@@ -160,7 +160,7 @@ The following issues have source changes and local regression coverage. They are
 - **F-10:** PeriodLocks now appends `LOCKED` / `REOPENED` events; current state is derived from the latest event per period. Structural tests were added, but local execution and close → reopen → re-close runtime acceptance remain pending. Previously overwritten legacy history cannot be recovered.
 - **F-14:** true multi-session ScriptLock contention/recovery is not proven by local tests.
 - **F-17:** delivery-method catalogue needs the user's actual options; none are invented.
-- **F-20:** source audit completed. First low-risk implementation step exposes the stored executor actor in attempt diagnostics and adds a regression test for recovery/manual-review attribution. The centralized actor-context helper and initiator propagation are still not implemented; see `docs/F20_OPERATION_IDENTITY_AUDIT.md`. New test is added but not executed here.
+- **F-20:** source implementation now includes centralized active-user capture, immutable operation-initiator attribution in order/supply/manual-stock audit rows, executor identity in attempt diagnostics, and checks for remaining administrative writers. Regression assertions and runner updates are committed, but the runner and syntax checks have not been executed after these latest F-20 changes; restored-workbook recovery acceptance is also pending. See docs/F20_OPERATION_IDENTITY_AUDIT.md.
 - The Warehouse Dashboard chart remains blank in the user's Sheets copy. The next step is to run the existing read-only chart diagnostics on the restored test copy and inspect N1:O21 plus the chart's actual source range.
 
 
@@ -263,3 +263,11 @@ The following issues have source changes and local regression coverage. They are
 - Extended the system-safety runner to load the supply-domain, schema-versioning and full-edit modules; added structural assertions for these paths.
 - **Not verified:** no runner or syntax check was executed. Restored-workbook acceptance remains required.
 - Strengthened F-20 regression coverage to construct dispatch, return and receipt movement-detail rows and assert that their actor column is the immutable initiator. These are source tests only and remain unexecuted.
+
+## C-01 / F-09 — performance audit plan — 26.11.2026
+
+- Source inspection confirms that the common FIFO path reads only the appended StockLedger tail when its cursor is valid. The remaining scaling risk is repeated tagged lookups per affected product; a backdated event can trigger a full product replay.
+- The stock journal currently reads full StockLedger, StockMovementDetails, StockLots, active allocations, products and product codes, then materializes and sorts the complete history.
+- Added docs/C01_F09_PERFORMANCE_AUDIT_AND_BENCHMARK_PLAN.md with a disposable-workbook benchmark matrix for 500 / 1,000 / 2,000 movements, one vs. many affected products, product replay, full rebuild, journal and dashboard refresh.
+- This is a source audit and measurement plan only. No performance claim, code optimization, Apps Script execution, or workbook change is made. Batch reads, journal windowing and selective view refresh should be implemented only after runtime measurements identify the bottleneck.
+- C-01 remains open until real Apps Script timing and read/write counts are recorded. F-09 remains partially mitigated; per-view error isolation is in place, but full-history read cost and scoped refresh remain open.
