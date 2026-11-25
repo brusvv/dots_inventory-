@@ -174,3 +174,6 @@ This does not yet change `OperationAttempts.actor`: that column intentionally co
 ### Verification status
 
 The new tests are committed but **have not been executed**. Syntax checks and restored-workbook recovery tests remain pending. No schema, manifest, trigger, deployment, or live workbook changes were made.
+
+
+The supply receipt detail writer was also updated after the initial slice: its existing `StockMovementDetails.actor` slot now records the registered initiator from `Operations.actor`. The regression test checks this writer as well.
