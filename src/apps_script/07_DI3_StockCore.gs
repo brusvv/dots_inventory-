@@ -1152,7 +1152,7 @@ function di3ApplyManualStockOperation_(operationRecord, storedPayload) {
   if (!detailsRecord) di3AppendTableRows_("StockMovementDetails", [detailRow]);
   if (storedPayload.direction === "IN" && !lotRecord) di3AppendTableRows_("StockLots", [lotRow]);
 
-  var fifoResult = di3RebuildFifoAllocations_("MANUAL_STOCK_MOVEMENT", [storedPayload.product_id]);
+  var fifoResult = di3RebuildFifoAllocations_("MANUAL_STOCK_MOVEMENT", [storedPayload.product_id], { operation_id: String(operationRecord.values[0] || "") });
   var cost = storedPayload.direction === "OUT"
     ? di3GetMovementFifoCostWithinOperation_(movementId)
     : { total_cost_minor: storedPayload.cost_status === "UNKNOWN" ? null :
