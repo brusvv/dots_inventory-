@@ -5,6 +5,7 @@ const root = path.resolve(__dirname, "..");
 const context = vm.createContext({ console, Date, JSON, Math, Number, String, Object, Array, RegExp, Error, isNaN, parseInt, parseFloat });
 const files = [
   "src/apps_script/00_DI3_AppConfig.gs",
+  "src/apps_script/00_DI3_SchemaRegistry.gs",
   "src/apps_script/07_DI3_StockCore.gs",
   "src/apps_script/24_DI3_IncrementalFifo.gs",
   "src/apps_script/08_DI3_WarehouseManager.gs",
