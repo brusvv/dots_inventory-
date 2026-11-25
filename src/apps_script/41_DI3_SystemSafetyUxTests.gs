@@ -143,6 +143,7 @@ function di3RunSystemSafetyUxUnitTests() {
     includes(di3EnsureOrderStatusHistory_.toString(), "di3GetOperationInitiatorActor_");
     includes(di3EnsureSupplyStatusHistory_.toString(), "di3GetOperationInitiatorActor_");
     includes(di3BuildOrderDispatchRows_.toString(), "di3GetOperationInitiatorActor_");
+    includes(di3BuildOrderReturnRows_.toString(), "di3GetOperationInitiatorActor_");
   });
 
   test("operation attempt diagnostics preserve the executor actor across recovery and manual review", function () {
