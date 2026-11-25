@@ -1,9 +1,9 @@
 # F-06 — FIFO allocation archive and crash-recovery implementation specification
 
 Дата: 26.11.2026  
-Статус: **source-audited implementation specification; application code and workbook data unchanged**
+Статус: **source implementation pass; CI verified; Apps Script runtime acceptance pending**
 
-## Source implementation groundwork — 26.11.2026
+## Source implementation progress — 26.11.2026
 
 - Added clean-baseline schemas for `FifoAllocationArchive`, `FifoLotCacheArchive` and `FifoReplayEvents`, including both source and target lot-cache fingerprints.
 - Extended `FifoAllocationRuns` with `operation_id`, parent `replay_id`, `scope_type`, `scope_json` and `input_fingerprint`.
@@ -11,9 +11,9 @@
 - Added a SHA-256 fingerprint helper and persisted top-level run scope/input metadata. Added the archive tables to backup priority ordering.
 - Verified the clean-baseline schema contract in the FIFO source test suite.
 
-**Not implemented yet:** deterministic allocation IDs; idempotent archive snapshot writes; PREPARED/COMMITTED event transitions; stable child replay IDs for each product replay; pending-run reuse; crash recovery and quarantine. F-06 remains incomplete and no active projection is archived yet.
+**Implemented in source:** deterministic allocation IDs for product/full replay; idempotent append-only allocation and lot-cache snapshots; PREPARED/COMMITTED/QUARANTINED event transitions; stable per-product replay IDs; pending run reuse; source restoration when active projection is neither source nor target; recovery before tail processing; and a mutation gate while FIFO runs remain unresolved. Archive snapshots are written before active projection replacement.
 
-**Source verification:** GitHub Actions run `45710935351` passed syntax checks for 50 `.gs` files and all seven Node suites (99/99). This validates the source/test harness only; Apps Script runtime fault-injection and backup/restore acceptance remain pending.
+**Source verification:** Latest GitHub Actions run `45712426217` passed syntax checks for 50 `.gs` files and all seven Node suites (109/109: FIFO 34, Order Domain 17, Supply Workspace UX 15, Catalog/Order UX 12, System Safety UX 18, Warehouse Dashboard 9, Finance Schema 4). This validates the source/test harness only; Apps Script runtime fault-injection at every write boundary, full backup/restore acceptance and operator quarantine-resolution UX remain pending.
 ## 1. Цель и границы
 
 F-06 должен сохранять каждую вытесненную версию активных FIFO-распределений и обеспечивать восстановление после остановки Apps Script между отдельными записями Google Sheets.
