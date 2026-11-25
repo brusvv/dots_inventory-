@@ -29,6 +29,7 @@ function di3ReadLedgerSequenceIndex_() {
   if (lastRow < 2) return { max_sequence: 0, rows: [], movement_count: 0 };
   var count = lastRow - 1;
   var movementIds = sheet.getRange(2, 1, count, 1).getValues();
+  var productIds = sheet.getRange(2, 4, count, 1).getValues();
   var sequences = sheet.getRange(2, sequenceIndex + 1, count, 1).getValues();
   var seen = Object.create(null), rows = [], maxSequence = 0, movementCount = 0;
   for (var i = 0; i < count; i++) {
@@ -36,6 +37,7 @@ function di3ReadLedgerSequenceIndex_() {
     var raw = sequences[i][0], blankSequence = raw === "" || raw == null;
     if (!movementId && blankSequence) continue;
     if (!movementId) throw new Error("StockLedger: ledger_sequence заполнен без movement_id в строке " + (i + 2) + ".");
+    if (!String(productIds[i][0] == null ? "" : productIds[i][0]).trim()) throw new Error("StockLedger: пустой product_id у движения " + movementId + " (строка " + (i + 2) + ").");
     if (blankSequence) throw new Error("StockLedger: отсутствует ledger_sequence у движения " + movementId + " (строка " + (i + 2) + ").");
     var sequence = Number(raw);
     if (!Number.isSafeInteger(sequence) || sequence <= 0) throw new Error("StockLedger: ledger_sequence должен быть положительным целым числом у движения " + movementId + ".");
