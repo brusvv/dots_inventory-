@@ -262,3 +262,4 @@ The following issues have source changes and local regression coverage. They are
 - Simplified redundant actor lookup wrappers.
 - Extended the system-safety runner to load the supply-domain, schema-versioning and full-edit modules; added structural assertions for these paths.
 - **Not verified:** no runner or syntax check was executed. Restored-workbook acceptance remains required.
+- Strengthened F-20 regression coverage to construct dispatch, return and receipt movement-detail rows and assert that their actor column is the immutable initiator. These are source tests only and remain unexecuted.
