@@ -128,8 +128,8 @@
     },
     {
       "path": "src/apps_script/08_DI3_WarehouseManager.gs",
-      "bytes": 15099,
-      "sha256": "b52911d7885137376907a14b43f38c7c3a62c77ded21bb9f45a282245dd0b410",
+      "bytes": 17839,
+      "sha256": "8897c17b8a977685899d0e1747fe2ccc542a8317b12ec2342bdfa9c8823fa58e",
       "kind": "apps_script_module"
     },
     {
@@ -326,8 +326,8 @@
     },
     {
       "path": "src/apps_script/41_DI3_SystemSafetyUxTests.gs",
-      "bytes": 4481,
-      "sha256": "08b7713a6e6fabf17a700fba31d38c6e133ca8e04316ff02bb04209cf265620c",
+      "bytes": 5740,
+      "sha256": "57db7d5f456654a9b8751c5052de30a201774bfc9174454e1b4c99084154bac0",
       "kind": "apps_script_module"
     }
   ],
@@ -337,7 +337,7 @@
     "Node regression harness / package.json",
     "original repository history and full documentation"
   ],
-  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Local UX-01–UX-09 patches are documented in docs/UX_PATCH_UX01_UX03.md, docs/UX_PATCH_UX04_UX06.md and docs/UX_PATCH_UX07_UX09.md.",
+  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Local UX-01–UX-10 patches are documented in docs/UX_PATCH_UX01_UX03.md, docs/UX_PATCH_UX04_UX06.md, docs/UX_PATCH_UX07_UX09.md and docs/UX_PATCH_UX10.md.",
   "patch_scope": {
     "UX-01_UX-03": {
       "modified_modules": [
@@ -386,6 +386,20 @@
       ],
       "added_docs": [
         "docs/UX_PATCH_UX07_UX09.md"
+      ]
+    },
+    "UX-10": {
+      "modified_modules": [
+        "08_DI3_WarehouseManager.gs"
+      ],
+      "extended_modules": [
+        "41_DI3_SystemSafetyUxTests.gs"
+      ],
+      "modified_tools": [
+        "run_system_safety_ux_tests.js"
+      ],
+      "added_docs": [
+        "docs/UX_PATCH_UX10.md"
       ]
     }
   }

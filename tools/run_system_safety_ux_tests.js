@@ -4,6 +4,7 @@ const vm = require("vm");
 const root = path.resolve(__dirname, "..");
 const context = vm.createContext({ console, Date, JSON, Math, Number, String, Object, Array, RegExp, Error, isNaN, parseInt, parseFloat });
 const files = [
+  "src/apps_script/08_DI3_WarehouseManager.gs",
   "src/apps_script/12_DI3_SupplyReceiving.gs",
   "src/apps_script/16_DI3_OrderWorkflow.gs",
   "src/apps_script/17_DI3_OrderWorkspace.gs",

@@ -27,8 +27,8 @@ Static audit performed while assembling this repository:
 
 - all 49 `.gs` files parsed successfully with Node.js v22.16.0;
 - TypeScript AST audit: 521 top-level function declarations, 86 top-level variable declarations, no parse errors and no duplicate top-level names;
-- warehouse chart tests: **5/5 PASS**; Supply Workspace UX: **9/9 PASS**; Catalog/Order UX: **12/12 PASS**; System Safety UX: **8/8 PASS**.
-- TypeScript AST: **548 functions / 87 top-level variables**, no parse errors or duplicate declarations; menu audit: **68 actions / 0 missing handlers**.
+- warehouse chart tests: **5/5 PASS**; Supply Workspace UX: **9/9 PASS**; Catalog/Order UX: **12/12 PASS**; System Safety UX: **11/11 PASS**.
+- TypeScript AST: **549 functions / 87 top-level variables**, no parse errors or duplicate declarations; menu audit: **68 actions / 0 missing handlers**.
 
 These are static/local checks. The full Apps Script unit-test functions in the source were not all executed in a real Google Apps Script runtime. No claim is made that all 250+ previous Node tests were rerun against this RAR, because the prior Node harness is not included.
 
@@ -304,4 +304,7 @@ Never install all probes into the production app as normal modules. Use them tem
 
 ## Current local UX patch status (25.11.2026)
 
-UX-01–UX-09 are implemented in the local working tree. UX-07 protects batch pending-operation recovery, UX-08 protects the Money Core integer-minor-unit migration, and UX-09 protects reopening the latest accounting period with explicit YES/NO confirmation. Install/accept only on a restored test copy. Their No paths remain to be validated in the real Google Sheets UI. See `docs/UX_PATCH_UX07_UX09.md`.
+UX-01–UX-10 are implemented in the local working tree. UX-07 protects batch pending-operation recovery, UX-08 protects the Money Core integer-minor-unit migration, and UX-09 protects reopening the latest accounting period with explicit YES/NO confirmation. Install/accept only on a restored test copy. Their No paths remain to be validated in the real Google Sheets UI. See `docs/UX_PATCH_UX07_UX09.md`.
+
+
+UX-10 adds a confirmation summary before manually posting warehouse IN/OUT movements. It displays the stock/FIFO consequences and returns before posting when the user selects No. Validate this No path on a restored copy; do not confirm Yes solely for a UX test. See `docs/UX_PATCH_UX10.md`.

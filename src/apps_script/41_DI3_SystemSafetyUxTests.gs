@@ -49,6 +49,27 @@ function di3RunSystemSafetyUxUnitTests() {
     includes(source, "PeriodGuard");
     includes(source, "CANCELLED_BY_USER");
   });
+  test("manual warehouse movement confirms before posting the stock operation", function () {
+    var source = di3SubmitWarehouseManagerForm.toString();
+    var normalize = source.indexOf("di3BuildManualMovementCommand_(command)");
+    var prompt = source.indexOf("ui.alert(");
+    var post = source.indexOf("di3PostManualStockMovement(command)");
+    var clear = source.indexOf('sheet.getRange("B5:B11").clearContent()');
+    equal(normalize >= 0 && prompt > normalize && post > prompt && clear > post, true);
+    includes(source, "CANCELLED_BY_USER");
+  });
+  test("manual warehouse confirmation describes inbound and outbound FIFO effects", function () {
+    var source = di3BuildWarehouseManualMovementConfirmationText_.toString();
+    ["StockLedger", "StockLots", "FIFO-партия", "списано со склада", "FIFO-распределения расхода", "Количество:"].forEach(function (fragment) {
+      includes(source, fragment);
+    });
+  });
+  test("manual offline sale confirmation displays unit price and total revenue", function () {
+    var source = di3BuildWarehouseManualMovementConfirmationText_.toString();
+    includes(source, "OFFLINE_SALE");
+    includes(source, "Выручка вне системы");
+  });
+
   test("order transition domain enforces allowed source-to-target state edges", function () {
     equal(DI3_ORDER_ALLOWED_TRANSITIONS["Новый"].join("|"), "В пути|Отменен");
     equal(DI3_ORDER_ALLOWED_TRANSITIONS["В пути"].join("|"), "Завершен|Возвращается");

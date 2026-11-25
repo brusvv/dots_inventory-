@@ -210,6 +210,33 @@ function di3SetupWarehouseManager() {
   };
 }
 
+function di3BuildWarehouseManualMovementConfirmationText_(payload, productLabel, reasonLabel, note) {
+  payload = payload || {};
+  var inbound = String(payload.direction) === "IN";
+  var date = new Date(payload.effective_at);
+  var lines = [
+    "Движение: " + (inbound ? "Приход" : "Расход"),
+    "Товар: " + String(productLabel || payload.product_id || ""),
+    "Основание: " + String(reasonLabel || payload.reason_code || ""),
+    "Дата и время: " + (isNaN(date.getTime()) ? String(payload.effective_at || "") : Utilities.formatDate(date, di3GetConfiguredTimeZone_(), "dd.MM.yyyy HH:mm")),
+    "Количество: " + Number(payload.quantity || 0) + " шт."
+  ];
+  if (inbound) {
+    lines.push("Себестоимость: " + String(payload.cost_status || "не указана"));
+    if (payload.unit_cost !== "" && payload.unit_cost != null) lines.push("Себестоимость за единицу: " + Number(payload.unit_cost).toFixed(2) + " ₽");
+    lines.push("Эффект: будет добавлено движение StockLedger и новая FIFO-партия StockLots; FIFO-распределения и оценка товара будут пересчитаны.");
+  } else {
+    lines.push("Эффект: количество будет списано со склада; будут записаны движение StockLedger и FIFO-распределения расхода, а себестоимость движения будет рассчитана по FIFO.");
+    if (payload.reason_code === "OFFLINE_SALE" && payload.unit_sale_price !== "" && payload.unit_sale_price != null) {
+      lines.push("Цена продажи за единицу: " + Number(payload.unit_sale_price).toFixed(2) + " ₽");
+      lines.push("Выручка вне системы: " + (Number(payload.unit_sale_price) * Number(payload.quantity)).toFixed(2) + " ₽");
+    }
+  }
+  if (note) lines.push("Комментарий: " + String(note));
+  lines.push("", "Продолжить?");
+  return lines.join("\n");
+}
+
 function di3SubmitWarehouseManagerForm() {
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_WAREHOUSE_MANAGER_SHEET);
   if (!sheet) throw new Error('Лист «Управление складом» не найден. Запусти di3SetupWarehouseManagement().');
@@ -237,6 +264,17 @@ function di3SubmitWarehouseManagerForm() {
     note: values[8],
     request_token: di3GetFormRequestToken_("WAREHOUSE")
   };
+  // Validate and normalize the read-only command before asking the user to confirm.
+  // The posting function rebuilds and validates the payload again under the shared lock.
+  var normalized = di3BuildManualMovementCommand_(command);
+  var ui = SpreadsheetApp.getUi();
+  var answer = ui.alert(
+    "Подтверждение ручного складского движения",
+    di3BuildWarehouseManualMovementConfirmationText_(normalized, productLabel, String(values[3] || ""), normalized.note),
+    ui.ButtonSet.YES_NO
+  );
+  if (answer !== ui.Button.YES) return { status: "CANCELLED_BY_USER", direction: direction, quantity: normalized.quantity };
+
   var result;
   try {
     result = di3PostManualStockMovement(command);

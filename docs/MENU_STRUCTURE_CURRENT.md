@@ -1,4 +1,4 @@
-# Menu structure — RC8 after UX-01–UX-09
+# Menu structure — RC8 after UX-01–UX-10
 
 This file reflects `di3BuildMenus_()` in `src/apps_script/22_DI3_MenuAndFilterUtils.gs`. Menu entries describe commands and expected workflows; actual availability and permission control remain in their respective handlers.
 
@@ -19,6 +19,7 @@ This file reflects `di3BuildMenus_()` in `src/apps_script/22_DI3_MenuAndFilterUt
 
 - Open/refresh dashboard
 - Open warehouse management; submit warehouse in/out form; refresh product lists
+  - Submit opens a YES/NO summary of the movement and its FIFO/stock effects; NO exits before posting.
 - Open/refresh stock journal; clear journal filters
 - Open/refresh FIFO history; refresh all warehouse views
 

@@ -107,3 +107,21 @@ Runtime acceptance (restored test copy only):
 4. For order transitions, keep the prior UX-04–UX-06 procedure: test the **No** path for each status action. Do not confirm dispatch or accepted return unless stock effects are explicitly intended.
 
 Local validation: `bash tools/check_syntax.sh`, `node tools/run_system_safety_ux_tests.js`, and the three existing regression runners. These checks inspect code and pure logic only; they do not prove that real Apps Script dialogs, triggers or workbook data behave as expected.
+
+
+## Local UX patch UX-10 (25.11.2026)
+
+Replace these files on a restored/test copy after a fresh backup:
+
+- `08_DI3_WarehouseManager.gs`
+- `41_DI3_SystemSafetyUxTests.gs`
+
+The local runner `tools/run_system_safety_ux_tests.js` also changed to load the warehouse manager module. No schema migration is required.
+
+Runtime acceptance (restored test copy only):
+
+1. Fill the Warehouse Manager form with a test inbound or outbound movement, open `Склад → Провести приход / расход`, and choose **No**. Confirm the form values remain, no operation appears in `Operations`, `StockLedger`, `StockMovementDetails` or `StockLots`, and FIFO projections are unchanged.
+2. Review the dialog's direction, product, reason, date, quantity and cost/price fields. For inbound movements confirm the text describes creation of a FIFO lot; for outbound movements confirm it describes FIFO expense allocation. For `OFFLINE_SALE`, confirm unit sale price and total revenue are shown.
+3. Do not choose **Yes** solely for UX acceptance. A confirmed movement has real stock effects and must be a separately approved test operation on a disposable copy.
+
+Local check: `node tools/run_system_safety_ux_tests.js` (11/11 PASS). This does not emulate Apps Script UI or prove the No path in a real workbook.

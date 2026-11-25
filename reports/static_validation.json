@@ -10,7 +10,7 @@
   },
   "typescript_ast_audit": {
     "files": 49,
-    "functions": 548,
+    "functions": 549,
     "topLevelVars": 87,
     "parseErrors": [],
     "duplicateDeclarations": [],
@@ -45,7 +45,7 @@
   },
   "system_safety_ux_unit_tests": {
     "status": "PASS",
-    "passed": 8,
+    "passed": 11,
     "failed": 0,
     "failures": [],
     "runner": "tools/run_system_safety_ux_tests.js"
@@ -55,6 +55,6 @@
     "Product/supply selector staging, installable onEdit routing, toast messages and real YES/NO dialogs require runtime acceptance on a restored Google Sheets test copy.",
     "The blank warehouse Dashboard chart remains unresolved; these UX patches do not modify the chart implementation.",
     "Apps Script manifest timezone could not be checked because appsscript.json was absent from the supplied source archive.",
-    "No live Google Sheets workbook, deployment, stock operation, recovery, Money Core migration, accounting-period close/reopen, FIFO diagnostic or FIFO rebuild was executed for these UX patches."
+    "No live Google Sheets workbook, deployment, manual stock movement, batch recovery, Money Core migration, accounting-period close/reopen, FIFO diagnostic or FIFO rebuild was executed for these UX patches."
   ]
 }

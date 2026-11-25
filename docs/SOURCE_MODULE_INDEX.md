@@ -1,6 +1,6 @@
 # Apps Script source inventory
 
-The base `.gs` modules came from the supplied `40.rar`. The current working tree also includes three local UX regression modules and explicitly documented source patches UX-01–UX-09; consult the patch logs for modified/added files. Numeric gap `06` is present in the source naming sequence; no module `06_*.gs` was included in this upload. This repository does not infer whether that gap is intentional.
+The base `.gs` modules came from the supplied `40.rar`. The current working tree also includes three local UX regression modules and explicitly documented source patches UX-01–UX-10; consult the patch logs for modified/added files. Numeric gap `06` is present in the source naming sequence; no module `06_*.gs` was included in this upload. This repository does not infer whether that gap is intentional.
 
 | Module | Role inferred from module name/content |
 |---|---|
@@ -12,7 +12,7 @@ The base `.gs` modules came from the supplied `40.rar`. The current working tree
 | `04_DI3_Setup.gs` | Setup orchestration |
 | `05_DI3_CoreTests.gs` | Core foundation tests |
 | `07_DI3_StockCore.gs` | Stock core, FIFO valuation and stock operations |
-| `08_DI3_WarehouseManager.gs` | Warehouse management workspace |
+| `08_DI3_WarehouseManager.gs` | Warehouse management workspace; explicit YES/NO before manual IN/OUT posting |
 | `09_DI3_StockCoreTests.gs` | Stock core tests |
 | `10_DI3_ProductCatalog.gs` | Product catalogue and product form |
 | `11_DI3_SupplyDomain.gs` | Supply domain and supply form |
@@ -45,4 +45,4 @@ The base `.gs` modules came from the supplied `40.rar`. The current working tree
 | `38_DI3_WarehouseDashboardTests.gs` | Warehouse dashboard chart tests |
 | `39_DI3_SupplyWorkspaceUxTests.gs` | UX-01–UX-03 regression tests for Supply Workspace and FIFO menu safety |
 | `40_DI3_CatalogOrderUxTests.gs` | UX-04–UX-06 regression tests for Catalog, Order and navigation |
-| `41_DI3_SystemSafetyUxTests.gs` | UX-07–UX-09 regression tests for explicit confirmations before batch recovery, money/FIFO migration and period reopening |
+| `41_DI3_SystemSafetyUxTests.gs` | UX-07–UX-10 regression tests for confirmations before batch recovery, Money/FIFO migration, period reopening and manual warehouse movement |

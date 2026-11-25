@@ -1,11 +1,11 @@
 # Dots Inventory v3 — RC8 source repository snapshot
 
 **Base source snapshot:** 2026-11-24  
-**Local UX patches:** 2026-11-25 (UX-01–UX-09)  
+**Local UX patches:** 2026-11-25 (UX-01–UX-10)  
 **Source archive supplied in this chat:** `40.rar`  
 **SHA-256 of source archive:** `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`
 
-The base source package was assembled from the user's uploaded `40.rar`. The working tree is a **patched derivative** of the 2026-11-24 base snapshot. Local UX-01–UX-09 patches add unsaved-form protection, safer navigation, and explicit confirmations for recovery, money/FIFO migration and period reopening. See `docs/UX_PATCH_UX01_UX03.md`, `docs/UX_PATCH_UX04_UX06.md` and `docs/UX_PATCH_UX07_UX09.md` for exact scopes.
+The base source package was assembled from the user's uploaded `40.rar`. The working tree is a **patched derivative** of the 2026-11-24 base snapshot. Local UX-01–UX-10 patches add unsaved-form protection, safer navigation, and explicit confirmations for recovery, money/FIFO migration, period reopening and manual warehouse movements. See `docs/UX_PATCH_UX01_UX03.md`, `docs/UX_PATCH_UX04_UX06.md` and `docs/UX_PATCH_UX07_UX09.md` and `docs/UX_PATCH_UX10.md` for exact scopes.
 
 ## Repository contents
 
@@ -15,7 +15,7 @@ The base source package was assembled from the user's uploaded `40.rar`. The wor
 - `docs/ROADMAP_AND_STATUS.md` — current feature status and remaining work.
 - `docs/INSTALLATION_AND_RUNTIME_ACCEPTANCE.md` — deployment cautions and runtime test expectations.
 - `reports/` — source inventory, checksums and validation evidence.
-- `tools/` — syntax and local regression-test runners for dashboard, Supply Workspace, Catalog/Order UX and System Safety UX.
+- `tools/` — syntax and local regression-test runners for dashboard, Supply Workspace, Catalog/Order UX and System Safety UX, including the manual warehouse movement confirmation.
 
 ## Important omissions from the supplied archive
 
@@ -53,12 +53,12 @@ The syntax command checks all `.gs` files. The dashboard runner executes five pu
 
 ## Source-of-truth rule for future work
 
-Treat this repository's `src/apps_script/` files as the current local working tree: the 2026-11-24 archive snapshot plus the documented UX-01–UX-09 patches from 2026-11-25. Before patching, inspect the exact current module and its callers. Do not mix in older standalone V1–V4 hotfix files from prior chat messages unless a diff proves that a newer source module is missing a change.
+Treat this repository's `src/apps_script/` files as the current local working tree: the 2026-11-24 archive snapshot plus the documented UX-01–UX-10 patches from 2026-11-25. Before patching, inspect the exact current module and its callers. Do not mix in older standalone V1–V4 hotfix files from prior chat messages unless a diff proves that a newer source module is missing a change.
 
 ## UX-04 through UX-06
 
 Protect the order calculator and product editor from accidental data loss, stage product selection changes pending confirmation, and group System navigation by task. Existing-product identity collision now also passes through the normal unsaved-form confirmation. See `docs/ROADMAP_AND_STATUS.md`, `docs/UX_PATCH_UX04_UX06.md`, and `docs/MENU_STRUCTURE_CURRENT.md`.
 
-## UX-07 through UX-09
+## UX-07 through UX-10
 
-Add explicit YES/NO confirmation and impact summaries before batch recovery of pending operations, the integer-minor-unit money/FIFO migration, and reopening the latest accounting period. A No response exits before the corresponding mutation/lock path. See `docs/UX_PATCH_UX07_UX09.md`.
+Add explicit YES/NO confirmation and impact summaries before batch recovery of pending operations, the integer-minor-unit money/FIFO migration, reopening the latest accounting period, and manually posting warehouse IN/OUT movements. A No response exits before the corresponding mutation path. See `docs/UX_PATCH_UX07_UX09.md` and `docs/UX_PATCH_UX10.md`.
