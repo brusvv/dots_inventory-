@@ -34,10 +34,11 @@ function di3ReadLedgerSequenceIndex_() {
   var seen = Object.create(null), rows = [], maxSequence = 0, movementCount = 0;
   for (var i = 0; i < count; i++) {
     var movementId = String(movementIds[i][0] == null ? "" : movementIds[i][0]).trim();
+    var productId = String(productIds[i][0] == null ? "" : productIds[i][0]).trim();
     var raw = sequences[i][0], blankSequence = raw === "" || raw == null;
-    if (!movementId && blankSequence) continue;
-    if (!movementId) throw new Error("StockLedger: ledger_sequence заполнен без movement_id в строке " + (i + 2) + ".");
-    if (!String(productIds[i][0] == null ? "" : productIds[i][0]).trim()) throw new Error("StockLedger: пустой product_id у движения " + movementId + " (строка " + (i + 2) + ").");
+    if (!movementId && !productId && blankSequence) continue;
+    if (!movementId) throw new Error("StockLedger: заполненная строка без movement_id (строка " + (i + 2) + ").");
+    if (!productId) throw new Error("StockLedger: пустой product_id у движения " + movementId + " (строка " + (i + 2) + ").");
     if (blankSequence) throw new Error("StockLedger: отсутствует ledger_sequence у движения " + movementId + " (строка " + (i + 2) + ").");
     var sequence = Number(raw);
     if (!Number.isSafeInteger(sequence) || sequence <= 0) throw new Error("StockLedger: ledger_sequence должен быть положительным целым числом у движения " + movementId + ".");
