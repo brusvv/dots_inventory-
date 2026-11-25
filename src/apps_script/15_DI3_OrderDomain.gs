@@ -428,7 +428,7 @@ function di3ApplyOrderCreateOperation_(operationRecord, payload) {
   });
   if (!statusExists) di3AppendTableRows_("DocumentStatusHistory", [[
     di3MakeUuid_(), "ORDER", payload.order_id, "", DI3_ORDER_STATUS.NEW,
-    new Date(payload.created_at), di3GetActorEmail_(), operationId, "Создание заказа"
+    new Date(payload.created_at), di3GetOperationInitiatorActor_(operationId), operationId, "Создание заказа"
   ]]);
   var savedOrder = di3GetOrderById_(payload.order_id);
   var savedItems = di3GetOrderItems_(payload.order_id);
