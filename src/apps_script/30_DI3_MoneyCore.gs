@@ -231,6 +231,13 @@ function di3UpgradeStockAllocationsMoneySchema_() {
 
 /** Validate and explicitly rebuild the active FIFO projection using exact integer minor units. */
 function di3RunMoneyMinorUnitsMigration() {
+  var ui = SpreadsheetApp.getUi();
+  var answer = ui.alert(
+    "Пересчёт денежных значений и FIFO",
+    "Будет запущена предварительная проверка, затем создана полная верифицированная резервная копия. После этого миграция обновит денежные поля FIFO и полностью перестроит активные FIFO-распределения. Это изменяет системные данные и может затронуть расчёт себестоимости заказов. StockLedger не переписывается.\n\nПри ошибке автоматический откат не выполняется; для возврата к исходному состоянию потребуется восстановить проверенную копию.\n\nПродолжить?",
+    ui.ButtonSet.YES_NO
+  );
+  if (answer !== ui.Button.YES) return { status: "CANCELLED_BY_USER", migrated: false };
   return di3WithLock_(function () {
     var dryRun = typeof di3DryRunInstallation === "function" ? di3DryRunInstallation() : { status: "READY", issues: [] };
     if (dryRun.status !== "READY") {

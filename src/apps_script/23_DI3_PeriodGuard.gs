@@ -156,7 +156,15 @@ function di3PromptReopenAccountingPeriod() {
   if (!status.locked_through) { ui.alert("Нет закрытых периодов", "Открывать нечего.", ui.ButtonSet.OK); return { status: "NO_LOCKS" }; }
   var response = ui.prompt("Открыть последний закрытый период", "Последний закрытый месяц: " + status.locked_through + ". Укажи причину повторного открытия.", ui.ButtonSet.OK_CANCEL);
   if (response.getSelectedButton() !== ui.Button.OK) return { status: "CANCELLED" };
-  var result = di3ReopenAccountingPeriod(status.locked_through, response.getResponseText());
+  var reason = String(response.getResponseText() || "").trim();
+  if (!reason) throw new Error("Укажи причину повторного открытия периода.");
+  var confirmation = ui.alert(
+    "Подтверди повторное открытие периода",
+    "Период " + status.locked_through + " будет открыт повторно. Ограничение PeriodGuard для задних дат в этом периоде перестанет блокировать новые операции. Уже существующие документы автоматически не меняются.\n\nПричина: " + reason + "\n\nПродолжить?",
+    ui.ButtonSet.YES_NO
+  );
+  if (confirmation !== ui.Button.YES) return { status: "CANCELLED_BY_USER", period_key: status.locked_through };
+  var result = di3ReopenAccountingPeriod(status.locked_through, reason);
   ui.alert("Период открыт", result.period_key + "\nПричина: " + result.reason, ui.ButtonSet.OK);
   return result;
 }

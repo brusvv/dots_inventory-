@@ -3,7 +3,7 @@
 **Base context snapshot:** 24 November 2026  
 **Local UX patches:** 25 November 2026  
 **Base source:** user-uploaded `40.rar`, SHA-256 `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`  
-**Current working tree:** `src/apps_script/` (41 Apps Script modules) + `runtime/probes/` (7 probes), including UX-01–UX-06 patches from 25.11.2026. See `docs/UX_PATCH_UX01_UX03.md` and `docs/UX_PATCH_UX04_UX06.md`.
+**Current working tree:** `src/apps_script/` (42 Apps Script modules) + `runtime/probes/` (7 probes), including UX-01–UX-09 patches from 25.11.2026. See `docs/UX_PATCH_UX01_UX03.md`, `docs/UX_PATCH_UX04_UX06.md` and `docs/UX_PATCH_UX07_UX09.md`.
 
 > New-chat instruction: use this repository as the actual current source snapshot. Inspect current files before proposing edits. Do not assume that old patch links or older snippets represent the installed code. Preserve the user's safe workflow: work on a restored test copy, backup first, no destructive operation without explicit approval.
 
@@ -17,17 +17,19 @@ The spreadsheet is designed as an application with visible workspaces and hidden
 
 ## 2. Current source snapshot — what is actually in this ZIP
 
-The base `40.rar` contained 39 Apps Script source modules. The current patched working tree contains those base modules plus two local regression modules (`39_DI3_SupplyWorkspaceUxTests.gs`, `40_DI3_CatalogOrderUxTests.gs`), for 41 Apps Script modules total;
+The base `40.rar` contained 39 Apps Script source modules. The current patched working tree contains those base modules plus three local regression modules (`39_DI3_SupplyWorkspaceUxTests.gs`, `40_DI3_CatalogOrderUxTests.gs`, `41_DI3_SystemSafetyUxTests.gs`), for 42 Apps Script modules total;
 - 7 temporary runtime probes;
 - no `appsscript.json`, `.clasp.json`, Node regression harness, `package.json`, or original docs.
 
 Static audit performed while assembling this repository:
 
-- all 47 `.gs` files parsed successfully with Node.js v22.16.0 after the UX patch;
-- TypeScript AST audit: 521 top-level function declarations, 86 top-level variable declarations, no parse errors and no duplicate top-level names;
-- warehouse chart unit tests (`di3RunWarehouseDashboardUnitTests`) executed locally: **5 passed / 0 failed**;
-- Supply Workspace UX tests (`di3RunSupplyWorkspaceUxUnitTests`) executed locally: **9 passed / 0 failed**;
-- TypeScript AST audit after patch: **532 top-level functions**, **86 top-level variable declarations**, no parse errors and no duplicate top-level names.
+- all **49** `.gs` files (42 app modules + 7 temporary probes) parse successfully with Node.js v22.16.0;
+- TypeScript AST audit: **548 top-level function declarations**, **87 top-level variable declarations**, no parse errors and no duplicate top-level names;
+- menu reference audit: **68 actions**, 0 missing handlers;
+- warehouse chart unit tests: **5/5 PASS**;
+- Supply Workspace UX tests: **9/9 PASS**;
+- Catalog/Order UX tests: **12/12 PASS**;
+- System Safety UX tests: **8/8 PASS**.
 
 These are static/local checks. The full Apps Script unit-test functions in the source were not all executed in a real Google Apps Script runtime. No claim is made that all 250+ previous Node tests were rerun against this RAR, because the prior Node harness is not included.
 
@@ -231,7 +233,7 @@ Don't infer runtime acceptance from these modules existing. Inspect each module/
 2. **Test G6 on a separate sent test supply**: enter a valid historical awaiting date, preview `PREVIEW_ONLY`, save and verify target status becomes `Ожидает получения`, G5 remains unchanged, no stock receipt/ledger/lots are created, audit history is correct.
 3. **Test all full-edit fields on a disposable pre-receipt supply**: supplier, notes, seller discount, partner discount, shipping, price, quantity, add/remove/reorder items, number recalculation with collision protection, preserving IDs where appropriate. No receipt in this test.
 4. **Test normal G7 receipt path** on a separate pending supply. For a supply already in the warehouse, do not use `Внести старую поставку` again.
-5. **Supply UX/menu runtime acceptance**: validate UX-01–UX-03 on a restored copy; then continue contextual availability/labels and the remaining menu audit.
+5. **Supply UX/menu runtime acceptance**: validate UX-01–UX-03 on a restored copy; then validate UX-01–UX-09 prompts, selector behavior and menu actions in a restored Google Sheets copy. The local source/menu audit is complete; live runtime acceptance is still pending.
 6. **Warehouse Dashboard runtime test** after the current `19_DI3_WarehouseViews.gs` is installed. Confirm chart rendering and top-20 correct labels/values using the screenshot fixture. No stock mutations.
 7. **Implement Phase C `SUPPLY_CORRECTION`**: immutable corrective operation for received supplies, compensating movements, FIFO candidate replay, ProductCostHistory and downstream order COGS re-evaluation. Not implemented yet; design and failure/retry coverage required.
 8. After all historical purchases and sales have been entered, run full historical stock/FIFO/financial reconciliation. The user has intentionally postponed final acceptance of historical supply entries until then.

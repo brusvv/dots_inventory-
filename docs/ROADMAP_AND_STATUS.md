@@ -37,6 +37,10 @@
 - **UX-06:** System navigation is grouped by task; order transition labels name expected source/target states. Menu labels are descriptive only—the domain functions remain the actual status guards.
 - Local validation: syntax **48 `.gs` PASS**, Supply UX **9/9**, Catalog/Order UX **12/12**, Warehouse Dashboard **5/5**, TypeScript AST **546 functions / 87 top-level vars / no duplicates or parse errors**, menu reference audit **68 actions / 0 missing handlers**.
 - These checks are source/Node-only. Real onEdit trigger behavior, toasts, confirmation dialogs and menus must be accepted in a restored Google Sheets copy before deployment.
+- **UX-07:** batch recovery of pending operations now shows a read-only preflight summary and requires YES before entering the mutation lock; it distinguishes eligible, waiting, unsupported and quarantined operations.
+- **UX-08:** Money minor-unit/FIFO migration now requires YES before Dry Run, backup and rebuild; the dialog states that rollback is by verified backup, not automatic.
+- **UX-09:** reopening the latest accounting period now requires a second YES after the user enters a reason; the dialog explains that PeriodGuard will stop blocking backdated operations for that period.
+- Local validation after UX-07–UX-09: syntax **49 `.gs` PASS**, Supply UX **9/9**, Catalog/Order UX **12/12**, System Safety UX **8/8**, Warehouse Dashboard **5/5**, TypeScript AST **548 functions / 87 top-level vars / no duplicates or parse errors**, menu reference audit **68 actions / 0 missing handlers**.
 
 ## Warehouse Dashboard
 

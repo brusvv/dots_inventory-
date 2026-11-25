@@ -1,6 +1,6 @@
 # Apps Script source inventory
 
-The base `.gs` modules came from the supplied `40.rar`. The current working tree also includes explicitly documented local UX patch modules; consult the patch logs for modified/added files. Numeric gap `06` is present in the source naming sequence; no module `06_*.gs` was included in this upload. This repository does not infer whether that gap is intentional.
+The base `.gs` modules came from the supplied `40.rar`. The current working tree also includes three local UX regression modules and explicitly documented source patches UX-01–UX-09; consult the patch logs for modified/added files. Numeric gap `06` is present in the source naming sequence; no module `06_*.gs` was included in this upload. This repository does not infer whether that gap is intentional.
 
 | Module | Role inferred from module name/content |
 |---|---|
@@ -45,3 +45,4 @@ The base `.gs` modules came from the supplied `40.rar`. The current working tree
 | `38_DI3_WarehouseDashboardTests.gs` | Warehouse dashboard chart tests |
 | `39_DI3_SupplyWorkspaceUxTests.gs` | UX-01–UX-03 regression tests for Supply Workspace and FIFO menu safety |
 | `40_DI3_CatalogOrderUxTests.gs` | UX-04–UX-06 regression tests for Catalog, Order and navigation |
+| `41_DI3_SystemSafetyUxTests.gs` | UX-07–UX-09 regression tests for explicit confirmations before batch recovery, money/FIFO migration and period reopening |

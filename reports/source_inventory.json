@@ -3,9 +3,9 @@
   "source_archive": "40.rar",
   "source_archive_sha256": "2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09",
   "counts": {
-    "apps_script_modules": 41,
+    "apps_script_modules": 42,
     "runtime_probes": 7,
-    "gs_files_total": 48
+    "gs_files_total": 49
   },
   "configured_time_zone_in_source": "Europe/Helsinki",
   "schema_version_constant": 2,
@@ -152,8 +152,8 @@
     },
     {
       "path": "src/apps_script/12_DI3_SupplyReceiving.gs",
-      "bytes": 54311,
-      "sha256": "5d71d1144da41e689e4c28332e6a4f038dd1f6b6e86880572251ca065b2d570e",
+      "bytes": 56961,
+      "sha256": "4fb7bccf8bff49dfef1dc0b029668eec5b86b99ad845e8ce84bc966aaa466fa2",
       "kind": "apps_script_module"
     },
     {
@@ -218,8 +218,8 @@
     },
     {
       "path": "src/apps_script/23_DI3_PeriodGuard.gs",
-      "bytes": 8820,
-      "sha256": "65c59e5275e5aafe446ce1993246599e19c2a1661141ebc1a1a38d4289a89d2e",
+      "bytes": 9643,
+      "sha256": "94f784463e1b9967b783455231a8e7c046882dff404f415dd58f09151f9dbfbd",
       "kind": "apps_script_module"
     },
     {
@@ -260,8 +260,8 @@
     },
     {
       "path": "src/apps_script/30_DI3_MoneyCore.gs",
-      "bytes": 17958,
-      "sha256": "f4a7013440a46843ae4b0a805f9ae1e69eb4804b81abe7ab4b55f941c2c331c0",
+      "bytes": 19024,
+      "sha256": "57f7ec59dc2ebb27a031568717ac17a8510563d888887c74cdf74ae7b977f40a",
       "kind": "apps_script_module"
     },
     {
@@ -323,6 +323,12 @@
       "bytes": 5617,
       "sha256": "81e036c1a13cdae77ae2bfd5fe56320b62e222fc1b0054746ec5f4d4d81e4d6e",
       "kind": "apps_script_module"
+    },
+    {
+      "path": "src/apps_script/41_DI3_SystemSafetyUxTests.gs",
+      "bytes": 4481,
+      "sha256": "08b7713a6e6fabf17a700fba31d38c6e133ca8e04316ff02bb04209cf265620c",
+      "kind": "apps_script_module"
     }
   ],
   "source_archive_omissions": [
@@ -331,7 +337,7 @@
     "Node regression harness / package.json",
     "original repository history and full documentation"
   ],
-  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Local UX-01–UX-06 patches are documented in docs/UX_PATCH_UX01_UX03.md and docs/UX_PATCH_UX04_UX06.md.",
+  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Local UX-01–UX-09 patches are documented in docs/UX_PATCH_UX01_UX03.md, docs/UX_PATCH_UX04_UX06.md and docs/UX_PATCH_UX07_UX09.md.",
   "patch_scope": {
     "UX-01_UX-03": {
       "modified_modules": [
@@ -364,6 +370,22 @@
       "added_docs": [
         "docs/UX_PATCH_UX04_UX06.md",
         "docs/MENU_STRUCTURE_CURRENT.md"
+      ]
+    },
+    "UX-07_UX-09": {
+      "modified_modules": [
+        "12_DI3_SupplyReceiving.gs",
+        "23_DI3_PeriodGuard.gs",
+        "30_DI3_MoneyCore.gs"
+      ],
+      "added_modules": [
+        "41_DI3_SystemSafetyUxTests.gs"
+      ],
+      "added_tools": [
+        "run_system_safety_ux_tests.js"
+      ],
+      "added_docs": [
+        "docs/UX_PATCH_UX07_UX09.md"
       ]
     }
   }

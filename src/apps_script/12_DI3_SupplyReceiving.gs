@@ -858,7 +858,48 @@ function di3RefreshSupplyRegister(preservedEffectiveDatesById) {
   return { refreshed: true, supplies: rows.length, max_rows: sheet.getMaxRows(), max_columns: sheet.getMaxColumns() };
 }
 
+function di3BuildRecoverPendingOperationsConfirmationText_(report) {
+  report = report || {};
+  var recoverable = Array.isArray(report.recoverable) ? report.recoverable : [];
+  var eligible = recoverable.filter(function (item) {
+    return item.handler_available && (item.retry_ready || String(item.status) === "PREPARED");
+  });
+  var waiting = recoverable.length - eligible.length;
+  var counts = report.counts || {};
+  var byType = {};
+  eligible.forEach(function (item) {
+    var type = String(item.operation_type || "UNKNOWN");
+    byType[type] = (byType[type] || 0) + 1;
+  });
+  var typeLines = Object.keys(byType).sort().map(function (type) {
+    return "• " + type + ": " + byType[type];
+  });
+  return [
+    "Будет выполнена проверка незавершённых операций и попытка безопасно завершить операции PREPARED/RETRYABLE, для которых доступен обработчик и наступило время повтора.",
+    "",
+    "Готово к восстановлению: " + eligible.length,
+    "Ожидает повтора или незавершённой попытки: " + waiting,
+    "Без обработчика: " + Number(counts.unsupported || 0),
+    "В карантине (не запускаются этой командой): " + Number(counts.quarantined || 0),
+    "",
+    typeLines.length ? "Типы операций к восстановлению:\n" + typeLines.join("\n") : "Подходящих операций сейчас не обнаружено.",
+    "",
+    "Восстановление может завершить ранее подготовленные движения склада, приёмки поставок, отправки/возвраты заказов или создание документов. Новые операции по уже завершённым записям не создаются; payload и idempotency проверяются.",
+    "Операции в карантине и записи без обработчика эта команда не запускает.",
+    "",
+    "Продолжить?"
+  ].join("\n");
+}
+
 function di3RecoverAllPendingOperations() {
+  var preview = di3GetOperationRecoveryReport_(); // read-only preflight; the operation set is checked again under lock below.
+  var ui = SpreadsheetApp.getUi();
+  var answer = ui.alert(
+    "Подтверждение восстановления операций",
+    di3BuildRecoverPendingOperationsConfirmationText_(preview),
+    ui.ButtonSet.YES_NO
+  );
+  if (answer !== ui.Button.YES) return { status: "CANCELLED_BY_USER", recovered: 0 };
   return di3WithLock_(function () {
     di3EnsureStockCoreSchemas_();
     var manual = di3RecoverPreparedOperations_(["MANUAL_STOCK_MOVEMENT"]);

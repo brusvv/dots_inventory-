@@ -20,3 +20,10 @@ Local patch applied 2026-11-25:
 - Added current menu map: docs/MENU_STRUCTURE_CURRENT.md.
 - Duplicate product identity resolution now confirms before replacing the unsaved product card.
 - Source archive SHA-256 above remains provenance of the unmodified base archive, not the patched working tree.
+
+Local patch applied 2026-11-25:
+- UX-07–UX-09 add explicit YES/NO confirmation before batch pending-operation recovery, Money Core minor-unit/FIFO migration and accounting-period reopening.
+- Modified source modules: 12, 23, 30.
+- Added test module: 41_DI3_SystemSafetyUxTests.gs.
+- Added local runner: tools/run_system_safety_ux_tests.js.
+- Base source archive SHA-256 remains the provenance of the original RAR, not of this patched working tree.

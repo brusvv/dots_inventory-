@@ -1,4 +1,4 @@
-# Menu structure — RC8 after UX-01–UX-06
+# Menu structure — RC8 after UX-01–UX-09
 
 This file reflects `di3BuildMenus_()` in `src/apps_script/22_DI3_MenuAndFilterUtils.gs`. Menu entries describe commands and expected workflows; actual availability and permission control remain in their respective handlers.
 
@@ -45,6 +45,12 @@ The label documents the expected status path. Every transition opens a YES/NO di
 - **Accounting period:** show period status; close month…; reopen last closed month…
 - **Operations and FIFO:** operation recovery report; recover pending operations…; clear quarantine after manual reconciliation…; minor-unit money migration…; **read-only FIFO integrity check**; **full FIFO rebuild… (mutating)**.
 - **Backups:** create backup; list backups; open backup folder; restore backup into a new spreadsheet…
+
+### Confirmations for consequential System commands
+
+- `Восстановить незавершённые операции…` first builds a read-only operation-recovery report, then shows counts of eligible, waiting, unsupported and quarantined operations plus the eligible operation types. YES is required before the recovery lock and handlers run.
+- `Пересчитать FIFO в копейках…` requires YES before Dry Run, verified backup, schema updates and full FIFO allocation rebuild. The dialog warns that automatic rollback is not performed and `StockLedger` is not rewritten.
+- `Открыть последний закрытый месяц…` asks for a reason and then a separate YES/NO confirmation explaining that PeriodGuard will no longer block new backdated operations for the reopened period.
 
 ## Known UX limitations
 

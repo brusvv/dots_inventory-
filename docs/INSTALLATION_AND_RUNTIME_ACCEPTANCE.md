@@ -86,3 +86,24 @@ Local checks: `bash tools/check_syntax.sh`, `node tools/run_catalog_order_ux_tes
 ### Order-transition confirmation UX
 
 The current order workspace asks for confirmation before **each** selected-order status transition. The dialog names the order and target status, states whether the transition writes stock movements (dispatch / accepted return) or only changes the order status (complete / returning / cancel), and shows the effective date from column P or the current timestamp fallback. On **No**, the domain transition is not called. Validate the dialog's No path on a restored copy. Do not choose Yes for dispatch or accepted return unless you have a disposable order and explicitly authorized stock effects.
+
+
+## Local UX patch UX-07–UX-09 (25.11.2026)
+
+Replace these modules on a restored/test copy after a fresh backup:
+
+- `12_DI3_SupplyReceiving.gs`
+- `23_DI3_PeriodGuard.gs`
+- `30_DI3_MoneyCore.gs`
+- add `41_DI3_SystemSafetyUxTests.gs`
+
+The Node runner `tools/run_system_safety_ux_tests.js` is repository tooling, not an Apps Script module. No schema migration is part of installing this UI-only patch. Reload the spreadsheet so its menus are refreshed.
+
+Runtime acceptance (restored test copy only):
+
+1. Open `Система → Операции и FIFO → Восстановить незавершённые операции…`. Inspect the read-only summary and choose **No**. Confirm no recovery attempt was started and no operation, stock movement, supply or order changed. Do not choose **Yes** if the copy contains pending business operations unless that recovery is separately intended and approved.
+2. Open `Пересчитать FIFO в копейках…` and choose **No**. Confirm the command exits before creating its migration backup, changing money migration metadata/schema, or rebuilding FIFO. Do not choose **Yes** solely for a UX test.
+3. On a restored copy that has a deliberately closed test period, run `Открыть последний закрытый месяц…`, enter a reason, then choose **No** in the second confirmation. Confirm the `PeriodLocks` row remains `LOCKED` and PeriodGuard still blocks dates within that closed period. Do not choose **Yes** solely for a UX test.
+4. For order transitions, keep the prior UX-04–UX-06 procedure: test the **No** path for each status action. Do not confirm dispatch or accepted return unless stock effects are explicitly intended.
+
+Local validation: `bash tools/check_syntax.sh`, `node tools/run_system_safety_ux_tests.js`, and the three existing regression runners. These checks inspect code and pure logic only; they do not prove that real Apps Script dialogs, triggers or workbook data behave as expected.

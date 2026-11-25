@@ -3,18 +3,19 @@
   "runtime": "Local container only; not Google Apps Script runtime",
   "node_version": "v22.16.0",
   "syntax_check": {
-    "files_checked": 48,
+    "files_checked": 49,
     "failures": [],
     "status": "PASS",
     "tool": "tools/check_syntax.sh"
   },
   "typescript_ast_audit": {
-    "files": 48,
-    "functions": 546,
+    "files": 49,
+    "functions": 548,
     "topLevelVars": 87,
     "parseErrors": [],
     "duplicateDeclarations": [],
-    "status": "PASS"
+    "status": "PASS",
+    "tool": "TypeScript 5.8.3"
   },
   "menu_handler_audit": {
     "actions": 68,
@@ -42,11 +43,18 @@
     "failures": [],
     "runner": "tools/run_catalog_order_ux_tests.js"
   },
+  "system_safety_ux_unit_tests": {
+    "status": "PASS",
+    "passed": 8,
+    "failed": 0,
+    "failures": [],
+    "runner": "tools/run_system_safety_ux_tests.js"
+  },
   "limitations": [
     "Local Node syntax and unit tests do not emulate Google Sheets rendering, Apps Script services, installed triggers, Drive, LockService or the full application regression harness.",
     "Product/supply selector staging, installable onEdit routing, toast messages and real YES/NO dialogs require runtime acceptance on a restored Google Sheets test copy.",
     "The blank warehouse Dashboard chart remains unresolved; these UX patches do not modify the chart implementation.",
     "Apps Script manifest timezone could not be checked because appsscript.json was absent from the supplied source archive.",
-    "No live Google Sheets workbook, deployment, stock operation, FIFO diagnostic or FIFO rebuild was executed for these UX patches."
+    "No live Google Sheets workbook, deployment, stock operation, recovery, Money Core migration, accounting-period close/reopen, FIFO diagnostic or FIFO rebuild was executed for these UX patches."
   ]
 }

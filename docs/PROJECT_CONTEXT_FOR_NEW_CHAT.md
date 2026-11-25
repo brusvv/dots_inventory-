@@ -2,7 +2,7 @@
 
 **Context snapshot:** 24 November 2026  
 **Source of truth:** user-uploaded `40.rar`, SHA-256 `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`  
-**Repository folder:** `src/apps_script/` (39 Apps Script modules) + `runtime/probes/` (7 probes)
+**Repository folder:** `src/apps_script/` (42 Apps Script modules, including UX regression tests) + `runtime/probes/` (7 probes)
 
 > New-chat instruction: use this repository as the actual current source snapshot. Inspect current files before proposing edits. Do not assume that old patch links or older snippets represent the installed code. Preserve the user's safe workflow: work on a restored test copy, backup first, no destructive operation without explicit approval.
 
@@ -16,17 +16,19 @@ The spreadsheet is designed as an application with visible workspaces and hidden
 
 ## 2. Current source snapshot — what is actually in this ZIP
 
-The uploaded `40.rar` contains:
+The base `40.rar` contains:
 
 - 39 numbered Apps Script modules (including production modules and Apps Script unit-test modules);
+- the current patched tree adds three UX regression modules, for 42 modules total;
 - 7 temporary runtime probes;
 - no `appsscript.json`, `.clasp.json`, Node regression harness, `package.json`, or original docs.
 
 Static audit performed while assembling this repository:
 
-- all 46 `.gs` files parsed successfully with Node.js v22.16.0;
+- all 49 `.gs` files parsed successfully with Node.js v22.16.0;
 - TypeScript AST audit: 521 top-level function declarations, 86 top-level variable declarations, no parse errors and no duplicate top-level names;
-- warehouse chart unit tests (`di3RunWarehouseDashboardUnitTests`) executed locally: **5 passed / 0 failed**.
+- warehouse chart tests: **5/5 PASS**; Supply Workspace UX: **9/9 PASS**; Catalog/Order UX: **12/12 PASS**; System Safety UX: **8/8 PASS**.
+- TypeScript AST: **548 functions / 87 top-level variables**, no parse errors or duplicate declarations; menu audit: **68 actions / 0 missing handlers**.
 
 These are static/local checks. The full Apps Script unit-test functions in the source were not all executed in a real Google Apps Script runtime. No claim is made that all 250+ previous Node tests were rerun against this RAR, because the prior Node harness is not included.
 
@@ -298,3 +300,8 @@ Never install all probes into the production app as normal modules. Use them tem
 ## 12. First prompt for the new chat
 
 "Прочитай `PROJECT_CONTEXT_FOR_NEW_CHAT.md` и `README.md` в приложенном репозитории. Считай исходники `src/apps_script/` текущей версией проекта. Сначала кратко подтверди фактическое состояние кода и ближайшие задачи. Продолжим приёмку полного редактирования: проверить `26JY021` — `supply_id`, `created_at`, `SUPPLY_DOCUMENT_EDIT`, неизменность StockLedger/StockLots/FIFO; затем проверим G6 на отдельной отправленной тестовой поставке. Не меняй файлы и не запускай операции до согласования следующего шага."
+
+
+## Current local UX patch status (25.11.2026)
+
+UX-01–UX-09 are implemented in the local working tree. UX-07 protects batch pending-operation recovery, UX-08 protects the Money Core integer-minor-unit migration, and UX-09 protects reopening the latest accounting period with explicit YES/NO confirmation. Install/accept only on a restored test copy. Their No paths remain to be validated in the real Google Sheets UI. See `docs/UX_PATCH_UX07_UX09.md`.

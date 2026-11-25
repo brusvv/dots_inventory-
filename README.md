@@ -1,21 +1,21 @@
 # Dots Inventory v3 — RC8 source repository snapshot
 
 **Base source snapshot:** 2026-11-24  
-**Local UX patches:** 2026-11-25 (UX-01–UX-06)  
+**Local UX patches:** 2026-11-25 (UX-01–UX-09)  
 **Source archive supplied in this chat:** `40.rar`  
 **SHA-256 of source archive:** `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`
 
-The base source package was assembled from the user's uploaded `40.rar`. On 2026-11-25, the local UX-01–UX-03 patch modified six existing Apps Script modules and added one regression-test module. All other Apps Script modules and all seven runtime probes remain byte-for-byte from the base archive. The current working tree is therefore a **patched derivative** of the 2026-11-24 base snapshot, not a byte-identical copy of the RAR. See `docs/UX_PATCH_UX01_UX03.md` for the exact patch scope and installation procedure.
+The base source package was assembled from the user's uploaded `40.rar`. The working tree is a **patched derivative** of the 2026-11-24 base snapshot. Local UX-01–UX-09 patches add unsaved-form protection, safer navigation, and explicit confirmations for recovery, money/FIFO migration and period reopening. See `docs/UX_PATCH_UX01_UX03.md`, `docs/UX_PATCH_UX04_UX06.md` and `docs/UX_PATCH_UX07_UX09.md` for exact scopes.
 
 ## Repository contents
 
-- `src/apps_script/` — 41 production and Apps Script unit-test modules (`.gs`), including `39_DI3_SupplyWorkspaceUxTests.gs` and `40_DI3_CatalogOrderUxTests.gs`. The patched source modules are listed in the patch logs; unmodified modules retain the base archive contents.
+- `src/apps_script/` — 42 Apps Script production and unit-test modules (`.gs`), including `39_DI3_SupplyWorkspaceUxTests.gs`, `40_DI3_CatalogOrderUxTests.gs` and `41_DI3_SystemSafetyUxTests.gs`. The patched source modules are listed in the patch logs; unmodified modules retain the base archive contents.
 - `runtime/probes/` — 7 temporary runtime probes. Some are mutating and must only be used on a disposable test copy.
 - `docs/PROJECT_CONTEXT_FOR_NEW_CHAT.md` — detailed handoff context for a new ChatGPT conversation.
 - `docs/ROADMAP_AND_STATUS.md` — current feature status and remaining work.
 - `docs/INSTALLATION_AND_RUNTIME_ACCEPTANCE.md` — deployment cautions and runtime test expectations.
 - `reports/` — source inventory, checksums and validation evidence.
-- `tools/` — syntax and local regression-test runners for dashboard, Supply Workspace and Catalog/Order UX.
+- `tools/` — syntax and local regression-test runners for dashboard, Supply Workspace, Catalog/Order UX and System Safety UX.
 
 ## Important omissions from the supplied archive
 
@@ -37,9 +37,10 @@ bash tools/check_syntax.sh
 node tools/run_warehouse_dashboard_tests.js
 node tools/run_supply_workspace_ux_tests.js
 node tools/run_catalog_order_ux_tests.js
+node tools/run_system_safety_ux_tests.js
 ```
 
-The syntax command checks all `.gs` files. The dashboard runner executes five pure chart tests. The Supply UX runner executes nine pure/structural tests for dirty-form protection, B2 switching and FIFO menu safety. The Catalog/Order runner executes twelve source-level regression tests for dirty product/order form protection and menu discoverability. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet.
+The syntax command checks all `.gs` files. The dashboard runner executes five pure chart tests. The Supply UX runner executes nine pure/structural tests for dirty-form protection, B2 switching and FIFO menu safety. The Catalog/Order runner executes twelve source-level regression tests for dirty product/order form protection and menu discoverability. The System Safety runner executes eight source-level tests for confirmed batch recovery, money/FIFO migration and accounting-period reopening. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or stock operation was executed during local validation.
 
 ## Safe operating rules
 
@@ -52,8 +53,12 @@ The syntax command checks all `.gs` files. The dashboard runner executes five pu
 
 ## Source-of-truth rule for future work
 
-Treat this repository's `src/apps_script/` files as the current local working tree: the 2026-11-24 archive snapshot plus the documented UX-01–UX-06 patches from 2026-11-25. Before patching, inspect the exact current module and its callers. Do not mix in older standalone V1–V4 hotfix files from prior chat messages unless a diff proves that a newer source module is missing a change.
+Treat this repository's `src/apps_script/` files as the current local working tree: the 2026-11-24 archive snapshot plus the documented UX-01–UX-09 patches from 2026-11-25. Before patching, inspect the exact current module and its callers. Do not mix in older standalone V1–V4 hotfix files from prior chat messages unless a diff proves that a newer source module is missing a change.
 
 ## UX-04 through UX-06
 
 Protect the order calculator and product editor from accidental data loss, stage product selection changes pending confirmation, and group System navigation by task. Existing-product identity collision now also passes through the normal unsaved-form confirmation. See `docs/ROADMAP_AND_STATUS.md`, `docs/UX_PATCH_UX04_UX06.md`, and `docs/MENU_STRUCTURE_CURRENT.md`.
+
+## UX-07 through UX-09
+
+Add explicit YES/NO confirmation and impact summaries before batch recovery of pending operations, the integer-minor-unit money/FIFO migration, and reopening the latest accounting period. A No response exits before the corresponding mutation/lock path. See `docs/UX_PATCH_UX07_UX09.md`.
