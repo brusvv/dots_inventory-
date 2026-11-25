@@ -286,3 +286,10 @@ The following issues have source changes and local regression coverage. They are
 - Added docs/F07_STABLE_LEDGER_SEQUENCE_IMPLEMENTATION_SPEC.md. The proposed design appends ledger_sequence to the clean baseline, changes global and per-product cursors to sequence watermarks, discovers tail rows by scanning the narrow sequence column (not physical row offsets), and preserves effective_at / recorded_at / movement_id as FIFO business ordering.
 - Important schema-versioning finding: current versioning assumes baseline v1 plus sequential migrations through v3. A clean final baseline requires explicit clean-baseline adoption distinct from legacy upgrade paths; merely increasing DI3_SCHEMA_VERSION would break the existing initialization assumptions.
 - No application code or workbook changed in this step. F-07 remains open pending implementation, source tests, and runtime acceptance on a disposable empty workbook.
+
+## Clean-baseline versioning audit — 26.11.2026
+
+- Added docs/CLEAN_BASELINE_SCHEMA_VERSIONING_DESIGN.md. It defines separate clean-final-baseline adoption and explicit legacy-upgrade paths; it does not assign a final schema version number until F-02 and F-06 contracts are frozen.
+- Source inspection found the current installer creates/initializes the schema before calling schema versioning, while the versioning code assumes baseline v1 and migrations v2/v3. A clean final workbook therefore needs its own idempotent adoption record, not a fabricated historical migration chain.
+- Source inspection also found di3DryRunInstallation() checks known system sheets/workspaces but does not inventory and block every unknown populated tab. The clean-install preflight must close this gap.
+- No source runtime or workbook changes were made. Clean-baseline versioning remains a design task before implementation.
