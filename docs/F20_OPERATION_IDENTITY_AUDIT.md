@@ -131,12 +131,9 @@ Do not use `Session.getEffectiveUser()` as a fallback for the initiating user. I
 5. Requeue a quarantined operation manually; verify a separate `MANUAL_REOPEN` audit row with reason and reviewer context.
 6. Confirm domain event actor semantics are consistent for normal and recovery execution.
 
-## Scope and safety
+## Original audit scope and safety
 
-- Audit/design only.
-- No application source, schema, manifest, triggers, spreadsheet, operation payload, stock event or business record was changed.
-- No Apps Script or Node tests were run for this audit.
-- Do not deploy an identity/schema patch until the intended meaning of every existing actor column is agreed and the restored-workbook tests above can be performed.
+At the time of the initial audit, this work was design-only and no application source or workbook data had been changed. The subsequent implementation slices are recorded below. The safety boundary remains: no deployment, schema migration, trigger change, or live workbook/business-data mutation without restored-workbook acceptance.
 
 
 ## Implementation progress — centralized identity capture
