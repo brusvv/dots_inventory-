@@ -1,7 +1,7 @@
 # Clean baseline schema and versioning strategy
 
 Date: 2026-11-26  
-Status: architecture design with partial source implementation. Unknown populated-tab preflight and FIFO archive schemas/backup priority are implemented and CI-checked; clean-baseline schema adoption and runtime setup acceptance are still pending.
+Status: clean-baseline source path implemented on `feature/clean-final-baseline`; targeted regression cases added. CI and Google Sheets runtime acceptance are pending.
 
 ## Why this is required
 
@@ -85,5 +85,15 @@ Do not freeze the final schema version number until F-02 field semantics and F-0
 
 - `di3DryRunInstallation()` now inventories every workbook tab. Known system tables, current/legacy managed workspaces and the default blank tab names are allowlisted. Any other tab containing cells or charts is reported as a blocking issue; the preflight does not rename, clear or delete it. This is source-implemented and covered by the System Safety UX Node suite, but still needs a real Google Sheets Dry Run check.
 - Backup hashing priority now explicitly includes `FifoAllocationArchive`, `FifoLotCacheArchive` and `FifoReplayEvents`; a regression test protects that priority. Backup snapshots still enumerate all spreadsheet tabs.
-- The setup flow in `04_DI3_Setup.gs` still runs schema versioning after `di3EnsureCoreFoundationSchemas_(true)` has created/initialized the current schema. The clean-baseline adoption path remains to be implemented; do not use the existing RC8 baseline-v1 + v2 + v3 migration chain to describe a workbook created directly with final headers.
+- The setup flow in `04_DI3_Setup.gs` still runs schema versioning after `di3EnsureCoreFoundationSchemas_(true)` has created/initialized the current schema. `33_DI3_SchemaVersioning.gs` now distinguishes a clean final baseline from the RC8 upgrade path. A clean workbook receives one `CLEAN_FINAL_BASELINE_ADOPTION` record (0 → current target version) after exact final-header validation; the legacy RC8 baseline and ordered v1→v2→v3 chain remain separate. The clean path is recognized on subsequent setup runs even after ordinary business rows have been created, and interrupted STARTED records can resume after revalidation.
 - Current source CI validates 50 Apps Script files and 118/118 Node tests. This is not Google Sheets runtime acceptance.
+
+
+## Implementation note — clean baseline branch
+
+- Branch: `feature/clean-final-baseline`.
+- The clean path currently adopts target schema **v3**, because F-02 historical-sale fields have not yet been implemented or frozen. If F-02 is included before the first production install, update the target schema and include its fields in the clean baseline directly; do not simulate v4 history in a never-migrated workbook.
+- Eligibility is fail-closed: the workbook must be unversioned, have no legacy migration records, contain no business rows before the first baseline record, and have only absent/blank/exact-current system headers. Once the clean baseline record exists, it remains the identity anchor for later setup reruns.
+- The legacy path is preserved for recognized earlier workbooks; the clean path does not adopt RC8 data or execute RC8 migrations.
+- Added four targeted System Safety UX tests for empty workbook eligibility, rejection of unversioned business rows, rejection of legacy/mismatched headers, and recognition after normal business rows exist.
+- These are source changes only at this stage. CI execution, test-runner execution, and real Apps Script Dry Run/setup/interruption acceptance have not yet been verified.
