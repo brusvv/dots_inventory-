@@ -293,3 +293,12 @@ The following issues have source changes and local regression coverage. They are
 - Source inspection found the current installer creates/initializes the schema before calling schema versioning, while the versioning code assumes baseline v1 and migrations v2/v3. A clean final workbook therefore needs its own idempotent adoption record, not a fabricated historical migration chain.
 - Source inspection also found di3DryRunInstallation() checks known system sheets/workspaces but does not inventory and block every unknown populated tab. The clean-install preflight must close this gap.
 - No source runtime or workbook changes were made. Clean-baseline versioning remains a design task before implementation.
+
+## F-06 — FIFO allocation archive and crash-recovery specification — 26.11.2026
+
+- Audited the active allocation replacement path, FIFO run lifecycle, allocation ID generation, and all four stock-operation call sites.
+- Confirmed that the current rollback helper only handles caught write errors; abrupt Apps Script termination between sheet writes can leave a partially replaced projection. A subsequent retry currently creates a new FIFO run ID, so it cannot reliably identify the interrupted replay.
+- Confirmed that allocation rows currently receive random UUIDs on every rebuild. F-06 therefore requires deterministic allocation IDs for a stable replay identity and target fingerprint.
+- Added `docs/F06_FIFO_ALLOCATION_ARCHIVE_IMPLEMENTATION_SPEC.md`. It defines separate append-only allocation and lot-cache archives, an append-only replay lifecycle event log, operation-linked replay identity, PREPARED/COMMITTED recovery, fail-closed quarantine, and 20 fault-injection/regression cases.
+- F-06 depends on F-07 sequence-based input identity. The spec is for the clean baseline; no production backfill or legacy migration is planned for the recreated workbook.
+- No Apps Script source, spreadsheet schema, workbook data, or deployment was changed. Tests and runtime fault injection were not run. F-06 remains open pending implementation and acceptance.
