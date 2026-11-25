@@ -7,6 +7,7 @@ const files = [
   "src/apps_script/00_DI3_AppConfig.gs",
   "src/apps_script/07_DI3_StockCore.gs",
   "src/apps_script/08_DI3_WarehouseManager.gs",
+  "src/apps_script/11_DI3_SupplyDomain.gs",
   "src/apps_script/12_DI3_SupplyReceiving.gs",
   "src/apps_script/15_DI3_OrderDomain.gs",
   "src/apps_script/16_DI3_OrderWorkflow.gs",
@@ -14,6 +15,8 @@ const files = [
   "src/apps_script/22_DI3_MenuAndFilterUtils.gs",
   "src/apps_script/23_DI3_PeriodGuard.gs",
   "src/apps_script/27_DI3_OperationExecutor.gs",
+  "src/apps_script/33_DI3_SchemaVersioning.gs",
+  "src/apps_script/36_DI3_SupplyFullEdit.gs",
   "src/apps_script/29_DI3_SettingsRepository.gs",
   "src/apps_script/30_DI3_MoneyCore.gs",
   "src/apps_script/41_DI3_SystemSafetyUxTests.gs"
