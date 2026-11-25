@@ -55,6 +55,21 @@ function di3GetSchemaVersioningReport_() {
   }
   var cleanState = di3GetCleanBaselineState_();
   if (cleanState.eligible) return di3GetCleanBaselineVersioningReport_(cleanState);
+  var hasCleanBaselineIdentity = migrations.some(function (row) { return row.migration_key === DI3_CLEAN_BASELINE_MIGRATION_KEY; });
+  var hasLegacyMigrationIdentity = migrations.some(function (row) {
+    return row.migration_key === DI3_SCHEMA_BASELINE_MIGRATION_KEY ||
+      DI3_SCHEMA_MIGRATION_DEFINITIONS.some(function (definition) { return row.migration_key === definition.key; });
+  });
+  if (hasCleanBaselineIdentity || (currentVersion === 0 && !hasLegacyMigrationIdentity)) {
+    issues.push("Книга не прошла проверку clean baseline и не имеет подтверждённой legacy migration identity. Автоматическая установка/миграция заблокирована; данные и заголовки не будут изменены.");
+    cleanState.issues.forEach(function (issue) { issues.push(issue); });
+    return {
+      status: "BLOCKED", installation_path: "UNRECOGNIZED_OR_DAMAGED",
+      current_version: currentVersion, target_version: DI3_SCHEMA_VERSION,
+      migrations_count: migrations.length, baseline_migration: null, schema_migrations: [],
+      issues: issues, warnings: warnings, planned_changes: []
+    };
+  }
   var baselineRows = migrations.filter(function (row) { return row.migration_key === DI3_SCHEMA_BASELINE_MIGRATION_KEY; });
   var baseline = baselineRows.length === 1 ? baselineRows[0] : null;
   if (baselineRows.length > 1) issues.push("В SchemaMigrations обнаружены дубли записей базовой миграции схемы.");
@@ -483,12 +498,19 @@ function di3EnsureSchemaVersioning_(backup) {
 function di3GetCleanBaselineState_() {
   var ss = di3GetSpreadsheet_();
   var metaSheet = ss.getSheetByName("_AppMeta");
-  var currentVersion = metaSheet ? di3GetSchemaVersion_() : 0;
-  var migrationSheet = ss.getSheetByName("SchemaMigrations");
-  var migrations = migrationSheet ? di3GetSchemaMigrationRows_() : [];
+  var currentVersion = 0;
+  var migrations = [];
+  var issues = [];
+  try { currentVersion = metaSheet ? di3GetSchemaVersion_() : 0; }
+  catch (versionError) { issues.push(versionError.message || String(versionError)); }
+  try {
+    var migrationSheet = ss.getSheetByName("SchemaMigrations");
+    migrations = migrationSheet ? di3GetSchemaMigrationRows_() : [];
+  } catch (migrationError) {
+    issues.push("Не удалось прочитать SchemaMigrations: " + (migrationError.message || String(migrationError)));
+  }
   var cleanRows = migrations.filter(function (row) { return row.migration_key === DI3_CLEAN_BASELINE_MIGRATION_KEY; });
   var otherRows = migrations.filter(function (row) { return row.migration_key !== DI3_CLEAN_BASELINE_MIGRATION_KEY; });
-  var issues = [];
 
   if (cleanRows.length > 1) issues.push("В SchemaMigrations обнаружены дубли CLEAN_FINAL_BASELINE_ADOPTION.");
   if (otherRows.length) issues.push("Обнаружены записи legacy-миграций; clean baseline не может использоваться.");
