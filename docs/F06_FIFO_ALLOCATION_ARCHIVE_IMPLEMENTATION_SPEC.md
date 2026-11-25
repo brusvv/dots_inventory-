@@ -113,7 +113,7 @@ Append-only lifecycle log. Рекомендуемые поля:
 | fifo_run_id | Run, выполняющий replay |
 | operation_id | Исходная операция или пусто для ручного rebuild |
 | scope_type | PRODUCT или FULL |
-| scope_json | Канонически отсортированный список product_id либо FULL |
+| scope_json | Один product_id для PRODUCT либо FULL |
 | input_fingerprint | Fingerprint ledger/lot/detail входа |
 | source_allocations_fingerprint | Fingerprint вытесняемого active snapshot |
 | target_allocations_fingerprint | Fingerprint детерминированной новой проекции |
@@ -179,21 +179,6 @@ Full replay имеет scope `FULL` и один replay ID на весь ledger r
 Новая allocation строка получает детерминированный ID, вычисленный из:
 - replay_id;
 - стабильного ordinal allocation в детерминированном FIFO plan.
-
-Не использовать физический номер строки или случайный UUID. Повторная сборка одинакового replay должна выдавать идентичные строки и одинаковый target fingerprint.
-
-### 4.2 Ручной full rebuild
-
-При первом ручном запуске создаётся FIFO run и replay ID до любых изменений проекции. Если выполнение оборвалось, recovery-команда должна обнаружить незавершённый replay и продолжить именно его. Повторный ручной запуск не должен молча создавать новый replay поверх незавершённого.
-
-### 4.3 Стабильные allocation IDs
-
-Новая allocation строка получает детерминированный ID, вычисленный из:
-- replay_id;
-- movement_id;
-- lot_id;
-- allocation_type;
-- стабильного ordinal для повторяющихся сочетаний.
 
 Не использовать физический номер строки или случайный UUID. Повторная сборка одинакового replay должна выдавать идентичные строки и одинаковый target fingerprint.
 
