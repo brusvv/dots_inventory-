@@ -149,6 +149,7 @@ function di3BuildMenus_() {
       .addSeparator()
       .addItem("Новый товар", "di3NewProductForm")
       .addItem("Открыть карточку продукта", "di3OpenProductForm")
+      .addItem("Загрузить выбранный товар…", "di3LoadSelectedProductToForm")
       .addItem("Сохранить товар", "di3SaveNewProductForm");
   });
 
@@ -218,11 +219,11 @@ function di3BuildMenus_() {
       .addItem("Открыть реестр заказов", "di3OpenOrderRegister")
       .addItem("Обновить реестр", "di3RefreshOrderRegister")
       .addSeparator()
-      .addItem("Отправить выбранный заказ", "di3DispatchSelectedOrder")
-      .addItem("Завершить выбранный заказ", "di3CompleteSelectedOrder")
-      .addItem("Отметить «Возвращается»", "di3MarkSelectedOrderReturning")
-      .addItem("Принять возврат", "di3ReturnSelectedOrder")
-      .addItem("Отменить новый заказ", "di3CancelSelectedOrder");
+      .addItem("Отправить выбранный заказ (Новый → В пути)…", "di3DispatchSelectedOrder")
+      .addItem("Завершить выбранный заказ (В пути → Завершен)…", "di3CompleteSelectedOrder")
+      .addItem("Отметить «Возвращается» (из «В пути»)…", "di3MarkSelectedOrderReturning")
+      .addItem("Принять возврат (из «Возвращается»)…", "di3ReturnSelectedOrder")
+      .addItem("Отменить заказ (только «Новый»)…", "di3CancelSelectedOrder");
   });
 
   addMenu("Финансы", function (menu) {
@@ -232,30 +233,42 @@ function di3BuildMenus_() {
   });
 
   addMenu("Система", function (menu) {
-    menu.addItem("Открыть настройки", "di3OpenSettingsWorkspace")
-      .addItem("Обновить настройки", "di3RefreshSettingsWorkspace")
-      .addSeparator()
-      .addItem("Предварительная проверка установки (Dry Run)", "di3RunInstallationDryRun")
-      .addItem("Проверить установку и систему", "di3RunInstallationDiagnostics")
-      .addItem("Показать размеры строк и столбцов", "di3LogSheetGridReport")
-      .addItem("Проверить часовой пояс конфигурации", "di3ShowTimeZoneConfiguration")
-      .addItem("Переустановить триггеры после копирования", "di3RepairInstallableTriggersAfterRestore")
-      .addSeparator()
-      .addItem("Состояние учётного периода", "di3ShowPeriodGuardStatus")
-      .addItem("Закрыть учётный месяц…", "di3PromptCloseAccountingPeriod")
-      .addItem("Открыть последний закрытый месяц…", "di3PromptReopenAccountingPeriod")
-      .addSeparator()
-      .addItem("Отчёт по состоянию операций", "di3ShowOperationRecoveryReport")
-      .addItem("Восстановить незавершённые операции", "di3RecoverAllPendingOperations")
-      .addItem("Снять карантин после ручной сверки…", "di3PromptRequeueQuarantinedOperation")
-      .addItem("Пересчитать FIFO в копейках", "di3RunMoneyMinorUnitsMigration")
-      .addItem("Проверить целостность FIFO (без изменений)", "di3RunFifoIntegrityCheck")
-      .addItem("Перестроить FIFO полностью…", "di3RunFullFifoRebuild")
-      .addSeparator()
-      .addItem("Создать резервную копию сейчас", "di3CreateSpreadsheetBackupFromMenu")
-      .addItem("Показать резервные копии", "di3ShowSpreadsheetBackups")
-      .addItem("Открыть папку резервных копий", "di3OpenSpreadsheetBackupFolder")
-      .addItem("Восстановить в новую таблицу…", "di3PromptRestoreSpreadsheetBackup");
+    function subMenu(name, build) {
+      var child = ui.createMenu(name);
+      build(child);
+      return child;
+    }
+    menu.addSubMenu(subMenu("Настройки", function (child) {
+      child.addItem("Открыть настройки", "di3OpenSettingsWorkspace")
+        .addItem("Обновить настройки", "di3RefreshSettingsWorkspace");
+    }));
+    menu.addSubMenu(subMenu("Установка и диагностика", function (child) {
+      child.addItem("Предварительная проверка установки (Dry Run)", "di3RunInstallationDryRun")
+        .addItem("Проверить установку и систему", "di3RunInstallationDiagnostics")
+        .addItem("Показать размеры строк и столбцов", "di3LogSheetGridReport")
+        .addItem("Проверить часовой пояс конфигурации", "di3ShowTimeZoneConfiguration")
+        .addItem("Переустановить триггеры после копирования", "di3RepairInstallableTriggersAfterRestore");
+    }));
+    menu.addSubMenu(subMenu("Учётный период", function (child) {
+      child.addItem("Состояние учётного периода", "di3ShowPeriodGuardStatus")
+        .addItem("Закрыть учётный месяц…", "di3PromptCloseAccountingPeriod")
+        .addItem("Открыть последний закрытый месяц…", "di3PromptReopenAccountingPeriod");
+    }));
+    menu.addSubMenu(subMenu("Операции и FIFO", function (child) {
+      child.addItem("Отчёт по состоянию операций", "di3ShowOperationRecoveryReport")
+        .addItem("Восстановить незавершённые операции…", "di3RecoverAllPendingOperations")
+        .addItem("Снять карантин после ручной сверки…", "di3PromptRequeueQuarantinedOperation")
+        .addSeparator()
+        .addItem("Пересчитать FIFO в копейках…", "di3RunMoneyMinorUnitsMigration")
+        .addItem("Проверить целостность FIFO (без изменений)", "di3RunFifoIntegrityCheck")
+        .addItem("Перестроить FIFO полностью…", "di3RunFullFifoRebuild");
+    }));
+    menu.addSubMenu(subMenu("Резервное копирование", function (child) {
+      child.addItem("Создать резервную копию сейчас", "di3CreateSpreadsheetBackupFromMenu")
+        .addItem("Показать резервные копии", "di3ShowSpreadsheetBackups")
+        .addItem("Открыть папку резервных копий", "di3OpenSpreadsheetBackupFolder")
+        .addItem("Восстановить в новую таблицу…", "di3PromptRestoreSpreadsheetBackup");
+    }));
   });
 
   return { status: "READY", menus: menus };

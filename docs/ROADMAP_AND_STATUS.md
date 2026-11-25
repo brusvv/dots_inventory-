@@ -23,6 +23,21 @@
 - Local checks: all 47 `.gs` syntax checks PASS; Supply Workspace UX tests 9/9 PASS; warehouse dashboard tests 5/5 PASS; TypeScript AST audit 532 top-level functions, 86 top-level variable declarations, no parse errors or duplicate names.
 - Not runtime-accepted: dialogs, installable onEdit behavior, Apps Script hashing/Spreadsheet APIs and actual FIFO read-only behavior must be verified on a restored test spreadsheet. The blank Warehouse Dashboard chart remains an open issue.
 
+## UX patch — product/order workspaces and navigation
+
+- **UX-04:** protect `Новый заказ` with a dirty-form fingerprint and confirmation; successful order creation resets the form without a duplicate prompt.
+- **UX-05:** protect the product card from clearing/replacing unsaved fields; selector changes are staged and require an explicit menu confirmation before loading another product.
+- **UX-06:** group System commands into settings, diagnostics, accounting period, operations/FIFO and backups; order transition labels show allowed source/target states.
+- Local tests are source/Node checks only. Real trigger prompts and menu behavior still require a restored Google Sheets test copy.
+
+## UX patch — product/order workspaces and navigation (25.11.2026)
+
+- **UX-04:** `Новый заказ` fingerprints B3:B8 and A12:C31 (excluding derived G4:G11) and prompts before clearing unsaved parameters/lines. After successful order creation, the form is reset without asking again.
+- **UX-05:** `Новый товар` prompts before clearing B6:B15. When a different product is selected while dirty, the attempted option is staged in DocumentProperties and the previous selector restored. The explicit menu action asks before loading the new record. The duplicate-identity path also uses this confirmation and must not silently replace entered fields.
+- **UX-06:** System navigation is grouped by task; order transition labels name expected source/target states. Menu labels are descriptive only—the domain functions remain the actual status guards.
+- Local validation: syntax **48 `.gs` PASS**, Supply UX **9/9**, Catalog/Order UX **10/10**, Warehouse Dashboard **5/5**, TypeScript AST **545 functions / 87 top-level vars / no duplicates or parse errors**, menu reference audit **68 actions / 0 missing handlers**.
+- These checks are source/Node-only. Real onEdit trigger behavior, toasts, confirmation dialogs and menus must be accepted in a restored Google Sheets copy before deployment.
+
 ## Warehouse Dashboard
 
 В текущем источнике `19_DI3_WarehouseViews.gs` уже содержит:

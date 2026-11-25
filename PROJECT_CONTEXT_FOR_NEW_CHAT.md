@@ -1,9 +1,9 @@
 # PROJECT CONTEXT FOR NEW CHAT — Dots Inventory v3 RC8
 
 **Base context snapshot:** 24 November 2026  
-**Local UX patch:** 25 November 2026  
+**Local UX patches:** 25 November 2026  
 **Base source:** user-uploaded `40.rar`, SHA-256 `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`  
-**Current working tree:** `src/apps_script/` (40 Apps Script modules) + `runtime/probes/` (7 probes), including the 25.11.2026 UX-01–UX-03 patch. See `docs/UX_PATCH_UX01_UX03.md`.
+**Current working tree:** `src/apps_script/` (41 Apps Script modules) + `runtime/probes/` (7 probes), including UX-01–UX-06 patches from 25.11.2026. See `docs/UX_PATCH_UX01_UX03.md` and `docs/UX_PATCH_UX04_UX06.md`.
 
 > New-chat instruction: use this repository as the actual current source snapshot. Inspect current files before proposing edits. Do not assume that old patch links or older snippets represent the installed code. Preserve the user's safe workflow: work on a restored test copy, backup first, no destructive operation without explicit approval.
 
@@ -17,9 +17,7 @@ The spreadsheet is designed as an application with visible workspaces and hidden
 
 ## 2. Current source snapshot — what is actually in this ZIP
 
-The uploaded `40.rar` contains:
-
-- 39 numbered Apps Script modules from the base archive, plus `39_DI3_SupplyWorkspaceUxTests.gs` added by the 25.11.2026 local patch (40 modules in the current working tree);
+The base `40.rar` contained 39 Apps Script source modules. The current patched working tree contains those base modules plus two local regression modules (`39_DI3_SupplyWorkspaceUxTests.gs`, `40_DI3_CatalogOrderUxTests.gs`), for 41 Apps Script modules total;
 - 7 temporary runtime probes;
 - no `appsscript.json`, `.clasp.json`, Node regression harness, `package.json`, or original docs.
 

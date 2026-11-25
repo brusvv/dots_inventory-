@@ -267,13 +267,20 @@ function di3OpenProductForm() {
   return { opened: true, sheet: DI3_PRODUCT_FORM_SHEET, product_options: selector.options || 0 };
 }
 
-function di3NewProductForm() {
+function di3NewProductForm(options) {
+  options = options || {};
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_PRODUCT_FORM_SHEET);
   if (!sheet) throw new Error('Лист «Карточка продукта» не найден.');
+  if (di3HasUnsavedProductFormChanges_(sheet) && options.skipUnsavedConfirmation !== true) {
+    var confirmed = di3ConfirmProductFormDiscard_("Очистить карточку продукта?",
+      "В карточке есть несохранённые изменения. Команда «Новый товар» очистит выбранный товар и поля B6:B15. Продолжить?");
+    if (!confirmed) return { status: "CANCELLED_BY_USER", cleared: false };
+  }
   sheet.getRange("B4:B16").clearContent();
   sheet.getRange("B16").setValue("Появятся после выбора существующего товара");
+  di3SetProductFormStateBaseline_(sheet);
   di3OpenProductForm();
-  return { cleared: true, mode: "CREATE" };
+  return { status: "READY", cleared: true, mode: "CREATE" };
 }
 
 function di3RefreshProductsSheet() {
@@ -368,11 +375,73 @@ function di3RefreshProductsSheet() {
   };
 }
 
-function di3LoadSelectedProductToForm() {
+var DI3_PRODUCT_FORM_STATE_KEYS = Object.freeze({
+  baseline: "DI3_PRODUCT_FORM_STATE_BASELINE",
+  selected: "DI3_PRODUCT_FORM_SELECTED_OPTION",
+  pending: "DI3_PRODUCT_FORM_PENDING_OPTION",
+  previous: "DI3_PRODUCT_FORM_PREVIOUS_OPTION"
+});
+
+function di3BuildProductFormStatePayload_(fields) {
+  fields = fields || {};
+  return { fields: fields.fields || [] }; // B6:B15; selector and read-only summary are excluded.
+}
+
+function di3GetProductFormStateHash_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_PRODUCT_FORM_SHEET);
+  return di3BuildManualOperationPayloadHash_(di3BuildProductFormStatePayload_({
+    fields: sheet.getRange("B6:B15").getValues()
+  }));
+}
+
+function di3HasProductFormUserData_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_PRODUCT_FORM_SHEET);
+  return sheet.getRange("B6:B15").getValues().some(function (row) {
+    return row[0] !== "" && row[0] !== null && typeof row[0] !== "undefined";
+  });
+}
+
+function di3HasUnsavedProductFormChanges_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_PRODUCT_FORM_SHEET);
+  var baseline = di3DocumentProperties_().getProperty(DI3_PRODUCT_FORM_STATE_KEYS.baseline);
+  return baseline ? di3GetProductFormStateHash_(sheet) !== baseline : di3HasProductFormUserData_(sheet);
+}
+
+function di3SetProductFormStateBaseline_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_PRODUCT_FORM_SHEET);
+  var properties = di3DocumentProperties_();
+  var selected = String(sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).getValue() || "");
+  properties.setProperty(DI3_PRODUCT_FORM_STATE_KEYS.baseline, di3GetProductFormStateHash_(sheet));
+  properties.setProperty(DI3_PRODUCT_FORM_STATE_KEYS.selected, selected);
+  properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.pending);
+  properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.previous);
+  return { baseline_set: true, selected: selected };
+}
+
+function di3ConfirmProductFormDiscard_(title, message) {
+  var ui = SpreadsheetApp.getUi();
+  return ui.alert(title, message, ui.ButtonSet.YES_NO) === ui.Button.YES;
+}
+
+function di3LoadSelectedProductToForm(options) {
+  options = options || {};
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_PRODUCT_FORM_SHEET);
   if (!sheet) throw new Error('Лист «Карточка продукта» не найден.');
-  var selected = String(sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).getValue() || "");
+  var properties = di3DocumentProperties_();
+  var pending = String(properties.getProperty(DI3_PRODUCT_FORM_STATE_KEYS.pending) || "");
+  var selected = String(options.requestedOption || pending || sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).getValue() || "");
   if (!selected) return { loaded: false };
+  var previous = String(properties.getProperty(DI3_PRODUCT_FORM_STATE_KEYS.previous) || properties.getProperty(DI3_PRODUCT_FORM_STATE_KEYS.selected) || "");
+  if (di3HasUnsavedProductFormChanges_(sheet) && options.skipUnsavedConfirmation !== true) {
+    var confirmed = di3ConfirmProductFormDiscard_("Заменить данные карточки продукта?",
+      "В карточке есть несохранённые изменения. Загрузка товара «" + selected + "» заменит значения полей B6:B15. Продолжить?");
+    if (!confirmed) {
+      sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).setValue(previous);
+      properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.pending);
+      properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.previous);
+      return { status: "CANCELLED_BY_USER", loaded: false };
+    }
+  }
   var products = di3ListAllProductsForWarehouse_();
   var codeMap = di3GetProductPublicCodeMap_();
   var matches = products.filter(function (p) { return di3ProductUiOption_(p, codeMap) === selected; });
@@ -380,6 +449,7 @@ function di3LoadSelectedProductToForm() {
   var p = matches[0];
   var storedDiameter = di3NormalizeDiameter_(p.diameter, p.diameter);
   var diameterForForm = storedDiameter.invalidDate ? "" : String(storedDiameter.value || "").replace(".", ",");
+  sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).setValue(selected);
   sheet.getRange("B8").setNumberFormat("@");
   sheet.getRange("B6:B15").setValues([
     [p.brand || ""], [p.model || ""], [diameterForForm], [p.category || ""], [p.shape || ""],
@@ -389,6 +459,7 @@ function di3LoadSelectedProductToForm() {
   sheet.getRange("B8").setNote(storedDiameter.invalidDate
     ? "Ранее сохранено значение, похожее на дату/серийный номер Google Sheets. Укажи фактический диаметр текстом или оставь поле пустым."
     : "Введи диаметр как текст, например 6,5. Поле не преобразует значение в дату.");
+  di3SetProductFormStateBaseline_(sheet);
   return { loaded: true, product_id: p.product_id, label: di3GetProductLabel_(p), diameter_needs_review: storedDiameter.invalidDate };
 }
 
@@ -451,6 +522,7 @@ function di3SaveProductForm() {
     sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).clearContent();
     sheet.getRange("B6:B15").clearContent();
     sheet.getRange("B16").setValue(di3GetProductPackVariantsSummary_(String(oldProduct.product_id)));
+    di3SetProductFormStateBaseline_(sheet);
     return { updated: true, product_id: oldProduct.product_id, pack_variant: variant };
   });
 }
@@ -491,7 +563,7 @@ function di3SaveNewProductForm() {
   if (existing) {
     var existingOption = di3GetProductOptionLabel_(existing);
     sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).setValue(existingOption);
-    di3LoadSelectedProductToForm();
+    di3LoadSelectedProductToForm({ requestedOption: existingOption });
     di3GetSpreadsheet_().toast(
       'Товар ' + existingOption + ' уже существует. Карточка загружена; для добавления фасовки укажи её размер в B15 и сохрани.',
       "Товар уже существует",
@@ -508,6 +580,7 @@ function di3SaveNewProductForm() {
   if (typeof di3RefreshDependentCatalogViews_ === "function") di3RefreshDependentCatalogViews_();
   sheet.getRange("B4:B15").clearContent();
   sheet.getRange("B16").setValue("Создано: " + result.display_code + ". Фасовки можно добавить при редактировании товара.");
+  di3SetProductFormStateBaseline_(sheet);
   di3GetSpreadsheet_().toast(result.display_code + " · " + result.label, "Товар создан", 5);
   return result;
 }
@@ -517,8 +590,30 @@ function di3InstallProductCatalogTrigger_() {
 }
 
 function di3ProductCatalogOnEdit(e) {
-  if (!e || !e.range) return;
-  if (e.range.getSheet().getName() === DI3_PRODUCT_FORM_SHEET && e.range.getA1Notation() === DI3_PRODUCTS_UI_CELLS.selected) {
-    di3LoadSelectedProductToForm();
+  if (!e || !e.range || !e.range.getSheet) return;
+  var sheet = e.range.getSheet();
+  if (sheet.getName() !== DI3_PRODUCT_FORM_SHEET || e.range.getA1Notation() !== DI3_PRODUCTS_UI_CELLS.selected) return;
+  var properties = di3DocumentProperties_();
+  var attempted = String(typeof e.value === "undefined" ? sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).getValue() || "" : e.value || "").trim();
+  var previous = typeof e.oldValue !== "undefined"
+    ? String(e.oldValue || "")
+    : String(properties.getProperty(DI3_PRODUCT_FORM_STATE_KEYS.selected) || "");
+  if (!attempted) {
+    sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).setValue(previous);
+    properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.pending);
+    properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.previous);
+    return { status: "IGNORED_EMPTY_SELECTOR" };
   }
+  if (attempted === previous) return { status: "UNCHANGED_SELECTION" };
+  if (di3HasUnsavedProductFormChanges_(sheet)) {
+    properties.setProperty(DI3_PRODUCT_FORM_STATE_KEYS.pending, attempted);
+    properties.setProperty(DI3_PRODUCT_FORM_STATE_KEYS.previous, previous);
+    sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).setValue(previous);
+    di3GetSpreadsheet_().toast("В карточке есть несохранённые изменения. Они сохранены в форме. Для загрузки нового товара запусти «Продукты → Загрузить выбранный товар…» и подтверди замену.", "Загрузка товара не выполнена", 10);
+    return { status: "CONFIRMATION_REQUIRED", requested_product: attempted };
+  }
+  properties.setProperty(DI3_PRODUCT_FORM_STATE_KEYS.selected, attempted);
+  properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.pending);
+  properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.previous);
+  return di3LoadSelectedProductToForm({ skipUnsavedConfirmation: true, requestedOption: attempted });
 }

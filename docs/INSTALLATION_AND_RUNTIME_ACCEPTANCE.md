@@ -59,3 +59,25 @@ Runtime acceptance (on restored copy only):
 5. Run `Перестроить FIFO полностью…` and choose **No**. Confirm no backup/rebuild run is started. Do not choose **Yes** during UX acceptance; the mutating rebuild is outside the current test scope.
 
 Local validation commands: `bash tools/check_syntax.sh`, `node tools/run_warehouse_dashboard_tests.js`, and `node tools/run_supply_workspace_ux_tests.js`. They do not prove Google Apps Script runtime behavior or Dashboard rendering. The warehouse Dashboard's blank chart remains open and must still be accepted separately.
+
+
+## Local UX patch UX-04–UX-06 (25.11.2026)
+
+Replace these modules on a restored/test copy after taking a fresh backup:
+
+- `10_DI3_ProductCatalog.gs`
+- `17_DI3_OrderWorkspace.gs`
+- `22_DI3_MenuAndFilterUtils.gs`
+- add `40_DI3_CatalogOrderUxTests.gs` for in-project regression tests (the Node runner stays in the repository tools folder and is not an Apps Script module).
+
+No schema migration is part of this patch. The unified edit dispatcher already routes `di3ProductCatalogOnEdit`; retain the existing unified installable trigger and verify its handler is `di3UnifiedOnEdit`. Reload the spreadsheet after replacing modules to rebuild custom menus.
+
+Runtime acceptance (restored test copy only):
+
+1. Enter values in the product card, run `Новый товар`, select **No**, and verify B4 and B6:B15 remain unchanged. On a separate clean form choose **Yes** and verify the form clears.
+2. Load a product, edit B6:B15, change B4 to another product. Confirm the previous B4 is restored and the form values remain. Run `Продукты → Загрузить выбранный товар…`; **No** must retain the current record and edits, **Yes** must load the requested product.
+3. Enter a new product whose identity already exists. Confirm the duplicate-identity path asks before loading the existing product; **No** must not replace entered data. Do not save the product as part of this UX prompt test.
+4. Enter parameters/items in the order calculator and run `Новый заказ`. **No** must retain all inputs; **Yes** must clear them. Do not call `Создать заказ` solely to test UX unless a disposable test order is explicitly authorized.
+5. Check System submenu grouping and order transition labels. Invalid order states must still be rejected by their domain handlers; static menu text is not a state guard.
+
+Local checks: `bash tools/check_syntax.sh`, `node tools/run_catalog_order_ux_tests.js`, `node tools/run_supply_workspace_ux_tests.js`, and `node tools/run_warehouse_dashboard_tests.js`. They do not emulate Apps Script dialogs, Spreadsheet services or live menu behavior.

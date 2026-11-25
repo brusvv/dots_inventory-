@@ -3,9 +3,9 @@
   "source_archive": "40.rar",
   "source_archive_sha256": "2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09",
   "counts": {
-    "apps_script_modules": 40,
+    "apps_script_modules": 41,
     "runtime_probes": 7,
-    "gs_files_total": 47
+    "gs_files_total": 48
   },
   "configured_time_zone_in_source": "Europe/Helsinki",
   "schema_version_constant": 2,
@@ -140,8 +140,8 @@
     },
     {
       "path": "src/apps_script/10_DI3_ProductCatalog.gs",
-      "bytes": 31417,
-      "sha256": "13493740e5c558bbf47691e62a47a98e9fca93515bb512788648039a89f8f93b",
+      "bytes": 37130,
+      "sha256": "3eb18c72c43fe58051c168c1c741f9147e7ee56843907d7c26335e2df23216e7",
       "kind": "apps_script_module"
     },
     {
@@ -182,8 +182,8 @@
     },
     {
       "path": "src/apps_script/17_DI3_OrderWorkspace.gs",
-      "bytes": 24268,
-      "sha256": "0053270be817df879131589704d4bbfbaa24cbf250c86f808419fdc847c495bb",
+      "bytes": 27099,
+      "sha256": "dc70d1c068d876ea27658b3329265cf3be4b766511e8854779aa432f39050738",
       "kind": "apps_script_module"
     },
     {
@@ -212,8 +212,8 @@
     },
     {
       "path": "src/apps_script/22_DI3_MenuAndFilterUtils.gs",
-      "bytes": 15259,
-      "sha256": "0f0532a71e823529e2cddd8073dc71a350ecab86d5ed97350195a5a1d78aa2f8",
+      "bytes": 16092,
+      "sha256": "1872615d1a23527317eff3b6ebe886866fd8f46deacdf936a18b8386ca0650f3",
       "kind": "apps_script_module"
     },
     {
@@ -317,6 +317,12 @@
       "bytes": 5312,
       "sha256": "ba92d43133ff3c0205ab20a550f8bfa09761a34d0840e801a59a56fc253a72d2",
       "kind": "apps_script_module"
+    },
+    {
+      "path": "src/apps_script/40_DI3_CatalogOrderUxTests.gs",
+      "bytes": 4729,
+      "sha256": "b4d9758360232c3434fcee961eba69af4d939067657f25a11dd7953d36875632",
+      "kind": "apps_script_module"
     }
   ],
   "source_archive_omissions": [
@@ -325,21 +331,40 @@
     "Node regression harness / package.json",
     "original repository history and full documentation"
   ],
-  "working_tree_status": "PATCHED_DERIVATIVE_UX01_UX03",
+  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Local UX-01–UX-06 patches are documented in docs/UX_PATCH_UX01_UX03.md and docs/UX_PATCH_UX04_UX06.md.",
   "patch_scope": {
-    "modified_modules": [
-      "src/apps_script/11_DI3_SupplyDomain.gs",
-      "src/apps_script/12_DI3_SupplyReceiving.gs",
-      "src/apps_script/22_DI3_MenuAndFilterUtils.gs",
-      "src/apps_script/24_DI3_IncrementalFifo.gs",
-      "src/apps_script/34_DI3_HistoricalSupply.gs",
-      "src/apps_script/36_DI3_SupplyFullEdit.gs"
-    ],
-    "added_modules": [
-      "src/apps_script/39_DI3_SupplyWorkspaceUxTests.gs"
-    ],
-    "local_tooling": [
-      "tools/run_supply_workspace_ux_tests.js"
-    ]
+    "UX-01_UX-03": {
+      "modified_modules": [
+        "11_DI3_SupplyDomain.gs",
+        "12_DI3_SupplyReceiving.gs",
+        "22_DI3_MenuAndFilterUtils.gs",
+        "24_DI3_IncrementalFifo.gs",
+        "34_DI3_HistoricalSupply.gs",
+        "36_DI3_SupplyFullEdit.gs"
+      ],
+      "added_modules": [
+        "39_DI3_SupplyWorkspaceUxTests.gs"
+      ],
+      "added_tools": [
+        "run_supply_workspace_ux_tests.js"
+      ]
+    },
+    "UX-04_UX-06": {
+      "modified_modules": [
+        "10_DI3_ProductCatalog.gs",
+        "17_DI3_OrderWorkspace.gs",
+        "22_DI3_MenuAndFilterUtils.gs"
+      ],
+      "added_modules": [
+        "40_DI3_CatalogOrderUxTests.gs"
+      ],
+      "added_tools": [
+        "run_catalog_order_ux_tests.js"
+      ],
+      "added_docs": [
+        "docs/UX_PATCH_UX04_UX06.md",
+        "docs/MENU_STRUCTURE_CURRENT.md"
+      ]
+    }
   }
 }

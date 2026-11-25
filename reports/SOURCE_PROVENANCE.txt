@@ -12,3 +12,11 @@ Local patch applied 2026-11-25:
 - Added source test module: 39_DI3_SupplyWorkspaceUxTests.gs.
 - Added local Node test runner: tools/run_supply_workspace_ux_tests.js.
 - Original archive SHA-256 remains the provenance of the unmodified base snapshot, not of the patched working tree.
+
+Local patch applied 2026-11-25:
+- UX-04–UX-06 protect Catalog and Order workspaces from accidental unsaved-data loss and improve menu grouping/labels.
+- Modified source modules: 10, 17, 22. Added source test module: 40_DI3_CatalogOrderUxTests.gs.
+- Added local Node runner: tools/run_catalog_order_ux_tests.js.
+- Added current menu map: docs/MENU_STRUCTURE_CURRENT.md.
+- Duplicate product identity resolution now confirms before replacing the unsaved product card.
+- Source archive SHA-256 above remains provenance of the unmodified base archive, not the patched working tree.

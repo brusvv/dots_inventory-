@@ -157,6 +157,9 @@ function di3SetupOrderForm() {
   di3CompactSheet_(sheet, DI3_ORDER_FORM.firstLine + DI3_ORDER_FORM.lineCount - 1, 7);
   sheet.setHiddenGridlines(true);
   di3RefreshOrderFormValidations();
+  if (!di3DocumentProperties_().getProperty("DI3_ORDER_FORM_STATE_BASELINE") && !di3HasOrderFormUserData_(sheet)) {
+    di3SetOrderFormStateBaseline_(sheet);
+  }
   return { status: "READY", sheet: DI3_ORDER_FORM_SHEET, product_options: di3GetOrderProductOptionIndex_().options.length };
 }
 
@@ -245,8 +248,60 @@ function di3PreviewOrderForm() {
   return plan;
 }
 
-function di3NewOrderForm() {
+function di3BuildOrderFormStatePayload_(fields) {
+  fields = fields || {};
+  return {
+    settings: fields.settings || [], // B3:B8
+    lines: fields.lines || [] // A12:C31
+  };
+}
+
+function di3GetOrderFormStateHash_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_ORDER_FORM_SHEET);
+  return di3BuildManualOperationPayloadHash_(di3BuildOrderFormStatePayload_({
+    settings: sheet.getRange("B3:B8").getValues(),
+    lines: sheet.getRange(DI3_ORDER_FORM.firstLine, 1, DI3_ORDER_FORM.lineCount, 3).getValues()
+  }));
+}
+
+function di3HasOrderFormUserData_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_ORDER_FORM_SHEET);
+  var settings = sheet.getRange("B3:B8").getValues().map(function (row) { return row[0]; });
+  var enabled = settings[0] === true || settings[2] === true;
+  var rates = Number(settings[1] || 0) !== 0 || Number(settings[3] || 0) !== 0;
+  var deliveryOrNotes = settings[4] !== "" && settings[4] != null || settings[5] !== "" && settings[5] != null;
+  var lines = sheet.getRange(DI3_ORDER_FORM.firstLine, 1, DI3_ORDER_FORM.lineCount, 3).getValues();
+  return enabled || rates || deliveryOrNotes || lines.some(function (row) {
+    return row.some(function (value) { return value !== "" && value !== null && typeof value !== "undefined"; });
+  });
+}
+
+function di3HasUnsavedOrderFormChanges_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_ORDER_FORM_SHEET);
+  var baseline = di3DocumentProperties_().getProperty("DI3_ORDER_FORM_STATE_BASELINE");
+  return baseline ? di3GetOrderFormStateHash_(sheet) !== baseline : di3HasOrderFormUserData_(sheet);
+}
+
+function di3SetOrderFormStateBaseline_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_ORDER_FORM_SHEET);
+  var hash = di3GetOrderFormStateHash_(sheet);
+  di3DocumentProperties_().setProperty("DI3_ORDER_FORM_STATE_BASELINE", hash);
+  return hash;
+}
+
+function di3ConfirmOrderFormDiscard_() {
+  var ui = SpreadsheetApp.getUi();
+  return ui.alert("Очистить калькулятор заказа?",
+    "В форме есть несохранённые изменения. Команда «Новый заказ» очистит параметры заказа и товарные строки. Созданные ранее заказы и складские движения не удаляются. Продолжить?",
+    ui.ButtonSet.YES_NO) === ui.Button.YES;
+}
+
+function di3NewOrderForm(options) {
+  options = options || {};
   var sheet = di3GetSheetOrThrow_(DI3_ORDER_FORM_SHEET);
+  if (di3HasUnsavedOrderFormChanges_(sheet) && options.skipUnsavedConfirmation !== true && !di3ConfirmOrderFormDiscard_()) {
+    return { status: "CANCELLED_BY_USER", cleared: false };
+  }
   sheet.getRange("B3:B8").clearContent();
   sheet.getRange("B3").insertCheckboxes().setValue(false);
   sheet.getRange("B4").setValue(0);
@@ -256,13 +311,14 @@ function di3NewOrderForm() {
   sheet.getRange("G4:G11").clearContent();
   di3RotateFormRequestToken_("ORDER");
   di3RefreshOrderFormValidations();
-  return { cleared: true };
+  di3SetOrderFormStateBaseline_(sheet);
+  return { status: "READY", cleared: true };
 }
 
 function di3SaveOrderForm() {
   var command = di3ReadOrderFormCommand_();
   var result = di3CreateOrder(command);
-  di3NewOrderForm();
+  di3NewOrderForm({ skipUnsavedConfirmation: true });
   di3GetSpreadsheet_().toast("Заказ " + result.order_number + " создан. Остатки пока не изменились.", "Заказ создан", 7);
   return result;
 }
