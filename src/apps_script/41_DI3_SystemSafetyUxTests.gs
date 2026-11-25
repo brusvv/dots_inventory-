@@ -244,6 +244,15 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
+    ["StockLedger", "StockAllocations", "FifoAllocationRuns", "FifoAllocationArchive",
+      "FifoLotCacheArchive", "FifoReplayEvents"].forEach(function (sheetName) {
+      equal(DI3_BACKUP_HASH_PRIORITY_SHEETS.indexOf(sheetName) >= 0, true,
+        "Backup priority must include " + sheetName);
+    });
+    includes(di3GetSpreadsheetBackupSnapshot_.toString(), "spreadsheet.getSheets()");
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("System Safety UX tests failed: " + JSON.stringify(failed));
   return report;
