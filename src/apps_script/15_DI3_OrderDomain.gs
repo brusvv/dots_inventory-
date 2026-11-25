@@ -483,10 +483,11 @@ function di3CreateOrder(command) {
  * Active-user email may be unavailable in trigger/recovery contexts; an empty
  * value is intentional and must not be replaced with the effective-user email.
  */
-function di3CaptureActorContext_() {
+function di3CaptureActorContext_(sessionApi) {
   var email = "";
   try {
-    email = String(Session.getActiveUser().getEmail() || "").trim();
+    var activeSession = sessionApi || Session;
+    email = String(activeSession.getActiveUser().getEmail() || "").trim();
   } catch (ignore) {}
   return {
     email: email,
