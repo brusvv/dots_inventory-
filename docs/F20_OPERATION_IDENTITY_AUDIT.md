@@ -144,7 +144,7 @@ The first source-level implementation slice is now in place:
 - Kept `di3GetActorEmail_()` as a backwards-compatible string accessor for existing schema columns.
 - Routed operation registration, operation-attempt execution, supply draft/status history, order status/movement history, PeriodLocks, schema migration records, supply full-edit metadata and settings actor lookup through the shared accessor.
 - Removed the duplicate direct active-user lookups and the executor's direct Session fallback. No code path substitutes `Session.getEffectiveUser()`.
-- Added a structural regression check to `di3RunSystemSafetyUxUnitTests()` for the shared helper, identity status/source markers and absence of effective-user fallback.
+- Added regression coverage to `di3RunSystemSafetyUxUnitTests()` for identified, empty-email and throwing/unavailable Session cases, plus absence of effective-user fallback.
 
 ### Boundaries not yet solved
 
