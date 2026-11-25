@@ -289,6 +289,40 @@ function di3RunStockCoreUnitTests() {
     equal(threw, true);
   });
 
+  test("pending FIFO run reuse preserves operation identity and rejects changed scope", function () {
+    var row = ["run-1", 7, "PREPARED", "ORDER_DISPATCH", new Date(), "", 12, 4, 1, "",
+      "op-1", "OP:op-1", "PRODUCT_SET", '["p1"]', "fingerprint-a"];
+    var reusable = di3SelectReusableFifoRun_([{ row_number: 9, values: row }], {
+      operation_id: "op-1", scope_type: "PRODUCT_SET", scope_json: '["p1"]', input_fingerprint: "fingerprint-a"
+    });
+    equal(reusable.run_id, "run-1");
+    equal(reusable.row_number, 9);
+    var mismatchThrew = false;
+    try {
+      di3SelectReusableFifoRun_([{ row_number: 9, values: row }], {
+        operation_id: "op-1", scope_type: "PRODUCT_SET", scope_json: '["p1"]', input_fingerprint: "fingerprint-b"
+      });
+    } catch (error) { mismatchThrew = /другой scope или input fingerprint/.test(error.message); }
+    equal(mismatchThrew, true);
+    var committed = row.slice(); committed[2] = "COMMITTED";
+    equal(di3SelectReusableFifoRun_([{ row_number: 9, values: committed }], {
+      operation_id: "op-1", scope_type: "PRODUCT_SET", scope_json: '["p1"]', input_fingerprint: "fingerprint-a"
+    }), null);
+  });
+
+  test("multiple pending FIFO runs for one operation fail closed", function () {
+    var row = ["run-1", 7, "PREPARED", "ORDER_DISPATCH", new Date(), "", 12, 4, 1, "",
+      "op-1", "OP:op-1", "PRODUCT_SET", '["p1"]', "fingerprint-a"];
+    var other = row.slice(); other[0] = "run-2"; other[1] = 8;
+    var threw = false;
+    try {
+      di3SelectReusableFifoRun_([
+        { row_number: 9, values: row }, { row_number: 10, values: other }
+      ], { operation_id: "op-1", scope_type: "PRODUCT_SET", scope_json: '["p1"]', input_fingerprint: "fingerprint-a" });
+    } catch (error) { threw = /несколько незавершённых FIFO run/.test(error.message); }
+    equal(threw, true);
+  });
+
   test("clean FIFO baseline includes sequence and append-only replay archive schemas", function () {
     equal(DI3_TABLE_SCHEMAS.StockLedger[12], "ledger_sequence");
     equal(DI3_TABLE_SCHEMAS.FifoProductState[4], "last_processed_ledger_sequence");
