@@ -13,6 +13,28 @@ For the clean release workbook, StockLedger events receive an immutable positive
 
 The sequence must never replace that ordering or be used to decide which lot is consumed first.
 
+## Source implementation progress — 26.11.2026
+
+The first source implementation pass is now present on `main`:
+
+- `DI3_TABLE_SCHEMAS.StockLedger` appends `ledger_sequence` as column 13.
+- `FifoProductState` keeps the existing fifth field position but renames it to `last_processed_ledger_sequence`.
+- `DI3_FIFO_STATE_VERSION` is now `"4"`.
+- `di3ReadLedgerSequenceIndex_()` scans the movement ID, product ID and sequence columns, rejects missing/invalid/non-positive/duplicate sequences, and returns the maximum sequence plus physical row locations for targeted reads.
+- `di3AllocateLedgerSequenceBlock_()` requires the current execution to own the nested ScriptLock and allocates max+1…max+N. Gaps are accepted; duplicates and invalid populated rows fail closed.
+- `di3AssignLedgerSequencesToLines_()` stores assigned values in immutable operation payload lines. The manual stock payload stores a single sequence directly.
+- The four stock-operation writers now append the persisted sequence as the final StockLedger field. Their row builders reject absent or invalid sequence values before writing.
+- The incremental tail reader scans the sequence index, fetches full-width data only for rows above the committed cursor, groups physically adjacent reads, and orders the returned tail by sequence.
+- Global metadata now uses `fifo_ledger_sequence_cursor`; the old row-count cursor is no longer read or written by the FIFO module.
+- Product state records the maximum processed sequence separately from the business event tuple. Full replay and incremental replay both preserve the existing business comparator.
+- Integrity diagnostics validate sequence uniqueness and compare product/global watermarks to maximum sequence values, not physical row counts.
+- Added unit coverage for reordered physical rows, sequence gaps, duplicate/missing sequence values, lock-required allocation, and business-date ordering independent of ingestion sequence. Existing actor-attribution fixtures now provide the required sequence.
+- Added a GitHub Actions quality-gates workflow and included the sequence helper in the System Safety test runner.
+
+**Verification status:** tests and syntax checks have not yet been executed. A new Actions run was not observed after adding the workflow, so no CI pass is claimed. Apps Script runtime acceptance has not been performed.
+
+This implementation pass is not a release-ready F-07 sign-off. It still requires source review, execution of all local runners and syntax checks, and runtime acceptance on a disposable empty workbook. It is not compatible with the old 12-column StockLedger layout; do not deploy it to the existing workbook. The clean-baseline adoption and legacy-workbook isolation remain prerequisites before production installation.
+
 ## Current implementation verified
 
 - `DI3_TABLE_SCHEMAS.StockLedger` currently has 12 columns and no stable event sequence.
