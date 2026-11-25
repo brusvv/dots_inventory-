@@ -768,7 +768,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds) {
       di3RefreshAllOrderFifoSnapshots_(reason || "FIFO_FULL_REBUILD", run.run_id, productIds);
     }
     if (fullReplayStateRows) di3UpsertFifoProductStateRows_(fullReplayStateRows);
-    di3SetFifoLedgerCursor_(ledgerCount);
+    di3SetFifoLedgerSequenceCursor_(maxLedgerSequence);
     di3SetAppMetaValue_("fifo_state_version", DI3_FIFO_STATE_VERSION);
     di3UpdateFifoRunStatus_(run.row_number, "COMMITTED", new Date(), "", created);
     return {
