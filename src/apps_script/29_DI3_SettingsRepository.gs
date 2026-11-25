@@ -29,11 +29,7 @@ var DI3_SETTINGS_DEFINITIONS = Object.freeze({
 });
 
 function di3SettingsActor_() {
-  try {
-    return Session.getActiveUser().getEmail() || "";
-  } catch (error) {
-    return "";
-  }
+  return di3GetActorEmail_();
 }
 
 function di3GetSettingsRows_() {
