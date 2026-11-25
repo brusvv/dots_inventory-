@@ -83,7 +83,7 @@ The actual empty-chart cause is still unknown. Run the read-only diagnostics on 
 - C-16: Finance Dashboard runtime/visual acceptance with real control orders, FIFO snapshots, UNKNOWN COGS, filters/charts and period boundaries.
 
 ### Setup / UX
-- C-11: verify Dry Run blocked preflight without mutations.
+- C-11: source hardening now inventories workbook tabs and blocks populated unknown tabs; verify read-only Dry Run behavior on a new empty workbook and a workbook with an unrelated populated tab.
 - C-12: SettingsRepository runtime acceptance and timezone switch.
 - C-13: verify sheet tab order.
 - C-14: delivery-method add/select/order flow.
@@ -298,7 +298,7 @@ The following issues have source changes and local regression coverage. They are
 - Replaced physical-row tail offsets with sequence-based tail discovery and grouped full-row reads for only rows whose sequence exceeds the cursor. Physical row reorder no longer determines whether an event is skipped.
 - Product watermarks store max processed sequence; business event watermark remains effective_at / recorded_at / movement_id. FIFO integrity diagnostics now compare sequence watermarks, not row counts.
 - Added regression cases for reordered rows, sequence gaps, duplicate/missing values, ScriptLock enforcement and independent business/ingestion ordering. Updated the System Safety runner to load the sequence helper and added a GitHub Actions quality-gates workflow for syntax and all local test suites.
-- **Source verification passed:** Latest GitHub Actions run `45721008666` completed successfully. Syntax passed for 50 `.gs` files; all seven local suites passed 117/117 (FIFO 41, Order Domain 17, Supply Workspace UX 15, Catalog/Order UX 12, System Safety UX 19, Warehouse Dashboard 9, Finance Schema 4). Added a fail-closed consistency check so a physical row sort between narrow-index scan and full-row fetch aborts tail processing rather than applying a mismatched event. No Apps Script runtime acceptance was performed.
+- **Source verification passed:** Latest GitHub Actions run `45721244778` completed successfully. Syntax passed for 50 `.gs` files; all seven local suites passed 118/118 (FIFO 41, Order Domain 17, Supply Workspace UX 15, Catalog/Order UX 12, System Safety UX 20, Warehouse Dashboard 9, Finance Schema 4). Added a fail-closed consistency check so a physical row sort between narrow-index scan and full-row fetch aborts tail processing rather than applying a mismatched event. No Apps Script runtime acceptance was performed.
 - **Deployment warning:** the new StockLedger schema is 13 columns and is intentionally incompatible with the existing 12-column workbook. Do not deploy to the current workbook. Production remains blocked on clean-baseline adoption, complete review, executed test suites, backup/restore validation and disposable-workbook runtime acceptance.
 - F-07 remains open; this is an implementation pass, not a release sign-off.
 
