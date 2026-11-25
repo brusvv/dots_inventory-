@@ -237,7 +237,16 @@ function di3SetAllLotRemainingFromReplay_(lotRows, replayPlan) {
 }
 
 
-function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount) {
+/** Stable SHA-256 fingerprint for replay inputs and projection snapshots. */
+function di3BuildFifoFingerprint_(value) {
+  if (typeof di3BuildManualOperationPayloadHash_ !== "function") {
+    throw new Error("FIFO fingerprint helper is unavailable; load StockCore before replay.");
+  }
+  return di3BuildManualOperationPayloadHash_(value);
+}
+
+function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount, options) {
+  options = options || {};
   var sheet = di3GetSheetOrThrow_("FifoAllocationRuns");
   var lastRow = sheet.getLastRow();
   // Run records are append-only. Read the last sequence, not the entire history.
@@ -249,9 +258,17 @@ function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount) {
   }
   var sequence = lastSequence + 1;
   var runId = di3MakeUuid_();
-  var row = [runId, sequence, "PREPARED", reason || "INCREMENTAL_FIFO", new Date(), "", ledgerCount, allocationCount, productCount, ""];
+  var operationId = String(options.operation_id || "");
+  var replayId = String(options.replay_id || (operationId ? "OP:" + operationId : "FULL:" + runId));
+  var scopeType = String(options.scope_type || (options.full_replay ? "FULL" : "PRODUCT_SET"));
+  var scopeJson = String(options.scope_json || "[]");
+  var inputFingerprint = String(options.input_fingerprint || "");
+  var row = [runId, sequence, "PREPARED", reason || "INCREMENTAL_FIFO", new Date(), "",
+    ledgerCount, allocationCount, productCount, "", operationId, replayId, scopeType, scopeJson, inputFingerprint];
   di3AppendTableRows_("FifoAllocationRuns", [row]);
-  return { run_id: runId, run_sequence: sequence, row_number: sheet.getLastRow() };
+  return { run_id: runId, run_sequence: sequence, row_number: sheet.getLastRow(),
+    operation_id: operationId, replay_id: replayId, scope_type: scopeType, scope_json: scopeJson,
+    input_fingerprint: inputFingerprint };
 }
 
 function di3GetFifoProductState_(stateRows, productId) {
