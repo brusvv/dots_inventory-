@@ -318,3 +318,11 @@ The following issues have source changes and local regression coverage. They are
 - Added `docs/F06_FIFO_ALLOCATION_ARCHIVE_IMPLEMENTATION_SPEC.md`. It defines separate append-only allocation and lot-cache archives, an append-only replay lifecycle event log, operation-linked replay identity, PREPARED/COMMITTED recovery, fail-closed quarantine, and 20 fault-injection/regression cases.
 - F-06 depends on F-07 sequence-based input identity. The spec is for the clean baseline; no production backfill or legacy migration is planned for the recreated workbook.
 - No Apps Script source, spreadsheet schema, workbook data, or deployment was changed. Tests and runtime fault injection were not run. F-06 remains open pending implementation and acceptance.
+
+## F-06 — source implementation groundwork — 26.11.2026
+
+- Added clean-baseline schemas for allocation snapshots, lot-cache snapshots and append-only replay events; expanded FIFO run metadata with operation ID, parent replay ID, scope and input fingerprint.
+- Linked all four stock-operation handlers to the FIFO run using their immutable operation ID. Added SHA-256 run input fingerprinting and prioritized the new archive tables in backup ordering.
+- Updated F-06 identity design after reviewing the live control flow: one stock operation may process multiple products, and only some may require a full product replay. Therefore each replaced product receives its own stable child replay identity; incremental-only products do not create archive events.
+- **Still missing:** actual archive writes, deterministic allocation IDs, PREPARED/COMMITTED lifecycle, pending replay discovery/reuse, crash recovery, source restoration and quarantine. No projection mutation was changed to archive yet.
+- GitHub Actions run `45710629961` passed syntax checks for 50 `.gs` files and all seven source suites (99/99). Runtime fault-injection and backup/restore acceptance remain open. F-06 remains open.
