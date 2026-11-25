@@ -690,6 +690,9 @@ function di3CommitFifoReplayEventsForRun_(runId) {
   var latestByReplay = Object.create(null);
   matches.forEach(function (match) {
     var row = match.values, replayId = String(row[1]);
+    if (!Number.isSafeInteger(Number(row[2])) || Number(row[2]) <= 0) {
+      throw new Error("FifoReplayEvents: invalid event_sequence for replay " + replayId + ".");
+    }
     var previous = latestByReplay[replayId];
     if (previous && Number(row[2]) === Number(previous.values[2])) {
       throw new Error("FifoReplayEvents: duplicate event_sequence for replay " + replayId + ".");
