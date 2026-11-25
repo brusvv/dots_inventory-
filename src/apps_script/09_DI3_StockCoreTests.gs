@@ -144,6 +144,149 @@ function di3RunStockCoreUnitTests() {
     equal(threw, true);
   });
 
+  test("incremental FIFO tail matches full replay for allocations, cost and remaining layers", function () {
+    var ledger = [
+      rowLedger("in1", "p1", 10, "2026-01-01T09:00:00Z"),
+      rowLedger("out1", "p1", -4, "2026-01-02T09:00:00Z"),
+      rowLedger("in2", "p1", 5, "2026-01-03T09:00:00Z"),
+      rowLedger("out2", "p1", -7, "2026-01-04T09:00:00Z")
+    ];
+    var details = [
+      rowDetail("in1", "IN"), rowDetail("out1", "OUT"),
+      rowDetail("in2", "IN"), rowDetail("out2", "OUT")
+    ];
+    var lot1 = rowLot("l1", "p1", "in1", 10, 1, "KNOWN", "2026-01-01T09:00:00Z");
+    lot1[13] = 6;
+    lot1[14] = 1000;
+    var lot2 = rowLot("l2", "p1", "in2", 5, 5, "KNOWN", "2026-01-03T09:00:00Z");
+    lot2[13] = "";
+    lot2[14] = 2500;
+    var state = [["p1", new Date("2026-01-02T09:00:00Z"), new Date("2026-01-02T09:00:00Z"),
+      "out1", 3, 2, 6, new Date("2026-01-02T09:01:00Z")]];
+    var tailIn = ledger[2].slice();
+    var tailOut = ledger[3].slice();
+    tailIn._di3RowNumber = 4;
+    tailOut._di3RowNumber = 5;
+    var tailDetails = [details[2], details[3]];
+    var tailPlan = di3BuildFifoTailPlanForProduct_("p1", [tailIn, tailOut], tailDetails,
+      [lot1, lot2], [], state);
+    equal(tailPlan.mode, "INCREMENTAL_TAIL");
+
+    var full = di3BuildFifoReplayPlan_(ledger, details, [lot1, lot2], null);
+    var fullOut = full.allocations.filter(function (item) { return item.movement_id === "out2"; });
+    var tailOutAllocations = tailPlan.allocations.filter(function (item) { return item.movement_id === "out2"; });
+    equal(tailOutAllocations.length, fullOut.length);
+    tailOutAllocations.forEach(function (item, index) {
+      equal(item.lot_id, fullOut[index].lot_id);
+      equal(item.quantity, fullOut[index].quantity);
+      equal(item.allocated_cost_minor, fullOut[index].allocated_cost_minor);
+    });
+    equal(tailPlan.movement_costs.out2.total_cost_minor, full.movement_costs.out2.total_cost_minor);
+    full.remaining_lots.forEach(function (lot) {
+      equal(tailPlan.remaining_by_lot[lot.lot_id], lot.remaining_quantity);
+    });
+  });
+
+  test("backdated tail requests product replay and full replay recalculates the original allocation", function () {
+    var ledger = [
+      rowLedger("in1", "p1", 10, "2026-01-02T09:00:00Z", "2026-01-02T10:00:00Z"),
+      rowLedger("out1", "p1", -5, "2026-01-03T09:00:00Z", "2026-01-03T10:00:00Z")
+    ];
+    var details = [rowDetail("in1", "IN"), rowDetail("out1", "OUT")];
+    var lot1 = rowLot("l1", "p1", "in1", 10, 10, "KNOWN",
+      "2026-01-02T09:00:00Z", "2026-01-02T10:00:00Z");
+    lot1[13] = 5;
+    lot1[14] = 10000;
+    var backdatedLedger = rowLedger("in-backdated", "p1", 10,
+      "2026-01-01T09:00:00Z", "2026-01-04T10:00:00Z");
+    backdatedLedger._di3RowNumber = 4;
+    var backdatedDetail = rowDetail("in-backdated", "IN");
+    var backdatedLot = rowLot("l-backdated", "p1", "in-backdated", 10, 5, "KNOWN",
+      "2026-01-01T09:00:00Z", "2026-01-04T10:00:00Z");
+    backdatedLot[13] = "";
+    backdatedLot[14] = 5000;
+    var state = [["p1", new Date("2026-01-03T09:00:00Z"), new Date("2026-01-03T10:00:00Z"),
+      "out1", 3, 2, 5, new Date("2026-01-03T10:01:00Z")]];
+    var tailPlan = di3BuildFifoTailPlanForProduct_("p1", [backdatedLedger],
+      [backdatedDetail], [lot1, backdatedLot], [], state);
+    equal(tailPlan.mode, "PRODUCT_REPLAY_REQUIRED");
+    equal(tailPlan.reason, "BACKDATED_EVENT");
+
+    var full = di3BuildFifoReplayPlan_(ledger.concat([backdatedLedger]),
+      details.concat([backdatedDetail]), [lot1, backdatedLot], null);
+    equal(full.allocations.length, 1);
+    equal(full.allocations[0].movement_id, "out1");
+    equal(full.allocations[0].lot_id, "l-backdated");
+    equal(full.allocations[0].quantity, 5);
+  });
+
+  test("partially applied OUT movement is routed to product replay, not incrementally duplicated", function () {
+    var ledger = [rowLedger("out2", "p1", -2, "2026-01-04T09:00:00Z")];
+    var detail = [rowDetail("out2", "OUT")];
+    var lot = rowLot("l1", "p1", "in1", 10, 10, "KNOWN", "2026-01-01T09:00:00Z");
+    lot[13] = 8;
+    lot[14] = 10000;
+    var state = [["p1", new Date("2026-01-03T09:00:00Z"), new Date("2026-01-03T10:00:00Z"),
+      "out1", 3, 2, 8, new Date("2026-01-03T10:01:00Z")]];
+    var existingPartialAllocation = [["allocation-1", "run-old", "out2", "l1", "p1",
+      "CONSUME", 1, 10, "KNOWN", 10, new Date("2026-01-04T09:00:00Z"),
+      new Date("2026-01-04T09:00:00Z"), "", 1000]];
+    var plan = di3BuildFifoTailPlanForProduct_("p1", ledger, detail, [lot],
+      existingPartialAllocation, state);
+    equal(plan.mode, "PRODUCT_REPLAY_REQUIRED");
+    equal(plan.reason, "PARTIALLY_APPLIED_MOVEMENT");
+  });
+
+  test("UNKNOWN and FREE lots retain distinct cost semantics through replay", function () {
+    var ledger = [
+      rowLedger("in-unknown", "p1", 2, "2026-01-01T09:00:00Z"),
+      rowLedger("in-free", "p1", 3, "2026-01-02T09:00:00Z"),
+      rowLedger("out", "p1", -4, "2026-01-03T09:00:00Z")
+    ];
+    var details = [rowDetail("in-unknown", "IN"), rowDetail("in-free", "IN"), rowDetail("out", "OUT")];
+    var unknownLot = rowLot("l-unknown", "p1", "in-unknown", 2, null, "UNKNOWN", "2026-01-01T09:00:00Z");
+    var freeLot = rowLot("l-free", "p1", "in-free", 3, 0, "FREE", "2026-01-02T09:00:00Z");
+    freeLot[14] = 0;
+    var plan = di3BuildFifoReplayPlan_(ledger, details, [unknownLot, freeLot], null);
+    equal(plan.allocations.length, 2);
+    equal(plan.allocations[0].lot_id, "l-unknown");
+    equal(plan.allocations[0].cost_status, "UNKNOWN");
+    equal(plan.allocations[0].allocated_cost_minor, null);
+    equal(plan.allocations[1].lot_id, "l-free");
+    equal(plan.allocations[1].cost_status, "FREE");
+    equal(plan.allocations[1].unit_cost, 0);
+    equal(plan.allocations[1].allocated_cost_minor, 0);
+    equal(plan.movement_costs.out.cost_status, "PARTIAL");
+    equal(plan.movement_costs.out.unknown_quantity, 2);
+    equal(plan.movement_costs.out.known_cost_minor, 0);
+  });
+
+  test("same-time FIFO tie-break is deterministic by movement ID", function () {
+    var sameEffective = "2026-01-01T09:00:00Z";
+    var sameRecorded = "2026-01-01T10:00:00Z";
+    var inboundFirst = [
+      rowLedger("a-in", "p1", 2, sameEffective, sameRecorded),
+      rowLedger("z-out", "p1", -1, sameEffective, sameRecorded)
+    ];
+    var valid = di3BuildFifoReplayPlan_(inboundFirst,
+      [rowDetail("a-in", "IN"), rowDetail("z-out", "OUT")],
+      [rowLot("l1", "p1", "a-in", 2, 10, "KNOWN", sameEffective, sameRecorded)], null);
+    equal(valid.allocations.length, 1);
+    equal(valid.allocations[0].lot_id, "l1");
+
+    var outboundFirst = [
+      rowLedger("a-out", "p1", -1, sameEffective, sameRecorded),
+      rowLedger("z-in", "p1", 2, sameEffective, sameRecorded)
+    ];
+    var threw = false;
+    try {
+      di3BuildFifoReplayPlan_(outboundFirst,
+        [rowDetail("a-out", "OUT"), rowDetail("z-in", "IN")],
+        [rowLot("l2", "p1", "z-in", 2, 10, "KNOWN", sameEffective, sameRecorded)], null);
+    } catch (error) { threw = /Недостаточно остатка/.test(error.message); }
+    equal(threw, true);
+  });
+
   test("offline sale revenue is separate from FIFO cost", function () {
     var suggestion = di3CalculatePriceSuggestion_(49, 100, 0.30, false, 10);
     equal(suggestion.status, "READY");
