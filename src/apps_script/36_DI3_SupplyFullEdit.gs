@@ -508,7 +508,7 @@ function di3BuildSupplyFullEditOperationPayload_(context, plan) {
     new_status: plan.status,
     reason: plan.reason,
     edited_at: new Date().toISOString(),
-    edited_by: (function () { try { return Session.getActiveUser().getEmail() || ""; } catch (ignore) { return ""; } })(),
+    edited_by: (function () { return di3GetActorEmail_(); })(),
     impact: { stock: false, lines_changed: plan.lines_changed, financial_changed: plan.financial_changed, received_date_changed: plan.received_date_changed },
     audit_before: di3BuildSupplyFullEditSnapshot_(context.supply_id),
     audit_after: {
