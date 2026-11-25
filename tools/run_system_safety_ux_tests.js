@@ -6,6 +6,7 @@ const context = vm.createContext({ console, Date, JSON, Math, Number, String, Ob
 const files = [
   "src/apps_script/00_DI3_AppConfig.gs",
   "src/apps_script/07_DI3_StockCore.gs",
+  "src/apps_script/24_DI3_IncrementalFifo.gs",
   "src/apps_script/08_DI3_WarehouseManager.gs",
   "src/apps_script/11_DI3_SupplyDomain.gs",
   "src/apps_script/12_DI3_SupplyReceiving.gs",
