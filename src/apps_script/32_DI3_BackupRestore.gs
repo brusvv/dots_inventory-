@@ -13,7 +13,7 @@ var DI3_BACKUP_HASH_MODE_SAMPLED = "SAMPLED_SHA256_V2";
 var DI3_BACKUP_HASH_MODE_LEGACY = "SAMPLED_SHA256_V1";
 var DI3_BACKUP_HASH_PRIORITY_SHEETS = Object.freeze([
   "StockLedger", "StockMovementDetails", "StockLots", "StockAllocations",
-  "FifoProductState", "FifoAllocationRuns", "Operations", "OperationPayloads",
+  "FifoProductState", "FifoAllocationRuns", "FifoAllocationArchive", "FifoLotCacheArchive", "FifoReplayEvents", "Operations", "OperationPayloads",
   "OperationAttempts", "OrderCostSnapshots", "V3_Orders", "V3_OrderItems",
   "V3_Supplies", "V3_SupplyItems", "_AppMeta", "SchemaMigrations", "Settings"
 ]);
