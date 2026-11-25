@@ -17,6 +17,10 @@ function di3GetPeriodBounds_(periodKey) {
   };
 }
 
+/**
+ * PeriodLocks is an append-only event log. Older RC8 rows are treated as the
+ * first event for their period; later LOCKED/REOPENED rows supersede them.
+ */
 function di3GetLockedPeriods_() {
   if (!di3GetSpreadsheet_().getSheetByName("PeriodLocks")) return [];
   return di3ReadTableValues_("PeriodLocks").map(function (row, index) {
@@ -36,8 +40,28 @@ function di3GetLockedPeriods_() {
   });
 }
 
+/** Return the last event for each period, preserving physical append order. */
+function di3GetLatestPeriodEvents_() {
+  var latestByKey = Object.create(null);
+  di3GetLockedPeriods_().forEach(function (item) {
+    if (!item.period_key) return;
+    var previous = latestByKey[item.period_key];
+    if (!previous || item.row_number > previous.row_number) latestByKey[item.period_key] = item;
+  });
+  return Object.keys(latestByKey).map(function (key) { return latestByKey[key]; });
+}
+
+function di3GetLatestPeriodEvent_(periodKey) {
+  var key = String(periodKey || "");
+  var latest = null;
+  di3GetLockedPeriods_().forEach(function (item) {
+    if (item.period_key === key && (!latest || item.row_number > latest.row_number)) latest = item;
+  });
+  return latest;
+}
+
 function di3GetLatestLockedPeriod_() {
-  var locked = di3GetLockedPeriods_().filter(function (item) {
+  var locked = di3GetLatestPeriodEvents_().filter(function (item) {
     return item.status === "LOCKED" && item.period_end;
   });
   if (!locked.length) return null;
@@ -74,8 +98,7 @@ function di3CloseAccountingPeriod(periodKey, note) {
     if (bounds.end.getTime() >= currentMonthStart.getTime()) {
       throw new Error("Можно закрывать только полностью завершившиеся месяцы.");
     }
-    var periods = di3GetLockedPeriods_();
-    var existing = periods.filter(function (item) { return item.period_key === bounds.period_key; })[0];
+    var existing = di3GetLatestPeriodEvent_(bounds.period_key);
     if (existing && existing.status === "LOCKED") {
       return { status: "ALREADY_LOCKED", period_key: bounds.period_key, period_end: bounds.end };
     }
@@ -89,18 +112,14 @@ function di3CloseAccountingPeriod(periodKey, note) {
     di3AssertNoPendingOperationsBeforePeriodClose_();
     var actor = "";
     try { actor = Session.getActiveUser().getEmail() || ""; } catch (ignore) {}
-    var sheet = di3GetSheetOrThrow_("PeriodLocks");
+    // Never overwrite a prior LOCKED/REOPENED event. A re-close is a new event.
     var row = [bounds.period_key, bounds.start, bounds.end, "LOCKED", now, actor, "", "", "", String(note || "")];
-    if (existing) {
-      sheet.getRange(existing.row_number, 1, 1, DI3_TABLE_SCHEMAS.PeriodLocks.length).setValues([row]);
-    } else {
-      di3AppendTableRows_("PeriodLocks", [row]);
-    }
+    di3AppendTableRows_("PeriodLocks", [row]);
     return { status: "LOCKED", period_key: bounds.period_key, period_end: bounds.end, locked_by: actor };
   });
 }
 
-/** Reopen only the most recently locked month; a reason is mandatory and remains in the audit row. */
+/** Reopen only the most recently locked month; the reason is stored as a new immutable event. */
 function di3ReopenAccountingPeriod(periodKey, reason) {
   return di3WithLock_(function () {
     di3EnsureCoreFoundationSchemas_();
@@ -116,19 +135,26 @@ function di3ReopenAccountingPeriod(periodKey, reason) {
       latest.period_key, latest.period_start, latest.period_end, "REOPENED", latest.locked_at,
       latest.locked_by, new Date(), actor, why, latest.note
     ];
-    di3GetSheetOrThrow_("PeriodLocks").getRange(latest.row_number, 1, 1, row.length).setValues([row]);
+    di3AppendTableRows_("PeriodLocks", [row]);
     return { status: "REOPENED", period_key: latest.period_key, reason: why, reopened_by: actor };
   });
 }
 
 function di3GetPeriodGuardStatus() {
   var latest = di3GetLatestLockedPeriod_();
+  var periods = di3GetLatestPeriodEvents_().sort(function (a, b) {
+    return a.period_end && b.period_end ? a.period_end.getTime() - b.period_end.getTime() : String(a.period_key).localeCompare(String(b.period_key));
+  });
   return {
     status: latest ? "LOCKED_THROUGH" : "OPEN",
     locked_through: latest ? latest.period_key : null,
     period_end: latest ? latest.period_end : null,
-    periods: di3GetLockedPeriods_().map(function (item) {
-      return { period_key: item.period_key, status: item.status, locked_at: item.locked_at, reopened_at: item.reopened_at, reopen_reason: item.reopen_reason };
+    periods: periods.map(function (item) {
+      return {
+        period_key: item.period_key, status: item.status, locked_at: item.locked_at,
+        locked_by: item.locked_by, reopened_at: item.reopened_at,
+        reopened_by: item.reopened_by, reopen_reason: item.reopen_reason, note: item.note
+      };
     })
   };
 }
