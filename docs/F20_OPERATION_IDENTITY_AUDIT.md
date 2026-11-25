@@ -156,3 +156,21 @@ This slice centralizes *acquisition*, but it does not yet persist the normalized
 - The structural test was added but **has not been executed**.
 - No Apps Script deployment, workbook mutation, schema migration, trigger change or live business-data change was performed.
 - Runtime acceptance still requires a restored workbook and separate user/trigger execution contexts.
+
+
+## Implementation progress — initiator attribution in operation-backed audit rows
+
+A second source-level slice now resolves the initiating actor from the immutable `Operations.actor` field:
+
+- Added `di3GetOperationInitiatorActor_(operationId)`. For a known operation it returns the persisted initiator, including an intentionally blank value. It does not fall back to the current executor if an operation exists but its actor is blank or the operation row cannot be found.
+- Non-operation/manual history events with no operation ID continue to use the currently available active-user identity.
+- Order creation and order status history now use the registered initiator.
+- Order dispatch and return `StockMovementDetails` now use the initiator, not the user executing a later recovery.
+- Supply receipt status history now uses the initiator.
+- Added a regression test with separate initiator and recovery-executor identities, including blank/missing operation actor cases, and structural checks for order/supply status history plus dispatch/return movement details.
+
+This does not yet change `OperationAttempts.actor`: that column intentionally continues to record the actual executor for each attempt. Supply receipt movement-detail rows currently leave their actor field blank by existing design; this patch does not assign an actor there. Existing historical rows are not rewritten.
+
+### Verification status
+
+The new tests are committed but **have not been executed**. Syntax checks and restored-workbook recovery tests remain pending. No schema, manifest, trigger, deployment, or live workbook changes were made.
