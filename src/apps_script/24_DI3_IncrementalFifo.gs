@@ -834,6 +834,8 @@ function di3GetFifoIntegrityDiagnostics_() {
   var lotRemainingByProduct = {};
   var movementCountByProduct = {};
   var latestMovementByProduct = {};
+  var sequenceByValue = Object.create(null);
+  var maxLedgerSequence = 0;
 
   ledgerRows.forEach(function (row, index) {
     var movementId = String(row[0] || "");
@@ -841,16 +843,26 @@ function di3GetFifoIntegrityDiagnostics_() {
     if (!movementId || !productId) { errors.push("StockLedger: пустой movement_id или product_id в строке " + (index + 2)); return; }
     if (movementById[movementId]) errors.push("StockLedger: повторный movement_id " + movementId + ".");
     movementById[movementId] = row;
+    var sequence = Number(row[12]);
+    if (!Number.isSafeInteger(sequence) || sequence <= 0) {
+      errors.push("StockLedger: некорректный ledger_sequence в строке " + (index + 2) + ".");
+    } else {
+      if (Object.prototype.hasOwnProperty.call(sequenceByValue, String(sequence))) {
+        errors.push("StockLedger: повторяется ledger_sequence " + sequence + ".");
+      }
+      sequenceByValue[String(sequence)] = movementId;
+      maxLedgerSequence = Math.max(maxLedgerSequence, sequence);
+    }
     productIds[productId] = true;
     movementCountByProduct[productId] = (movementCountByProduct[productId] || 0) + 1;
     var event = { movement_id: movementId, effective_at: row[7], recorded_at: row[8] };
     if (!latestMovementByProduct[productId]) {
-      latestMovementByProduct[productId] = { event: event, fifo_row_number: index + 2, last_ledger_row_number: index + 2 };
+      latestMovementByProduct[productId] = { event: event, max_ledger_sequence: Number.isSafeInteger(sequence) ? sequence : 0 };
     } else {
-      latestMovementByProduct[productId].last_ledger_row_number = index + 2;
+      latestMovementByProduct[productId].max_ledger_sequence = Math.max(
+        latestMovementByProduct[productId].max_ledger_sequence, Number.isSafeInteger(sequence) ? sequence : 0);
       if (di3FifoEventCompare_(event, latestMovementByProduct[productId].event) > 0) {
         latestMovementByProduct[productId].event = event;
-        latestMovementByProduct[productId].fifo_row_number = index + 2;
       }
     }
   });
@@ -917,7 +929,7 @@ function di3GetFifoIntegrityDiagnostics_() {
       errors.push("FifoProductState: movement_count не совпадает для товара " + productId + ".");
     }
     var latest = latestMovementByProduct[productId];
-    if (latest && (String(state[3]) !== String(latest.event.movement_id) || Number(state[4]) !== latest.last_ledger_row_number)) {
+    if (latest && (String(state[3]) !== String(latest.event.movement_id) || Number(state[4]) !== latest.max_ledger_sequence)) {
       errors.push("FifoProductState: курсор последнего движения не совпадает для товара " + productId + ".");
     }
     var stateRemaining = state[6] === "" || state[6] == null ? null : Number(state[6]);
@@ -928,11 +940,11 @@ function di3GetFifoIntegrityDiagnostics_() {
   });
 
   var version = di3GetAppMetaValue_("fifo_state_version");
-  var cursorRaw = di3GetAppMetaValue_("fifo_ledger_cursor");
+  var cursorRaw = di3GetAppMetaValue_("fifo_ledger_sequence_cursor");
   var cursor = cursorRaw === "" || cursorRaw == null ? null : Number(cursorRaw);
   if (String(version) !== DI3_FIFO_STATE_VERSION) warnings.push("FIFO state version требует bootstrap: " + String(version || "отсутствует") + ".");
-  if (cursor == null || !Number.isInteger(cursor) || cursor !== ledgerRows.length) {
-    warnings.push("FIFO ledger cursor не совпадает с количеством движений: " + String(cursorRaw) + " / " + ledgerRows.length + ". Следующая операция должна обработать хвост или выполнить bootstrap.");
+  if (cursor == null || !Number.isSafeInteger(cursor) || cursor !== maxLedgerSequence) {
+    warnings.push("FIFO sequence cursor не совпадает с максимальным ledger_sequence: " + String(cursorRaw) + " / " + maxLedgerSequence + ". Следующая операция должна обработать хвост или выполнить bootstrap.");
   }
   return {
     ok: errors.length === 0,
@@ -945,7 +957,8 @@ function di3GetFifoIntegrityDiagnostics_() {
       active_allocations: allocationRows.length,
       fifo_product_states: stateRows.length,
       fifo_state_version: String(version || ""),
-      fifo_ledger_cursor: cursor,
+      fifo_ledger_sequence_cursor: cursor,
+      max_ledger_sequence: maxLedgerSequence,
       money_fifo_schema_version: String(di3GetAppMetaValue_("money_fifo_schema_version") || ""),
       money_fifo_migration_status: String(di3GetAppMetaValue_("money_fifo_migration_status") || ""),
       money_fifo_ready: String(di3GetAppMetaValue_("money_fifo_schema_version") || "") === DI3_MONEY_FIFO_SCHEMA_VERSION &&
