@@ -31,7 +31,7 @@ The first source implementation pass is now present on `main`:
 - Added unit coverage for reordered physical rows, sequence gaps, duplicate/missing sequence values, lock-required allocation, and business-date ordering independent of ingestion sequence. Existing actor-attribution fixtures now provide the required sequence.
 - Added a GitHub Actions quality-gates workflow and included the sequence helper in the System Safety test runner.
 
-**Verification status:** tests and syntax checks have not yet been executed. A new Actions run was not observed after adding the workflow, so no CI pass is claimed. Apps Script runtime acceptance has not been performed.
+**Source verification:** GitHub Actions run `45709639278` completed successfully. JavaScript syntax check passed for all 50 `.gs` files. All seven local suites passed: FIFO 24/24, Order Domain 17/17, Supply Workspace UX 15/15, Catalog/Order UX 12/12, System Safety UX 18/18, Warehouse Dashboard 9/9, Finance Schema 4/4 — **99/99 tests, 0 failures**. Run: https://github.com/brusvv/dots_inventory-/actions/runs/45709639278. Apps Script runtime acceptance has not been performed.
 
 This implementation pass is not a release-ready F-07 sign-off. It still requires source review, execution of all local runners and syntax checks, and runtime acceptance on a disposable empty workbook. It is not compatible with the old 12-column StockLedger layout; do not deploy it to the existing workbook. The clean-baseline adoption and legacy-workbook isolation remain prerequisites before production installation.
 
