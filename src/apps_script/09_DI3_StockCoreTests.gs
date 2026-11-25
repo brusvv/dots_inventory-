@@ -369,6 +369,14 @@ function di3RunStockCoreUnitTests() {
       var missingThrew = false;
       try { di3ReadLedgerSequenceIndex_(); } catch (error) { missingThrew = /отсутствует ledger_sequence/.test(error.message); }
       equal(missingThrew, true);
+      di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [1, "not-a-number"], ["p1", "p1"]); };
+      var invalidThrew = false;
+      try { di3ReadLedgerSequenceIndex_(); } catch (error) { invalidThrew = /положительным целым числом/.test(error.message); }
+      equal(invalidThrew, true);
+      di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [1, 2], ["p1", ""]); };
+      var missingProductThrew = false;
+      try { di3ReadLedgerSequenceIndex_(); } catch (error) { missingProductThrew = /пустой product_id/.test(error.message); }
+      equal(missingProductThrew, true);
       di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [4, 9], ["p1", "p1"]); };
       var oldDepth = DI3_SCRIPT_LOCK_DEPTH_;
       try {
