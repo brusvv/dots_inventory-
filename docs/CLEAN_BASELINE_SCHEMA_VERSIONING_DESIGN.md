@@ -80,3 +80,9 @@ Do not freeze the final schema version number until F-02 field semantics and F-0
 7. Existing RC8 workbook with business rows: clean path is not selected; legacy path is explicit and backup-gated.
 8. Backup/restore-as-new round-trip preserves all new tables, metadata and schema identity.
 9. New workbook accepts supply receipt, dispatch, return and finance flows without any migration.
+
+## Additional source finding: installation preflight boundary
+
+Inspection of `di3DryRunInstallation()` in `28_DI3_InstallationPreflight.gs` shows that it combines checks for known core system sheets, known workspaces, settings and timezone. It does not currently perform a general inventory that blocks on every unknown populated tab in the spreadsheet. The clean-baseline implementation must add that explicit inventory/classification step; the current preflight must not be described as already enforcing the unknown-tab rule.
+
+Likewise, the setup flow in `04_DI3_Setup.gs` runs schema versioning after `di3EnsureCoreFoundationSchemas_(true)` has created/initialized the current schema. The new clean-baseline adoption should be implemented in that established sequence, but must not use the existing RC8 baseline-v1 + v2 + v3 migration chain to describe a workbook that was created directly with the final headers.
