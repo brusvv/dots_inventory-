@@ -344,7 +344,8 @@ function di3GetOperationAttemptStats_() {
       finished_at: row[7] || "",
       result_status: String(row[8] || ""),
       error_class: String(row[9] || ""),
-      error_message: String(row[10] || "")
+      error_message: String(row[10] || ""),
+      actor: String(row[11] || "")
     };
     if (item.execution_mode === "MANUAL_REOPEN") {
       manualReviews.push(item);
@@ -359,7 +360,7 @@ function di3GetOperationAttemptStats_() {
   });
   Object.keys(stats).forEach(function (operationId) {
     var active = di3GetOperationAttemptExecutionRows_(stats[operationId].all_attempts.map(function (item) {
-      return { row_number: item.row_number, values: [item.attempt_id, item.operation_id, item.attempt_number, item.operation_type, item.status_before, item.execution_mode, item.started_at, item.finished_at, item.result_status, item.error_class, item.error_message, ""] };
+      return { row_number: item.row_number, values: [item.attempt_id, item.operation_id, item.attempt_number, item.operation_type, item.status_before, item.execution_mode, item.started_at, item.finished_at, item.result_status, item.error_class, item.error_message, item.actor] };
     }));
     stats[operationId].attempt_count = active.length;
     if (active.length) {
@@ -368,7 +369,8 @@ function di3GetOperationAttemptStats_() {
         attempt_id: String(last.values[0]), operation_id: operationId,
         attempt_number: Number(last.values[2]) || 0, execution_mode: String(last.values[5] || ""),
         started_at: last.values[6] || "", finished_at: last.values[7] || "",
-        result_status: String(last.values[8] || ""), error_class: String(last.values[9] || ""), error_message: String(last.values[10] || "")
+        result_status: String(last.values[8] || ""), error_class: String(last.values[9] || ""), error_message: String(last.values[10] || ""),
+        actor: String(last.values[11] || "")
       };
     }
     delete stats[operationId].all_attempts;
