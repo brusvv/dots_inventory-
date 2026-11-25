@@ -4,6 +4,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.resolve(__dirname, '..');
 const files = [
+  path.join(root, 'src/apps_script/30_DI3_MoneyCore.gs'),
+  path.join(root, 'src/apps_script/07_DI3_StockCore.gs'),
   path.join(root, 'src/apps_script/19_DI3_WarehouseViews.gs'),
   path.join(root, 'src/apps_script/38_DI3_WarehouseDashboardTests.gs')
 ];
