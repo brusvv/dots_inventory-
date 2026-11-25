@@ -110,6 +110,39 @@ function di3RunSystemSafetyUxUnitTests() {
     ["locked_by", "reopened_by", "reopen_reason"].forEach(function (field) { includes(source, field); });
   });
 
+
+  test("operation attempt diagnostics preserve the executor actor across recovery and manual review", function () {
+    var originalGetSpreadsheet = di3GetSpreadsheet_;
+    var originalReadTableValues = di3ReadTableValues_;
+    try {
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) { return name === "OperationAttempts" ? {} : null; } };
+      };
+      di3ReadTableValues_ = function (name) {
+        if (name !== "OperationAttempts") throw new Error("Unexpected table read: " + name);
+        return [
+          ["attempt-a", "operation-1", 1, "ORDER_DISPATCH", "PREPARED", "INITIAL",
+            "2026-11-25T10:00:00Z", "2026-11-25T10:00:01Z", "INTERRUPTED", "EXECUTION_INTERRUPTED", "timeout", "user-a@example.test"],
+          ["review-c", "operation-1", 0, "ORDER_DISPATCH", "QUARANTINED", "MANUAL_REOPEN",
+            "2026-11-25T10:05:00Z", "2026-11-25T10:05:00Z", "REQUEUE_REQUESTED", "MANUAL_REVIEW", "reviewed", "user-c@example.test"],
+          ["attempt-b", "operation-1", 2, "ORDER_DISPATCH", "RETRYABLE", "RECOVERY",
+            "2026-11-25T10:06:00Z", "2026-11-25T10:06:02Z", "COMMITTED", "", "", "user-b@example.test"]
+        ];
+      };
+      var report = di3GetOperationAttemptStats_();
+      var stats = report.by_operation_id["operation-1"];
+      equal(stats.attempt_count, 1, "Only attempts after the latest manual reopen belong to the active retry epoch");
+      equal(stats.last_attempt.actor, "user-b@example.test", "Latest recovery executor must be exposed");
+      equal(stats.last_attempt.execution_mode, "RECOVERY");
+      equal(report.manual_reviews.length, 1);
+      equal(report.manual_reviews[0].actor, "user-c@example.test", "Manual reviewer must remain visible");
+      equal(report.manual_reviews[0].execution_mode, "MANUAL_REOPEN");
+    } finally {
+      di3GetSpreadsheet_ = originalGetSpreadsheet;
+      di3ReadTableValues_ = originalReadTableValues;
+    }
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("System Safety UX tests failed: " + JSON.stringify(failed));
   return report;
