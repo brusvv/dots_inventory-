@@ -331,6 +331,7 @@ function di3BuildSupplyReceiptRows_(operationId, payload) {
   var ledgerRows = [];
   var detailRows = [];
   var lotRows = [];
+  var actor = di3GetOperationInitiatorActor_(operationId);
   payload.lines.forEach(function (line) {
     ledgerRows.push([
       line.movement_id, operationId, line.event_key, line.product_id,
@@ -339,7 +340,7 @@ function di3BuildSupplyReceiptRows_(operationId, payload) {
     ]);
     detailRows.push([
       line.movement_id, line.display_code, "IN", "SUPPLY_RECEIVE", "", "",
-      line.cost_status, "", di3GetOperationInitiatorActor_(operationId), "Приёмка поставки " + payload.supply_number, "SUPPLY"
+      line.cost_status, "", actor, "Приёмка поставки " + payload.supply_number, "SUPPLY"
     ]);
     lotRows.push([
       line.lot_id, line.product_id, line.movement_id, "SUPPLY", payload.supply_id,
