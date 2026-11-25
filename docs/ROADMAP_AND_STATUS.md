@@ -281,6 +281,8 @@ The following issues have source changes and local regression coverage. They are
 
 ## F-07 — stable ledger sequence implementation specification — 26.11.2026
 
+- Follow-up F-07 call-site audit checked the other supply/order/history/backup/schema modules: no additional direct StockLedger append path was found. Historical supply uses the existing supply-receipt operation path; full supply-document edit is explicitly document-only. The four writer paths in the F-07 spec remain the complete identified set.
+
 - Verified current schema and cursor implementation: StockLedger has 12 columns without ledger_sequence; FIFO state v3 stores physical last_ledger_row_number; fifo_ledger_cursor is a physical data-row count; tail reading uses cursor + 2.
 - Identified four domain writer paths to update: manual warehouse movement (07), supply receipt (12), order dispatch and return (16). These public paths are lock-wrapped; recovery must reuse sequence values persisted in immutable operation payloads.
 - Added docs/F07_STABLE_LEDGER_SEQUENCE_IMPLEMENTATION_SPEC.md. The proposed design appends ledger_sequence to the clean baseline, changes global and per-product cursors to sequence watermarks, discovers tail rows by scanning the narrow sequence column (not physical row offsets), and preserves effective_at / recorded_at / movement_id as FIFO business ordering.
@@ -296,7 +298,6 @@ The following issues have source changes and local regression coverage. They are
 
 ## F-06 — FIFO allocation archive and crash-recovery specification — 26.11.2026
 
-- Follow-up F-07 call-site audit checked the other supply/order/history/backup/schema modules: no additional direct StockLedger append path was found. Historical supply uses the existing supply-receipt operation path; full supply-document edit is explicitly document-only. The four writer paths in the F-07 spec remain the complete identified set.
 
 - Audited the active allocation replacement path, FIFO run lifecycle, allocation ID generation, and all four stock-operation call sites.
 - Confirmed that the current rollback helper only handles caught write errors; abrupt Apps Script termination between sheet writes can leave a partially replaced projection. A subsequent retry currently creates a new FIFO run ID, so it cannot reliably identify the interrupted replay.
