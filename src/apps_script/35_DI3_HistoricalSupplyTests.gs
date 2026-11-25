@@ -1,0 +1,102 @@
+/** Pure tests for the one-shot historical supply entry flow. */
+function di3RunHistoricalSupplyUnitTests() {
+  var passed = 0;
+  var failed = [];
+  function test(name, callback) {
+    try { callback(); passed++; }
+    catch (error) { failed.push({ name: name, error: error.message || String(error) }); }
+  }
+  function equal(actual, expected, message) {
+    if (actual !== expected) throw new Error((message || "Values differ") + ": expected " + JSON.stringify(expected) + ", got " + JSON.stringify(actual));
+  }
+  function throws(callback, pattern) {
+    var error = null;
+    try { callback(); } catch (caught) { error = caught; }
+    if (!error) throw new Error("Expected error matching " + pattern + ", but no error was thrown");
+    if (pattern && !pattern.test(String(error.message || error))) {
+      throw new Error("Expected error matching " + pattern + ", got: " + String(error.message || error));
+    }
+  }
+  function validInput() {
+    return {
+      order_date: new Date(2024, 6, 2, 12, 0, 0),
+      expected_date: new Date(2024, 6, 15, 12, 0, 0),
+      sent_at: new Date(2024, 6, 4, 9, 30, 0),
+      awaiting_at: new Date(2024, 6, 12, 16, 0, 0),
+      received_at: new Date(2024, 6, 13, 11, 0, 0)
+    };
+  }
+
+  test("historical entry accepts a complete past date chain", function () {
+    var result = di3ValidateHistoricalSupplyDates_(validInput());
+    equal(result.order_date.getDate(), 2);
+    equal(result.sent_at.getDate(), 4);
+    equal(result.awaiting_at.getDate(), 12);
+    equal(result.received_at.getDate(), 13);
+  });
+  test("historical entry permits same-day order and dispatch", function () {
+    var input = validInput();
+    input.sent_at = new Date(2024, 6, 2, 0, 5, 0);
+    var result = di3ValidateHistoricalSupplyDates_(input);
+    equal(result.sent_at.getDate(), 2);
+  });
+  test("historical entry allows the optional expected arrival date to be empty", function () {
+    var input = validInput();
+    input.expected_date = "";
+    equal(di3ValidateHistoricalSupplyDates_(input).expected_date, null);
+  });
+  test("historical entry requires the store order date", function () {
+    var input = validInput();
+    input.order_date = "";
+    throws(function () { di3ValidateHistoricalSupplyDates_(input); }, /обязательно укажи дату заказа/);
+  });
+  test("historical entry requires all three factual stage dates", function () {
+    ["sent_at", "awaiting_at", "received_at"].forEach(function (field) {
+      var input = validInput();
+      input[field] = "";
+      throws(function () { di3ValidateHistoricalSupplyDates_(input); }, /Не указана фактическая дата этапа/);
+    });
+  });
+  test("historical dispatch cannot precede the store order date", function () {
+    var input = validInput();
+    input.sent_at = new Date(2024, 6, 1, 23, 59, 0);
+    throws(function () { di3ValidateHistoricalSupplyDates_(input); }, /Дата отправки G5 не может быть раньше даты заказа G2/);
+  });
+  test("historical awaiting date cannot precede dispatch", function () {
+    var input = validInput();
+    input.awaiting_at = new Date(2024, 6, 3, 9, 0, 0);
+    throws(function () { di3ValidateHistoricalSupplyDates_(input); }, /Дата ожидания получения G6 не может быть раньше даты отправки G5/);
+  });
+  test("historical receipt date cannot precede awaiting date", function () {
+    var input = validInput();
+    input.received_at = new Date(2024, 6, 11, 23, 59, 0);
+    throws(function () { di3ValidateHistoricalSupplyDates_(input); }, /Дата получения G7 не может быть раньше даты ожидания получения G6/);
+  });
+  test("historical expected arrival cannot precede the store order date", function () {
+    var input = validInput();
+    input.expected_date = new Date(2024, 6, 1, 12, 0, 0);
+    throws(function () { di3ValidateHistoricalSupplyDates_(input); }, /Ожидаемая дата прибытия не может быть раньше даты создания заказа/);
+  });
+  test("historical factual stage dates cannot be in the future", function () {
+    var input = validInput();
+    var future = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    input.sent_at = new Date(2024, 6, 4, 9, 30, 0);
+    input.awaiting_at = new Date(2024, 6, 12, 16, 0, 0);
+    input.received_at = future;
+    // Keep chronological order by placing G5 and G6 shortly before the future receipt.
+    input.sent_at = new Date(future.getTime() - 3 * 24 * 60 * 60 * 1000);
+    input.awaiting_at = new Date(future.getTime() - 2 * 24 * 60 * 60 * 1000);
+    input.order_date = new Date(future.getTime() - 5 * 24 * 60 * 60 * 1000);
+    input.expected_date = new Date(future.getTime() - 1 * 24 * 60 * 60 * 1000);
+    throws(function () { di3ValidateHistoricalSupplyDates_(input); }, /не может быть в будущем/);
+  });
+  test("historical mode uses one explicit standard SUPPLY_RECEIVE idempotency key", function () {
+    var source = di3CommitHistoricalSupplyEntry.toString();
+    equal(source.indexOf("di3ReceiveSupply_(supply, snapshot.received_at)") !== -1, true);
+    equal(source.indexOf("SUPPLY_RECEIVE:" + " + supply.supply_id") !== -1 || source.indexOf("di3GetSupplyReceiptOperation_") !== -1, true);
+  });
+
+  var report = { passed: passed, failed: failed.length, failures: failed };
+  if (failed.length) throw new Error("Historical supply tests failed: " + JSON.stringify(failed));
+  return report;
+}

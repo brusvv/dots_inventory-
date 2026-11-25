@@ -1,0 +1,141 @@
+/** Pure and structural tests for controlled full supply editing. */
+function di3RunSupplyFullEditUnitTests() {
+  var passed = 0;
+  var failed = [];
+  function test(name, callback) {
+    try { callback(); passed++; }
+    catch (error) { failed.push({ name: name, error: error.message || String(error) }); }
+  }
+  function equal(actual, expected, message) {
+    if (actual !== expected) throw new Error((message || "Values differ") + ": expected " + JSON.stringify(expected) + ", got " + JSON.stringify(actual));
+  }
+  function throws(callback, pattern) {
+    var error = null;
+    try { callback(); } catch (caught) { error = caught; }
+    if (!error) throw new Error("Expected error matching " + pattern + ", but no error was thrown");
+    if (pattern && !pattern.test(String(error.message || error))) {
+      throw new Error("Expected error matching " + pattern + ", got: " + String(error.message || error));
+    }
+  }
+  var fixedNow = new Date(2026, 10, 23, 12, 0, 0).getTime();
+  function dates() {
+    return {
+      order_date: new Date(2026, 6, 2, 0, 0, 0),
+      expected_date: new Date(2026, 6, 15, 0, 0, 0),
+      sent_at: new Date(2026, 6, 4, 10, 0, 0),
+      awaiting_at: new Date(2026, 6, 12, 12, 0, 0),
+      received_at: new Date(2026, 6, 14, 15, 0, 0)
+    };
+  }
+
+  test("full edit accepts the requested historical date correction 02.07 -> 04.07", function () {
+    var input = dates();
+    input.sent_at = new Date(2026, 6, 4, 0, 0, 0);
+    var result = di3ValidateSupplyFullEditDates_(input, fixedNow);
+    equal(result.sent_at.getFullYear(), 2026);
+    equal(result.sent_at.getMonth(), 6);
+    equal(result.sent_at.getDate(), 4);
+  });
+  test("full edit accepts an incomplete SENT document with only G5", function () {
+    var input = dates(); input.awaiting_at = ""; input.received_at = "";
+    equal(di3ValidateSupplyFullEditDates_(input, fixedNow).awaiting_at, null);
+  });
+  test("full edit accepts an AWAITING document with G5 and G6", function () {
+    var input = dates(); input.received_at = "";
+    equal(di3ValidateSupplyFullEditDates_(input, fixedNow).received_at, null);
+  });
+  test("full edit accepts an empty optional expected arrival date", function () {
+    var input = dates(); input.expected_date = "";
+    equal(di3ValidateSupplyFullEditDates_(input, fixedNow).expected_date, null);
+  });
+  test("full edit rejects G5 earlier than the store order date", function () {
+    var input = dates(); input.sent_at = new Date(2026, 6, 1, 23, 59, 0);
+    throws(function () { di3ValidateSupplyFullEditDates_(input, fixedNow); }, /G5 не может быть раньше даты заказа G2/);
+  });
+  test("full edit rejects G6 without G5", function () {
+    var input = dates(); input.sent_at = "";
+    throws(function () { di3ValidateSupplyFullEditDates_(input, fixedNow); }, /без фактической даты отправки G5/);
+  });
+  test("full edit rejects G7 without G6", function () {
+    var input = dates(); input.awaiting_at = "";
+    throws(function () { di3ValidateSupplyFullEditDates_(input, fixedNow); }, /без фактической даты.*G6/);
+  });
+  test("full edit rejects G6 earlier than G5", function () {
+    var input = dates(); input.awaiting_at = new Date(2026, 6, 4, 9, 59, 59);
+    throws(function () { di3ValidateSupplyFullEditDates_(input, fixedNow); }, /G6 не может быть раньше даты отправки G5/);
+  });
+  test("full edit rejects G7 earlier than G6", function () {
+    var input = dates(); input.received_at = new Date(2026, 6, 12, 11, 59, 59);
+    throws(function () { di3ValidateSupplyFullEditDates_(input, fixedNow); }, /G7 не может быть раньше даты ожидания получения G6/);
+  });
+  test("full edit rejects future factual dates", function () {
+    var input = dates(); input.sent_at = new Date(2026, 10, 24, 9, 0, 0);
+    throws(function () { di3ValidateSupplyFullEditDates_(input, fixedNow); }, /не может быть в будущем/);
+  });
+  test("full edit rejects an expected arrival before the store order date", function () {
+    var input = dates(); input.expected_date = new Date(2026, 6, 1, 0, 0, 0);
+    throws(function () { di3ValidateSupplyFullEditDates_(input, fixedNow); }, /Ожидаемая дата прибытия не может быть раньше даты создания заказа/);
+  });
+  test("full edit fingerprint is stable for equivalent normalized snapshots", function () {
+    var left = { supply: ["SUP-1", new Date(2026, 6, 4)], items: [["ITEM-1", 5]] };
+    var right = { supply: ["SUP-1", new Date(2026, 6, 4)], items: [["ITEM-1", 5]] };
+    equal(di3SupplyFullEditHash_(left), di3SupplyFullEditHash_(right));
+  });
+  test("full edit fingerprint changes when a business field changes", function () {
+    var before = { supplier: "A", shipping: 0 };
+    var after = { supplier: "A", shipping: 10 };
+    equal(di3SupplyFullEditHash_(before) === di3SupplyFullEditHash_(after), false);
+  });
+  test("document edit handler is registered as a dedicated OperationExecutor type", function () {
+    var registry = di3GetOperationHandlerRegistry_();
+    equal(typeof registry.SUPPLY_DOCUMENT_EDIT, "function");
+    equal(registry.SUPPLY_DOCUMENT_EDIT, di3ApplySupplyDocumentEditOperation_);
+  });
+  test("document edit handler never writes receipt, ledger, lots or FIFO projections", function () {
+    var source = di3ApplySupplyDocumentEditOperation_.toString();
+    equal(/di3AppendTableRows_\(\s*["']StockLedger/.test(source), false);
+    equal(/di3AppendTableRows_\(\s*["']StockLots/.test(source), false);
+    equal(/di3RebuildFifoAllocations_\s*\(/.test(source), false);
+    equal(/di3CreateSupplyReceiptOperation_\s*\(/.test(source), false);
+  });
+  test("full edit status history records adjacent forward transitions instead of skipping stages", function () {
+    var transitions = di3BuildSupplyFullEditStatusHistoryTransitions_(DI3_SUPPLY_STATUS.CREATED, DI3_SUPPLY_STATUS.AWAITING);
+    equal(JSON.stringify(transitions), JSON.stringify([[DI3_SUPPLY_STATUS.CREATED, DI3_SUPPLY_STATUS.SENT], [DI3_SUPPLY_STATUS.SENT, DI3_SUPPLY_STATUS.AWAITING]]));
+  });
+  test("full edit status history records adjacent reverse corrections", function () {
+    var transitions = di3BuildSupplyFullEditStatusHistoryTransitions_(DI3_SUPPLY_STATUS.AWAITING, DI3_SUPPLY_STATUS.CREATED);
+    equal(JSON.stringify(transitions), JSON.stringify([[DI3_SUPPLY_STATUS.AWAITING, DI3_SUPPLY_STATUS.SENT], [DI3_SUPPLY_STATUS.SENT, DI3_SUPPLY_STATUS.CREATED]]));
+  });
+  test("full edit uses a revision-scoped idempotency key and validates baseline fingerprint", function () {
+    var source = di3SaveFullSupplyEdit.toString();
+    equal(source.indexOf("SUPPLY_DOCUMENT_EDIT:") !== -1, true);
+    equal(source.indexOf("context.revision_id") !== -1, true);
+    equal(source.indexOf("snapshot.fingerprint !== context.baseline_hash") !== -1, true);
+  });
+  test("full edit preserves immutable supply identity and created_at", function () {
+    var source = di3ApplySupplyDocumentEditOperation_.toString();
+    equal(source.indexOf("targetParent[0] = String(payload.supply_id)") !== -1, true);
+    equal(source.indexOf("targetParent[4] = supply.created_at") !== -1, true);
+  });
+  test("received supply stock-impacting edits fail closed until SUPPLY_CORRECTION exists", function () {
+    var source = di3BuildSupplyFullEditPlan_.toString();
+    equal(source.indexOf("SUPPLY_CORRECTION") !== -1, true);
+    equal(source.indexOf("stockSensitiveChanges") !== -1, true);
+    equal(source.indexOf("currentStatus === DI3_SUPPLY_STATUS.RECEIVED && stockSensitiveChanges") !== -1, true);
+  });
+  test("full edit audit snapshot does not call the mutating quarantine-on-error payload verifier", function () {
+    var source = di3BuildSupplyFullEditSnapshot_.toString();
+    equal(/di3ReadVerifiedOperationPayload_\s*\(/.test(source), false);
+    equal(source.indexOf("payload_integrity") !== -1, true);
+  });
+  test("received supply full-edit mode requires a verified immutable receipt payload", function () {
+    var enableSource = di3EnableFullSupplyEditMode.toString();
+    var handlerSource = di3ApplySupplyDocumentEditOperation_.toString();
+    equal(enableSource.indexOf("snapshot.receipt_operation.payload_integrity !== \"VALID\"") !== -1, true);
+    equal(handlerSource.indexOf("receiptAudit.payload_integrity !== \"VALID\"") !== -1, true);
+  });
+
+  var report = { passed: passed, failed: failed.length, failures: failed };
+  if (failed.length) throw new Error("Supply full editing tests failed: " + JSON.stringify(failed));
+  return report;
+}
