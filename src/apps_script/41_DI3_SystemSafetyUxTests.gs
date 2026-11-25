@@ -269,6 +269,109 @@ function di3RunSystemSafetyUxUnitTests() {
     equal(unexpected[2].name, "Imported chart");
   });
 
+  test("clean baseline accepts a genuinely empty unversioned workbook", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      di3GetSpreadsheet_ = function () { return { getSheetByName: function () { return null; } }; };
+      di3GetSchemaVersion_ = function () { return 0; };
+      di3GetSchemaMigrationRows_ = function () { return []; };
+      var state = di3GetCleanBaselineState_();
+      equal(state.eligible, true);
+      equal(state.current_version, 0);
+      equal(state.record, null);
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
+  test("clean baseline rejects an unversioned workbook containing business rows", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      var headers = DI3_TABLE_SCHEMAS.Products.slice();
+      var productSheet = {
+        getLastRow: function () { return 2; },
+        getMaxColumns: function () { return headers.length; },
+        getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
+      };
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) { return name === "Products" ? productSheet : null; } };
+      };
+      di3GetSchemaVersion_ = function () { return 0; };
+      di3GetSchemaMigrationRows_ = function () { return []; };
+      equal(di3GetCleanBaselineState_().eligible, false);
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
+  test("clean baseline rejects legacy or partially mismatched system headers", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      var headers = DI3_TABLE_SCHEMAS.Products.slice();
+      headers[0] = "legacy_product_id";
+      var productSheet = {
+        getLastRow: function () { return 1; },
+        getMaxColumns: function () { return headers.length; },
+        getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
+      };
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) { return name === "Products" ? productSheet : null; } };
+      };
+      di3GetSchemaVersion_ = function () { return 0; };
+      di3GetSchemaMigrationRows_ = function () { return []; };
+      equal(di3GetCleanBaselineState_().eligible, false);
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
+  test("completed clean baseline remains recognizable after normal business rows exist", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      var headers = DI3_TABLE_SCHEMAS.Products.slice();
+      var productSheet = {
+        getLastRow: function () { return 2; },
+        getMaxColumns: function () { return headers.length; },
+        getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
+      };
+      var metaSheet = {};
+      var migrationSheet = {};
+      var record = { migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY, from_schema_version: 0,
+        to_schema_version: DI3_SCHEMA_VERSION, status: "COMPLETED", row_number: 2 };
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) {
+          if (name === "Products") return productSheet;
+          if (name === "_AppMeta") return metaSheet;
+          if (name === "SchemaMigrations") return migrationSheet;
+          return null;
+        } };
+      };
+      di3GetSchemaVersion_ = function () { return DI3_SCHEMA_VERSION; };
+      di3GetSchemaMigrationRows_ = function () { return [record]; };
+      var state = di3GetCleanBaselineState_();
+      equal(state.eligible, true);
+      equal(state.record.status, "COMPLETED");
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
     ["StockLedger", "StockAllocations", "FifoAllocationRuns", "FifoAllocationArchive",
       "FifoLotCacheArchive", "FifoReplayEvents"].forEach(function (sheetName) {
