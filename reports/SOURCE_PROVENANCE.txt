@@ -1,0 +1,6 @@
+Input archive: 40.rar
+SHA-256: 2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09
+Extraction: libarchive 3.7.4 RAR5 reader
+Extracted files: 46 .gs files
+No file contents were edited while copying the source modules.
+Additional files in this repository are documentation, reports and local tooling created during packaging.

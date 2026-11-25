@@ -1,0 +1,28 @@
+{
+  "snapshot_date": "2026-11-24",
+  "runtime": "Local container only; not Google Apps Script runtime",
+  "node_version": "v22.16.0",
+  "syntax_check": {
+    "files_checked": 46,
+    "failures": [],
+    "status": "PASS"
+  },
+  "typescript_ast_audit": {
+    "files": 46,
+    "functions": 521,
+    "topLevelVars": 86,
+    "parseErrors": [],
+    "duplicateDeclarations": []
+  },
+  "warehouse_dashboard_unit_tests": {
+    "status": "PASS",
+    "passed": 5,
+    "failed": 0,
+    "failures": []
+  },
+  "limitations": [
+    "No full Node regression harness was present in the uploaded RAR.",
+    "Google Sheets chart rendering and Apps Script service behavior were not tested here.",
+    "Apps Script manifest timezone could not be checked because appsscript.json was absent from the upload."
+  ]
+}
