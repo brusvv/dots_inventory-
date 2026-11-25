@@ -168,3 +168,25 @@ Until the new version is READY, the old cursor path must not silently mix with t
 - No mutation of historical StockLedger events.
 - No inclusion of archived allocations in active financial calculations.
 - No live workbook migration or historical data rewrite in this design-only phase.
+
+## Preferred path if the workbook is recreated from zero
+
+The project owner confirmed that recreating the spreadsheet from an empty workbook is acceptable because little business data has been entered. This changes the preferred implementation strategy:
+
+- Do not spend effort building a backfill migration for the current physical-row cursor if the production workbook can be recreated before release.
+- Put ledger_sequence directly into the initial StockLedger schema and assign it on every new stock event under the stock-operation lock.
+- Put the allocation-history event table directly into the baseline schema, so the first FIFO projection replacement is archived using the PREPARED / COMMITTED protocol.
+- Initialize the global cursor and per-product state against sequence watermarks from the first event; never create a production workbook that starts with row-number cursor semantics and later upgrades them.
+- Keep the existing v3 business tables only where their semantics remain correct. A clean workbook is not a reason to discard tested order, commission, supply or money rules.
+- Build the setup/installation path to create the complete baseline schema in one version, then verify backup/restore, setup idempotency and empty-workbook acceptance before importing or entering business data.
+
+Under this path, the F-07 backfill procedure becomes a test-only compatibility case for old workbooks, not a required production rollout step. F-06/F-07 still require the same replay, idempotency, fault-injection and concurrency tests; starting empty removes legacy-data migration risk, not correctness requirements.
+
+Recommended implementation order for a clean workbook:
+
+1. Freeze the target baseline schema and version identifier.
+2. Implement stable ledger_sequence allocation and cursor semantics.
+3. Implement the append-only allocation archive protocol and recovery.
+4. Extend setup and restore-as-new to create/rebind every new table and metadata key.
+5. Run empty-workbook setup twice, then synthetic supply → receipt → FIFO → dispatch → return → finance scenarios.
+6. Only after acceptance, create the production workbook and enter/import real data.
