@@ -321,6 +321,7 @@ function di3RunStockCoreUnitTests() {
       getLastRow: function () { return 4; },
       getRange: function (row, column, count, width) {
         if (width === 1 && column === 1) return { getValues: function () { return rows.slice(row - 2, row - 2 + count).map(function (x) { return [x[0]]; }); } };
+        if (width === 1 && column === 4) return { getValues: function () { return rows.slice(row - 2, row - 2 + count).map(function (x) { return [x[3]]; }); } };
         if (width === 1 && column === 13) return { getValues: function () { return rows.slice(row - 2, row - 2 + count).map(function (x) { return [x[12]]; }); } };
         fullReads.push({ row: row, count: count });
         return { getValues: function () { return rows.slice(row - 2, row - 2 + count).map(function (x) { return x.slice(); }); } };
@@ -342,24 +343,34 @@ function di3RunStockCoreUnitTests() {
 
   test("ledger sequence index rejects missing and duplicate populated values", function () {
     var originalGetSheet = di3GetSheetOrThrow_;
-    function fakeSheet(ids, seqs) {
+    function fakeSheet(ids, seqs, products) {
       return {
         getLastRow: function () { return ids.length + 1; },
         getRange: function (row, column, count) {
-          var values = column === 1 ? ids : seqs;
+          var values = column === 1 ? ids : (column === 4 ? products : seqs);
           return { getValues: function () { return values.slice(row - 2, row - 2 + count).map(function (x) { return [x]; }); } };
         }
       };
     }
     try {
-      di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [1, 1]); };
+      di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [1, 1], ["p1", "p1"]); };
       var duplicateThrew = false;
       try { di3ReadLedgerSequenceIndex_(); } catch (error) { duplicateThrew = /повторяется ledger_sequence/.test(error.message); }
       equal(duplicateThrew, true);
-      di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [1, ""]); };
+      di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [1, ""], ["p1", "p1"]); };
       var missingThrew = false;
       try { di3ReadLedgerSequenceIndex_(); } catch (error) { missingThrew = /отсутствует ledger_sequence/.test(error.message); }
       equal(missingThrew, true);
+      di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [4, 9], ["p1", "p1"]); };
+      var oldDepth = DI3_SCRIPT_LOCK_DEPTH_;
+      try {
+        DI3_SCRIPT_LOCK_DEPTH_ = 1;
+        equal(di3AllocateLedgerSequenceBlock_(2).join(","), "10,11");
+        DI3_SCRIPT_LOCK_DEPTH_ = 0;
+        var lockThrew = false;
+        try { di3AllocateLedgerSequenceBlock_(1); } catch (error) { lockThrew = /ScriptLock/.test(error.message); }
+        equal(lockThrew, true);
+      } finally { DI3_SCRIPT_LOCK_DEPTH_ = oldDepth; }
     } finally { di3GetSheetOrThrow_ = originalGetSheet; }
   });
 
