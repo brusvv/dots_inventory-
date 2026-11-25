@@ -171,10 +171,13 @@ function di3BuildProductFifoReplayPlan_(productId, ledgerRows, detailRows, lotRo
   return di3BuildFifoReplayPlan_(filteredLedger, filteredDetails, filteredLots, null);
 }
 
-function di3BuildFifoAllocationRows_(runId, allocations) {
-  return (allocations || []).map(function (allocation) {
+function di3BuildFifoAllocationRows_(runId, allocations, replayId) {
+  return (allocations || []).map(function (allocation, index) {
+    var allocationId = replayId
+      ? "F06:" + String(replayId) + ":" + String(index + 1).padStart(6, "0")
+      : di3MakeUuid_();
     return [
-      di3MakeUuid_(), runId, allocation.movement_id, allocation.lot_id,
+      allocationId, runId, allocation.movement_id, allocation.lot_id,
       allocation.product_id, allocation.allocation_type, allocation.quantity,
       allocation.unit_cost == null ? "" : allocation.unit_cost,
       allocation.cost_status,
@@ -495,13 +498,14 @@ function di3ReplaceFifoProjectionSafely_(predicate, newAllocationRows, lotRows, 
   }
 }
 
-function di3ApplyIncrementalFifoForProduct_(productId, runId, tailLedgerRows, detailRows, lotRows, activeAllocationRows, stateRows, allLedgerRows) {
+function di3ApplyIncrementalFifoForProduct_(productId, runId, tailLedgerRows, detailRows, lotRows, activeAllocationRows, stateRows, allLedgerRows, operationId) {
   var plan = di3BuildFifoTailPlanForProduct_(productId, tailLedgerRows, detailRows, lotRows, activeAllocationRows, stateRows);
   if (plan.mode === "NO_NEW_EVENTS") return { mode: plan.mode, movements_replayed: 0, allocations_created: 0, allocations_replaced: 0, lots_updated: 0, movement_costs: {} };
   if (plan.mode === "PRODUCT_REPLAY_REQUIRED") {
     var ledgerRows = Array.isArray(allLedgerRows) ? allLedgerRows : di3ReadTableValues_("StockLedger");
     var replay = di3BuildProductFifoReplayPlan_(productId, ledgerRows, detailRows, lotRows);
-    var allocationRows = di3BuildFifoAllocationRows_(runId, replay.allocations);
+    var replayId = operationId ? "OP:" + String(operationId) + ":PRODUCT:" + String(productId) : "RUN:" + String(runId) + ":PRODUCT:" + String(productId);
+    var allocationRows = di3BuildFifoAllocationRows_(runId, replay.allocations, replayId);
     var remainingFromReplay = {};
     replay.remaining_lots.forEach(function (lot) { remainingFromReplay[String(lot.lot_id)] = Number(lot.remaining_quantity); });
     (lotRows || []).filter(function (row) { return String(row[1]) === String(productId); }).forEach(function (row) {
@@ -794,7 +798,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
   var fullReplayStateRows = null;
   try {
     if (isFullReplay) {
-      var fullRows = di3BuildFifoAllocationRows_(run.run_id, candidateReplay.allocations);
+      var fullRows = di3BuildFifoAllocationRows_(run.run_id, candidateReplay.allocations, run.replay_id);
       var remaining = {};
       candidateReplay.remaining_lots.forEach(function (lot) { remaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
       lotRows.forEach(function (row) { if (!Object.prototype.hasOwnProperty.call(remaining, String(row[0]))) remaining[String(row[0])] = Number(row[8]); });
@@ -832,7 +836,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
             productLedgerRows.map(function (row) { return String(row[0]); }));
         }
         var result = di3ApplyIncrementalFifoForProduct_(productId, run.run_id, tailRows, productDetails,
-          productLots, productAllocations, productStateRows, productLedgerRows);
+          productLots, productAllocations, productStateRows, productLedgerRows, operationId);
         created += result.allocations_created;
         replaced += result.allocations_replaced;
         replayedMovements += result.movements_replayed;
