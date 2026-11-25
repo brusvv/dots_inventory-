@@ -583,6 +583,103 @@ function di3RunStockCoreUnitTests() {
     } finally { di3GetSheetOrThrow_ = originalGetSheet; }
   });
 
+  test("pending full replay is reconstructed and refreshes all product watermarks", function () {
+    var originals = {
+      pending: di3GetPendingFifoReplayEventsForRun_,
+      readTable: di3ReadTableValues_,
+      inputFingerprint: di3BuildFifoReplayInputFingerprint_,
+      replayPlan: di3BuildFifoReplayPlan_,
+      allocationRows: di3BuildFifoAllocationRows_,
+      replace: di3ReplaceFifoProjectionSafely_,
+      stateRows: di3BuildFifoProductStateRows_,
+      upsert: di3UpsertFifoProductStateRows_
+    };
+    var replaceCalls = 0, upsertRows = null;
+    var ledger = [
+      ["m1", "op1", "evt1", "p1", "T", "d", 1, new Date("2026-01-01"), new Date("2026-01-01"), "", "", "", 1],
+      ["m2", "op2", "evt2", "p2", "T", "d", -1, new Date("2026-01-02"), new Date("2026-01-02"), "", "", "", 2]
+    ];
+    var details = [["m1", "c1", "IN", "SUPPLY"], ["m2", "c2", "OUT", "SALE"]];
+    var lots = [
+      ["l1", "p1", "m1", "SUPPLY", "s1", "pv1", new Date("2026-01-01"), new Date("2026-01-01"), 1, 5, "KNOWN", "EUR", "", 1, 500],
+      ["l2", "p2", "m0", "SUPPLY", "s2", "pv2", new Date("2025-12-31"), new Date("2025-12-31"), 2, 4, "KNOWN", "EUR", "", 1, 800]
+    ];
+    var event = ["evt-1", "FULL:run-1", 1, "PREPARED", "run-1", "",
+      "FULL", "FULL", "input-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
+    try {
+      di3GetPendingFifoReplayEventsForRun_ = function () { return [{ row_number: 2, values: event }]; };
+      di3ReadTableValues_ = function (name) {
+        if (name === "StockLedger") return ledger;
+        if (name === "StockMovementDetails") return details;
+        if (name === "StockLots") return lots;
+        throw new Error("Unexpected table " + name);
+      };
+      di3BuildFifoReplayInputFingerprint_ = function () { return "input-fp"; };
+      di3BuildFifoReplayPlan_ = function () {
+        return { allocations: [{ movement_id: "m2", lot_id: "l2", product_id: "p2", allocation_type: "CONSUME",
+          quantity: 1, unit_cost: 4, cost_status: "KNOWN", allocated_cost: 4, effective_at: new Date(), recorded_at: new Date(), allocated_cost_minor: 400 }],
+          remaining_lots: [{ lot_id: "l2", remaining_quantity: 1 }], movement_count: 2 };
+      };
+      di3BuildFifoAllocationRows_ = function (runId, allocations, replayId) {
+        equal(runId, "run-1");
+        equal(replayId, "FULL:run-1");
+        return [["target-full-allocation"]];
+      };
+      di3ReplaceFifoProjectionSafely_ = function (predicate, targetRows, lotRows, remaining, productId, context) {
+        replaceCalls++;
+        equal(productId, null);
+        equal(context.scope_type, "FULL");
+        equal(targetRows.length, 1);
+        equal(remaining.l1, 1);
+        return { allocations_removed: 3, allocations_written: 1 };
+      };
+      di3BuildFifoProductStateRows_ = function (ids, ledgerRows) {
+        equal(ids.length, 2);
+        equal(ledgerRows.length, 2);
+        return [["p1-state"], ["p2-state"]];
+      };
+      di3UpsertFifoProductStateRows_ = function (rows) { upsertRows = rows; };
+      var result = di3RecoverPendingFifoReplaysForRun_({ run_id: "run-1", created_at: new Date() }, "TEST");
+      equal(result.recovered, 1);
+      equal(result.full_replay, true);
+      equal(result.movements_replayed, 2);
+      equal(replaceCalls, 1);
+      equal(upsertRows.length, 2);
+    } finally {
+      di3GetPendingFifoReplayEventsForRun_ = originals.pending;
+      di3ReadTableValues_ = originals.readTable;
+      di3BuildFifoReplayInputFingerprint_ = originals.inputFingerprint;
+      di3BuildFifoReplayPlan_ = originals.replayPlan;
+      di3BuildFifoAllocationRows_ = originals.allocationRows;
+      di3ReplaceFifoProjectionSafely_ = originals.replace;
+      di3BuildFifoProductStateRows_ = originals.stateRows;
+      di3UpsertFifoProductStateRows_ = originals.upsert;
+    }
+  });
+
+  test("FIFO replay event reader rejects invalid and duplicate sequence numbers", function () {
+    var originalRead = di3ReadRowsByColumnValue_;
+    try {
+      di3ReadRowsByColumnValue_ = function () {
+        return [
+          { values: ["e1", "replay-1", 1, "PREPARED"] },
+          { values: ["e2", "replay-1", 1, "COMMITTED"] }
+        ];
+      };
+      var duplicateThrew = false;
+      try { di3GetLatestFifoReplayEvent_("replay-1"); }
+      catch (error) { duplicateThrew = /duplicate event_sequence/.test(error.message); }
+      equal(duplicateThrew, true);
+      di3ReadRowsByColumnValue_ = function () {
+        return [{ values: ["e1", "replay-1", 0, "PREPARED"] }];
+      };
+      var invalidThrew = false;
+      try { di3GetLatestFifoReplayEvent_("replay-1"); }
+      catch (error) { invalidThrew = /invalid event_sequence/.test(error.message); }
+      equal(invalidThrew, true);
+    } finally { di3ReadRowsByColumnValue_ = originalRead; }
+  });
+
   test("unresolved FIFO run blocks allocation of new stock sequences", function () {
     var originalGetSheet = di3GetSheetOrThrow_;
     try {
