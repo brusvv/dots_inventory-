@@ -1720,6 +1720,13 @@ function di3RunFifoIntegrityCheck() {
     "FIFO-партий: " + Number(summary.lots || 0),
     "Активных распределений: " + Number(summary.active_allocations || 0),
     "Состояний товаров: " + Number(summary.fifo_product_states || 0),
+    "FIFO-запусков: " + Number(summary.fifo_runs || 0) + " · незавершённых: " + Number(summary.fifo_pending_runs || 0),
+    "Архив: " + Number(summary.fifo_archive_allocation_rows || 0) + " распределений · " +
+      Number(summary.fifo_archive_lot_rows || 0) + " остатков партий",
+    "Replay-событий: " + Number(summary.fifo_replay_events || 0) + " · PREPARED: " +
+      Number(summary.fifo_pending_replays || 0) + " · COMMITTED: " +
+      Number(summary.fifo_committed_replays || 0) + " · QUARANTINED: " +
+      Number(summary.fifo_quarantined_replays || 0),
     "Ошибок: " + (report.errors || []).length,
     "Предупреждений: " + (report.warnings || []).length,
     "\nДанные не изменялись. Полный отчёт записан в журнал выполнения."
