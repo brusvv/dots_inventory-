@@ -59,6 +59,7 @@ function di3BuildOrderDispatchPayload_(order, items, effectiveAt) {
 
 function di3BuildOrderDispatchRows_(operationId, payload) {
   var ledger = [], details = [];
+  var actor = di3GetOperationInitiatorActor_(operationId);
   payload.lines.forEach(function (line) {
     ledger.push([
       line.movement_id, operationId, line.event_key, line.product_id,
@@ -68,7 +69,7 @@ function di3BuildOrderDispatchRows_(operationId, payload) {
     ]);
     details.push([
       line.movement_id, line.display_code, "OUT", "ORDER_DISPATCH",
-      line.sale_unit_price, line.line_revenue, "", "", di3GetOperationInitiatorActor_(operationId),
+      line.sale_unit_price, line.line_revenue, "", "", actor,
       "Заказ " + payload.order_number, "ORDER"
     ]);
   });
