@@ -60,6 +60,16 @@ An active-user email can be unavailable in some Apps Script execution contexts. 
 
 The source audit does not establish which identity scopes will be available in the deployed spreadsheet's exact account, sharing and trigger configuration. That requires runtime acceptance in the actual Apps Script environment.
 
+## Progress update — diagnostic actor visibility
+
+A first low-risk source patch is now present:
+
+- `di3GetOperationAttemptStats_` includes the stored actor in attempt objects, the latest-attempt summary and manual-review objects.
+- The retry-epoch adapter preserves the actor field when it passes rows to `di3GetOperationAttemptExecutionRows_`.
+- A regression test covers a first executor, a separate manual reviewer and a different recovery executor.
+
+This does not resolve initiator/executor conflation in domain-event writes. The centralized identity helper, identity source/context metadata and initiator propagation remain unimplemented. The regression test and syntax checks have not been executed in this environment.
+
 ## Main risks
 
 1. **Initiator/executor conflation.** Domain rows written during recovery may record the recovery executor as the actor for a business action originally requested by another user.
