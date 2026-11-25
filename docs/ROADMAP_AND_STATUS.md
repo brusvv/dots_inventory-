@@ -251,3 +251,4 @@ The following issues have source changes and local regression coverage. They are
 
 - Supply receipt `StockMovementDetails.actor` is now populated from the same immutable initiator record; its regression assertion was added.
 - Manual warehouse stock movement details now also record the original operation initiator in `StockMovementDetails.actor`; regression coverage was extended.
+- Extended `tools/run_system_safety_ux_tests.js` to load the actor helper, settings accessor, and manual-stock source modules referenced by the expanded suite. Runner execution remains pending.
