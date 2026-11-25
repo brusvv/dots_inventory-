@@ -343,6 +343,11 @@ function di3BuildFifoLotCacheSnapshot_(lotRows, remainingByLotId, productId) {
 function di3AppendFifoArchiveRowsIdempotently_(tableName, rows) {
   if (!rows || !rows.length) return 0;
   var ids = rows.map(function (row) { return String(row[0]); });
+  var expectedIds = Object.create(null);
+  ids.forEach(function (id) {
+    if (!id || expectedIds[id]) throw new Error(tableName + ": duplicate or blank expected archive_row_id " + id + ".");
+    expectedIds[id] = true;
+  });
   var existing = di3ReadRowsByColumnValues_(tableName, 0, ids);
   var existingById = Object.create(null);
   existing.forEach(function (match) {
@@ -533,9 +538,11 @@ function di3GetPendingFifoReplayEventsForRun_(runId) {
   var latestByReplay = Object.create(null);
   matches.forEach(function (match) {
     var row = match.values, replayId = String(row[1]);
-    if (!latestByReplay[replayId] || Number(row[2]) > Number(latestByReplay[replayId].values[2])) {
-      latestByReplay[replayId] = match;
+    var previous = latestByReplay[replayId];
+    if (previous && Number(row[2]) === Number(previous.values[2])) {
+      throw new Error("FifoReplayEvents: duplicate event_sequence for replay " + replayId + ".");
     }
+    if (!previous || Number(row[2]) > Number(previous.values[2])) latestByReplay[replayId] = match;
   });
   return Object.keys(latestByReplay).map(function (id) { return latestByReplay[id]; })
     .filter(function (match) { return String(match.values[3]) === "PREPARED"; });
@@ -645,9 +652,11 @@ function di3CommitFifoReplayEventsForRun_(runId) {
   var latestByReplay = Object.create(null);
   matches.forEach(function (match) {
     var row = match.values, replayId = String(row[1]);
-    if (!latestByReplay[replayId] || Number(row[2]) > Number(latestByReplay[replayId].values[2])) {
-      latestByReplay[replayId] = match;
+    var previous = latestByReplay[replayId];
+    if (previous && Number(row[2]) === Number(previous.values[2])) {
+      throw new Error("FifoReplayEvents: duplicate event_sequence for replay " + replayId + ".");
     }
+    if (!previous || Number(row[2]) > Number(previous.values[2])) latestByReplay[replayId] = match;
   });
   Object.keys(latestByReplay).forEach(function (replayId) {
     var row = latestByReplay[replayId].values;
