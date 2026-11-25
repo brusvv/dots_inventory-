@@ -72,6 +72,21 @@ function di3FinanceGetMonthKey_(date) {
   return Utilities.formatDate(date, di3GetConfiguredTimeZone_(), "yyyy-MM");
 }
 
+/** Resolve stable table-column positions from the active schema; never hardcode row offsets. */
+function di3FinanceColumnIndex_(tableName, columnName) {
+  var schema = DI3_TABLE_SCHEMAS[tableName];
+  if (!Array.isArray(schema)) throw new Error("Finance Dashboard: отсутствует схема таблицы " + tableName + ".");
+  var index = schema.indexOf(String(columnName));
+  if (index < 0) throw new Error("Finance Dashboard: в схеме " + tableName + " отсутствует колонка " + columnName + ".");
+  return index;
+}
+
+function di3FinanceColumnMap_(tableName, columnNames) {
+  var map = Object.create(null);
+  (columnNames || []).forEach(function (name) { map[name] = di3FinanceColumnIndex_(tableName, name); });
+  return map;
+}
+
 function di3FinanceCreateBucket_(key) {
   return {
     month: key, order_ids: Object.create(null), buyer_paid_minor: 0, commission_minor: 0, discount_minor: 0,
@@ -81,16 +96,17 @@ function di3FinanceCreateBucket_(key) {
 }
 
 function di3FinanceResolveLatestOrderCosts_(snapshotRows) {
+  var col = di3FinanceColumnMap_("OrderCostSnapshots", ["order_item_id", "calculation_version", "cost_amount_minor", "cost_status"]);
   var latest = Object.create(null);
   (snapshotRows || []).forEach(function (row) {
-    var itemId = String(row[2] || "");
+    var itemId = String(row[col.order_item_id] || "");
     if (!itemId) return;
-    var version = Number(row[3]) || 0;
+    var version = Number(row[col.calculation_version]) || 0;
     if (!latest[itemId] || version > latest[itemId].version) {
       latest[itemId] = {
         version: version,
-        cost_minor: row[5] === "" || row[5] == null ? null : Number(row[5]),
-        cost_status: String(row[6] || "")
+        cost_minor: row[col.cost_amount_minor] === "" || row[col.cost_amount_minor] == null ? null : Number(row[col.cost_amount_minor]),
+        cost_status: String(row[col.cost_status] || "")
       };
     }
   });
@@ -98,7 +114,8 @@ function di3FinanceResolveLatestOrderCosts_(snapshotRows) {
 }
 
 function di3FinanceResolveItemCost_(itemRow, latestSnapshots) {
-  var itemId = String(itemRow[0] || "");
+  var col = di3FinanceColumnMap_("V3_OrderItems", ["order_item_id", "actual_fifo_cost", "actual_fifo_cost_status"]);
+  var itemId = String(itemRow[col.order_item_id] || "");
   var snapshot = latestSnapshots[itemId];
   if (snapshot) {
     if (snapshot.cost_status === "COMPLETE" && Number.isSafeInteger(snapshot.cost_minor) && snapshot.cost_minor >= 0) {
@@ -107,8 +124,9 @@ function di3FinanceResolveItemCost_(itemRow, latestSnapshots) {
     return { known: false, minor: null, source: "SNAPSHOT", status: snapshot.cost_status };
   }
   // Compatibility for completed legacy rows whose immutable snapshot was not yet created.
-  if (String(itemRow[13] || "") === "COMPLETE" && itemRow[12] !== "" && itemRow[12] != null) {
-    return { known: true, minor: di3MoneyToMinorUnits_(Number(itemRow[12]), "Фактическая себестоимость позиции", false), source: "ITEM_FALLBACK" };
+  var legacyCost = itemRow[col.actual_fifo_cost];
+  if (String(itemRow[col.actual_fifo_cost_status] || "") === "COMPLETE" && legacyCost !== "" && legacyCost != null) {
+    return { known: true, minor: di3MoneyToMinorUnits_(Number(legacyCost), "Фактическая себестоимость позиции", false), source: "ITEM_FALLBACK" };
   }
   return { known: false, minor: null, source: "MISSING" };
 }
@@ -128,6 +146,18 @@ function di3GetFinanceDashboardData(filters) {
   var selectedProductId = String(filters.product_id || "");
   var allProducts = !selectedProductId || selectedProductId === "ALL";
   var warnings = [];
+  var orderCol = di3FinanceColumnMap_("V3_Orders", [
+    "order_id", "order_number", "status", "commission_amount", "discount_amount", "completed_at",
+    "seller_revenue", "platform_commission_realized", "buyer_paid_total", "settlement_finalized_at", "commission_payer"
+  ]);
+  var itemCol = di3FinanceColumnMap_("V3_OrderItems", [
+    "order_item_id", "order_id", "line_no", "product_id", "quantity", "sale_unit_price", "line_revenue"
+  ]);
+  var snapshotCol = di3FinanceColumnMap_("OrderCostSnapshots", ["order_item_id"]);
+  var supplyCol = di3FinanceColumnMap_("V3_Supplies", ["supply_id", "supply_number", "supplier", "status", "sent_at", "received_at"]);
+  var supplyItemCol = di3FinanceColumnMap_("V3_SupplyItems", [
+    "supply_id", "product_id", "product_label_snapshot", "received_units", "final_line_amount", "unit_cost"
+  ]);
   var bucketMap = Object.create(null);
   function bucketFor(date) {
     var key = di3FinanceGetMonthKey_(date);
@@ -137,30 +167,33 @@ function di3GetFinanceDashboardData(filters) {
 
   var orderRows = di3ReadTableValues_("V3_Orders");
   orderRows.forEach(function (row) {
-    if (String(row[3]) === DI3_ORDER_STATUS.COMPLETED && (row[18] === "" || row[18] == null) && (row[27] === "" || row[27] == null)) {
-      warnings.push("У завершённого заказа " + String(row[1] || row[0]) + " отсутствует дата завершения/расчёта; он не включён в периодную аналитику.");
+    if (String(row[orderCol.status]) === DI3_ORDER_STATUS.COMPLETED &&
+        (row[orderCol.completed_at] === "" || row[orderCol.completed_at] == null) &&
+        (row[orderCol.settlement_finalized_at] === "" || row[orderCol.settlement_finalized_at] == null)) {
+      warnings.push("У завершённого заказа " + String(row[orderCol.order_number] || row[orderCol.order_id]) + " отсутствует дата завершения/расчёта; он не включён в периодную аналитику.");
     }
   });
   var recognizedOrders = orderRows.filter(function (row) {
-    return String(row[3]) === DI3_ORDER_STATUS.COMPLETED && di3FinanceIsInRange_(row[18] || row[27], start, end);
+    return String(row[orderCol.status]) === DI3_ORDER_STATUS.COMPLETED &&
+      di3FinanceIsInRange_(row[orderCol.completed_at] || row[orderCol.settlement_finalized_at], start, end);
   });
-  var recognizedOrderIds = recognizedOrders.map(function (row) { return String(row[0] || ""); }).filter(Boolean);
+  var recognizedOrderIds = recognizedOrders.map(function (row) { return String(row[orderCol.order_id] || ""); }).filter(Boolean);
   var itemMatches = recognizedOrderIds.length
-    ? di3ReadRowsByColumnValues_("V3_OrderItems", 1, recognizedOrderIds)
+    ? di3ReadRowsByColumnValues_("V3_OrderItems", itemCol.order_id, recognizedOrderIds)
     : [];
   var itemsByOrder = Object.create(null);
   itemMatches.forEach(function (match) {
     var row = match.values;
-    var orderId = String(row[1] || "");
+    var orderId = String(row[itemCol.order_id] || "");
     if (!itemsByOrder[orderId]) itemsByOrder[orderId] = [];
     itemsByOrder[orderId].push(row);
   });
   Object.keys(itemsByOrder).forEach(function (orderId) {
-    itemsByOrder[orderId].sort(function (a, b) { return Number(a[2]) - Number(b[2]); });
+    itemsByOrder[orderId].sort(function (a, b) { return Number(a[itemCol.line_no]) - Number(b[itemCol.line_no]); });
   });
-  var recognizedItemIds = itemMatches.map(function (match) { return String(match.values[0] || ""); }).filter(Boolean);
+  var recognizedItemIds = itemMatches.map(function (match) { return String(match.values[itemCol.order_item_id] || ""); }).filter(Boolean);
   var snapshotMatches = recognizedItemIds.length
-    ? di3ReadRowsByColumnValues_("OrderCostSnapshots", 2, recognizedItemIds)
+    ? di3ReadRowsByColumnValues_("OrderCostSnapshots", snapshotCol.order_item_id, recognizedItemIds)
     : [];
   var latestSnapshots = di3FinanceResolveLatestOrderCosts_(snapshotMatches.map(function (match) { return match.values; }));
   var sales = {
@@ -169,53 +202,53 @@ function di3GetFinanceDashboardData(filters) {
   };
 
   recognizedOrders.forEach(function (order) {
-    var orderId = String(order[0] || "");
-    var orderDate = di3ToDate_(order[18] || order[27], "Дата завершения заказа");
+    var orderId = String(order[orderCol.order_id] || "");
+    var orderDate = di3ToDate_(order[orderCol.completed_at] || order[orderCol.settlement_finalized_at], "Дата завершения заказа");
     var orderItems = itemsByOrder[orderId] || [];
     if (!orderItems.length) {
-      warnings.push("У завершённого заказа " + String(order[1] || orderId) + " нет строк V3_OrderItems; финансовые показатели заказа не включены.");
+      warnings.push("У завершённого заказа " + String(order[orderCol.order_number] || orderId) + " нет строк V3_OrderItems; финансовые показатели заказа не включены.");
       return;
     }
     var lineGoodsMinor = orderItems.map(function (item) {
-      var lineAmount = item[7] === "" || item[7] == null
-        ? Number(item[5]) * Number(item[6]) : Number(item[7]);
+      var lineAmount = item[itemCol.line_revenue] === "" || item[itemCol.line_revenue] == null
+        ? Number(item[itemCol.quantity]) * Number(item[itemCol.sale_unit_price]) : Number(item[itemCol.line_revenue]);
       return di3MoneyToMinorUnits_(lineAmount, "Выручка строки заказа", false);
     });
     var goodsMinor = lineGoodsMinor.reduce(function (sum, value) { return sum + value; }, 0);
-    var discountMinor = di3MoneyToMinorUnits_(Number(order[8] || 0), "Скидка заказа", false);
-    var commissionRecorded = order[24] !== "" && order[24] != null;
-    var commissionValue = commissionRecorded ? order[24] : order[6];
+    var discountMinor = di3MoneyToMinorUnits_(Number(order[orderCol.discount_amount] || 0), "Скидка заказа", false);
+    var commissionRecorded = order[orderCol.platform_commission_realized] !== "" && order[orderCol.platform_commission_realized] != null;
+    var commissionValue = commissionRecorded ? order[orderCol.platform_commission_realized] : order[orderCol.commission_amount];
     var commissionMinor = di3MoneyToMinorUnits_(Number(commissionValue || 0), "Комиссия площадки", false);
     if (!commissionRecorded && commissionMinor > 0) {
-      warnings.push("Заказ " + String(order[1] || orderId) + ": фактическая комиссия не зафиксирована; использована сумма комиссии из документа.");
+      warnings.push("Заказ " + String(order[orderCol.order_number] || orderId) + ": фактическая комиссия не зафиксирована; использована сумма комиссии из документа.");
     }
     if (discountMinor > goodsMinor) {
-      warnings.push("Скидка заказа " + String(order[1] || orderId) + " превышает сумму строк; заказ пропущен.");
+      warnings.push("Скидка заказа " + String(order[orderCol.order_number] || orderId) + " превышает сумму строк; заказ пропущен.");
       return;
     }
     var discountShares = di3FinanceAllocateMinorByWeights_(discountMinor, lineGoodsMinor);
     var commissionShares = di3FinanceAllocateMinorByWeights_(commissionMinor, lineGoodsMinor);
-    var commissionPayer = String(order[28] || "BUYER").toUpperCase();
+    var commissionPayer = String(order[orderCol.commission_payer] || "BUYER").toUpperCase();
     if (commissionPayer !== "BUYER" && commissionPayer !== "SELLER") {
-      warnings.push("Заказ " + String(order[1] || orderId) + ": неизвестный плательщик комиссии; для аналитики применено прежнее правило BUYER.");
+      warnings.push("Заказ " + String(order[orderCol.order_number] || orderId) + ": неизвестный плательщик комиссии; для аналитики применено прежнее правило BUYER.");
       commissionPayer = "BUYER";
     }
-    var storedSellerRevenue = order[23] === "" || order[23] == null ? null
-      : di3MoneyToMinorUnits_(Number(order[23]), "Выручка продавца в заказе", false);
-    var storedBuyerPaid = order[25] === "" || order[25] == null ? null
-      : di3MoneyToMinorUnits_(Number(order[25]), "Сумма оплаты покупателя в заказе", false);
+    var storedSellerRevenue = order[orderCol.seller_revenue] === "" || order[orderCol.seller_revenue] == null ? null
+      : di3MoneyToMinorUnits_(Number(order[orderCol.seller_revenue]), "Выручка продавца в заказе", false);
+    var storedBuyerPaid = order[orderCol.buyer_paid_total] === "" || order[orderCol.buyer_paid_total] == null ? null
+      : di3MoneyToMinorUnits_(Number(order[orderCol.buyer_paid_total]), "Сумма оплаты покупателя в заказе", false);
     var calculatedSplit = di3CalculateOrderCommissionSplit_(goodsMinor, discountMinor, commissionMinor, commissionPayer);
     var calculatedSellerRevenue = calculatedSplit.seller_revenue_cents;
     var calculatedBuyerPaid = calculatedSplit.buyer_paid_cents;
     if (storedSellerRevenue != null && storedSellerRevenue !== calculatedSellerRevenue) {
-      warnings.push("Заказ " + String(order[1] || orderId) + ": выручка продавца в документе не совпадает с суммой строк после скидки.");
+      warnings.push("Заказ " + String(order[orderCol.order_number] || orderId) + ": выручка продавца в документе не совпадает с суммой строк после скидки.");
     }
     if (storedBuyerPaid != null && storedBuyerPaid !== calculatedBuyerPaid) {
-      warnings.push("Заказ " + String(order[1] || orderId) + ": сумма оплаты покупателя не совпадает с выручкой продавца плюс комиссией.");
+      warnings.push("Заказ " + String(order[orderCol.order_number] || orderId) + ": сумма оплаты покупателя не совпадает с выручкой продавца плюс комиссией.");
     }
     var matchedLineCount = 0;
     orderItems.forEach(function (item, index) {
-      var productId = String(item[3] || "");
+      var productId = String(item[itemCol.product_id] || "");
       if (!allProducts && productId !== selectedProductId) return;
       matchedLineCount++;
       var lineSplit = di3CalculateOrderCommissionSplit_(
@@ -249,19 +282,20 @@ function di3GetFinanceDashboardData(filters) {
 
   var supplyRows = di3ReadTableValues_("V3_Supplies");
   supplyRows.forEach(function (row) {
-    if (String(row[3]) === DI3_SUPPLY_STATUS.RECEIVED && (row[7] === "" || row[7] == null)) {
-      warnings.push("У полученной поставки " + String(row[1] || row[0]) + " отсутствует дата получения; она не включена в периодную аналитику.");
+    if (String(row[supplyCol.status]) === DI3_SUPPLY_STATUS.RECEIVED &&
+        (row[supplyCol.received_at] === "" || row[supplyCol.received_at] == null)) {
+      warnings.push("У полученной поставки " + String(row[supplyCol.supply_number] || row[supplyCol.supply_id]) + " отсутствует дата получения; она не включена в периодную аналитику.");
     }
   });
   var deliveredSupplies = supplyRows.filter(function (row) {
-    return String(row[3]) === DI3_SUPPLY_STATUS.RECEIVED && di3FinanceIsInRange_(row[7], start, end);
+    return String(row[supplyCol.status]) === DI3_SUPPLY_STATUS.RECEIVED && di3FinanceIsInRange_(row[supplyCol.received_at], start, end);
   });
-  var supplyIds = deliveredSupplies.map(function (row) { return String(row[0] || ""); }).filter(Boolean);
-  var supplyItemMatches = supplyIds.length ? di3ReadRowsByColumnValues_("V3_SupplyItems", 1, supplyIds) : [];
+  var supplyIds = deliveredSupplies.map(function (row) { return String(row[supplyCol.supply_id] || ""); }).filter(Boolean);
+  var supplyItemMatches = supplyIds.length ? di3ReadRowsByColumnValues_("V3_SupplyItems", supplyItemCol.supply_id, supplyIds) : [];
   var supplyItemsById = Object.create(null);
   supplyItemMatches.forEach(function (match) {
     var row = match.values;
-    var supplyId = String(row[1] || "");
+    var supplyId = String(row[supplyItemCol.supply_id] || "");
     if (!supplyItemsById[supplyId]) supplyItemsById[supplyId] = [];
     supplyItemsById[supplyId].push(row);
   });
@@ -271,47 +305,47 @@ function di3GetFinanceDashboardData(filters) {
   var deliveries = [];
   var priceHistory = [];
   deliveredSupplies.forEach(function (supply) {
-    var supplyId = String(supply[0] || "");
+    var supplyId = String(supply[supplyCol.supply_id] || "");
     var lines = supplyItemsById[supplyId] || [];
-    var selectedLines = lines.filter(function (line) { return allProducts || String(line[3]) === selectedProductId; });
+    var selectedLines = lines.filter(function (line) { return allProducts || String(line[supplyItemCol.product_id]) === selectedProductId; });
     if (!selectedLines.length) return;
-    var receivedAt = di3ToDate_(supply[7], "Дата получения поставки");
+    var receivedAt = di3ToDate_(supply[supplyCol.received_at], "Дата получения поставки");
     var bucket = bucketFor(receivedAt);
     var days = null;
-    if (supply[5] !== "" && supply[5] != null) {
-      var sentAt = di3ToDate_(supply[5], "Дата отправки поставки");
+    if (supply[supplyCol.sent_at] !== "" && supply[supplyCol.sent_at] != null) {
+      var sentAt = di3ToDate_(supply[supplyCol.sent_at], "Дата отправки поставки");
       days = (receivedAt.getTime() - sentAt.getTime()) / 86400000;
       if (days < 0) {
-        warnings.push("У поставки " + String(supply[1]) + " дата получения раньше даты отправки; срок не рассчитан.");
+        warnings.push("У поставки " + String(supply[supplyCol.supply_number]) + " дата получения раньше даты отправки; срок не рассчитан.");
         days = null;
       }
     } else {
-      warnings.push("У полученной поставки " + String(supply[1] || supplyId) + " отсутствует дата отправки; срок доставки не рассчитан.");
+      warnings.push("У полученной поставки " + String(supply[supplyCol.supply_number] || supplyId) + " отсутствует дата отправки; срок доставки не рассчитан.");
     }
     var displayNames = [];
     selectedLines.forEach(function (line) {
-      var units = Number(line[14]) || 0;
-      var amountValue = line[15] === "" || line[15] == null
-        ? Number(line[16] || 0) * units : Number(line[15]);
+      var units = Number(line[supplyItemCol.received_units]) || 0;
+      var amountValue = line[supplyItemCol.final_line_amount] === "" || line[supplyItemCol.final_line_amount] == null
+        ? Number(line[supplyItemCol.unit_cost] || 0) * units : Number(line[supplyItemCol.final_line_amount]);
       var amountMinor = di3MoneyToMinorUnits_(amountValue, "Итоговая стоимость строки поставки", false);
       purchases.total_minor += amountMinor;
       purchases.units += units;
       purchases.line_count++;
       bucket.purchase_minor += amountMinor;
       bucket.purchase_units += units;
-      var productId = String(line[3] || "");
+      var productId = String(line[supplyItemCol.product_id] || "");
       var product = productsById[productId];
-      var label = String(line[4] || (product ? di3GetProductLabel_(product) : productId));
+      var label = String(line[supplyItemCol.product_label_snapshot] || (product ? di3GetProductLabel_(product) : productId));
       displayNames.push(label);
       priceHistory.push({
-        date: receivedAt, supply_number: String(supply[1] || ""), supplier: String(supply[2] || ""),
+        date: receivedAt, supply_number: String(supply[supplyCol.supply_number] || ""), supplier: String(supply[supplyCol.supplier] || ""),
         product_id: productId, product_label: label, units: units, total_minor: amountMinor,
         unit_cost: units > 0 ? amountMinor / 100 / units : null
       });
     });
     if (days != null) deliveries.push({
-      supply_number: String(supply[1] || ""), supplier: String(supply[2] || ""),
-      sent_at: supply[5], received_at: receivedAt, days: days,
+      supply_number: String(supply[supplyCol.supply_number] || ""), supplier: String(supply[supplyCol.supplier] || ""),
+      sent_at: supply[supplyCol.sent_at], received_at: receivedAt, days: days,
       product_count: selectedLines.length, product_labels: displayNames.join(", ")
     });
   });

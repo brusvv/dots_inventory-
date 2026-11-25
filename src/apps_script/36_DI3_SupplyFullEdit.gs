@@ -153,6 +153,9 @@ function di3GetSupplyFullEditContext_() {
 function di3EnableFullSupplyEditMode() {
   return di3WithLock_(function () {
     var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+    if (String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") === DI3_HISTORICAL_SUPPLY_MODE_VALUE) {
+      throw new Error("Сначала заверши или отмени режим «Внести старую поставку». Полное редактирование и исторический ввод взаимоисключают друг друга.");
+    }
     if (String(sheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === DI3_SUPPLY_FULL_EDIT_MODE_VALUE) {
       throw new Error("Полное редактирование уже включено. Продолжай текущую корректировку или отмени её перед повторным запуском команды.");
     }
@@ -439,13 +442,52 @@ function di3RecalculateSupplyNumberInFullEdit() {
     var context = di3GetSupplyFullEditContext_();
     var orderDate = di3ParseSupplyCalendarDate_(context.sheet.getRange("G2").getValue(), "Дата заказа в магазине");
     if (!orderDate) throw new Error("Для пересчёта номера нужна дата заказа в G2.");
-    var nextNumber = di3SupplyNumberForDate_(orderDate);
+    var nextNumber = di3PeekSupplyNumberForDate_(orderDate);
     var collision = di3FindSupplyByNumber_(nextNumber);
     if (collision && String(collision.supply_id) !== context.supply_id) {
       throw new Error("Не удалось пересчитать номер: " + nextNumber + " уже используется другой поставкой.");
     }
     context.sheet.getRange(DI3_SUPPLY_FORM.fullEditRecalculateNumber).setValue(nextNumber);
     return { status: "NUMBER_PREVIEW_UPDATED", previous_number: context.supply.supply_number, proposed_number: nextNumber };
+  });
+}
+
+function di3SupplyFullEditDateFingerprint_(value) {
+  return value instanceof Date && !isNaN(value.getTime()) ? value.toISOString() : "";
+}
+
+/** Stable fingerprint of editable inputs, independent of rows already partly applied by recovery. */
+function di3BuildSupplyFullEditRequestFingerprint_(plan) {
+  if (!plan || !plan.input || !plan.plan || !Array.isArray(plan.plan.lines)) {
+    throw new Error("Не удалось собрать fingerprint входных данных полного редактирования.");
+  }
+  var input = plan.input;
+  var lines = plan.plan.lines.map(function (line) {
+    return {
+      product_id: String(line.product_id || ""),
+      // A new pack variant gets its permanent ID only during first save.
+      // Product + units is the stable business identity across preview/retry.
+      units_per_pack: Number(line.units_per_pack),
+      packs: Number(line.packs),
+      purchase_price_minor: di3ToCents_(line.purchase_price_per_pack, "Закупочная цена")
+    };
+  });
+  return JSON.stringify({
+    schema_version: 1,
+    supplier: String(input.supplier || ""),
+    seller_discount_minor: di3ToCents_(input.seller_discount_amount || 0, "Скидка продавца"),
+    partner_discount_minor: di3ToCents_(input.partner_discount_amount || 0, "Скидка партнёров"),
+    shipping_minor: di3ToCents_(input.shipping_amount || 0, "Доставка"),
+    notes: String(input.notes || ""),
+    supplier_order_date: di3SupplyFullEditDateFingerprint_(input.supplier_order_date),
+    expected_received_date: di3SupplyFullEditDateFingerprint_(input.expected_received_date),
+    sent_at: di3SupplyFullEditDateFingerprint_(input.sent_at),
+    awaiting_at: di3SupplyFullEditDateFingerprint_(input.awaiting_at),
+    received_at: di3SupplyFullEditDateFingerprint_(input.received_at),
+    target_number: String(plan.target_number || ""),
+    target_status: String(plan.status || ""),
+    reason: String(plan.reason || ""),
+    lines: lines
   });
 }
 
@@ -461,6 +503,7 @@ function di3BuildSupplyFullEditOperationPayload_(context, plan) {
     item_ids: plan.item_ids,
     removed_item_ids: plan.removed_item_ids,
     expected_baseline_hash: context.baseline_hash,
+    request_fingerprint: di3BuildSupplyFullEditRequestFingerprint_(plan),
     old_status: plan.current_status,
     new_status: plan.status,
     reason: plan.reason,
@@ -481,6 +524,22 @@ function di3SaveFullSupplyEdit() {
     var idempotencyKey = "SUPPLY_DOCUMENT_EDIT:" + context.supply_id + ":" + context.revision_id;
     var existingOperation = di3FindRowByColumnValue_("Operations", 1, idempotencyKey);
     if (existingOperation) {
+      // Never resume an immutable operation blindly: the user may have changed
+      // the form after a failed/lost acknowledgement. Rebuild a side-effect-free
+      // request fingerprint and only resume when it exactly matches the payload.
+      var currentRequestPlan = di3BuildSupplyFullEditPlan_(context, false);
+      if (currentRequestPlan.current_status !== DI3_SUPPLY_STATUS.RECEIVED) {
+        // Variant creation is deliberately not repeated for the comparison path.
+        // PREVIEW IDs are normalized away by the request fingerprint helper.
+      }
+      var savedPayload = di3ReadVerifiedOperationPayload_(existingOperation);
+      if (!savedPayload || !savedPayload.request_fingerprint) {
+        throw new Error("Для этой версии операции SUPPLY_DOCUMENT_EDIT нет fingerprint исходных данных. Автоматическое возобновление остановлено, чтобы не применить старый payload к изменённой форме. Проверь запись Operations и восстанови/отмени режим после сверки.");
+      }
+      var currentRequestFingerprint = di3BuildSupplyFullEditRequestFingerprint_(currentRequestPlan);
+      if (String(savedPayload.request_fingerprint) !== currentRequestFingerprint) {
+        throw new Error("Форма поставки отличается от неизменяемого payload незавершённой/уже сохранённой корректировки. Старые данные не будут применены повторно. Отмени режим и заново включи полное редактирование либо сначала разберись с операцией в Operations.");
+      }
       var resumed = di3ExecutePreparedOperation_(existingOperation);
       if (["COMMITTED", "ALREADY_COMMITTED"].indexOf(String(resumed.status)) !== -1) {
         di3GetSpreadsheet_().toast("Изменения поставки сохранены", "Поставки", 5);

@@ -1,6 +1,6 @@
 # Roadmap and status — Dots Inventory v3 RC8
 
-Дата снимка: 24.11.2026. Статусы ниже отражают фактическое содержимое предоставленного `40.rar` и runtime-сведения пользователя в текущем чате.
+Дата актуализации: 25.11.2026. Старые блоки UX ниже сохраняют исторические результаты на момент соответствующего патча; актуальные суммарные результаты приведены в последнем разделе. Статусы ниже отражают фактическое содержимое предоставленного `40.rar` и runtime-сведения пользователя в текущем чате.
 
 ## Статусы Supply Workspace
 
@@ -62,7 +62,7 @@
 - chart grid-row retention based on computed chart height (addresses D-1 clipping risk);
 - read-only `di3DiagnoseWarehouseDashboardChart()` / `di3LogWarehouseDashboardChartDiagnostics()` to inspect N1:O21, hidden state, chart ranges/count/type/anchor.
 
-The actual empty-chart cause is still unknown. Run the read-only diagnostics on a restored copy and inspect N1:O21 before changing the chart API code again. Local chart tests are now 7/7, but they still do not test actual Sheets rendering.
+The actual empty-chart cause is still unknown. Run the read-only diagnostics on a restored copy and inspect N1:O21 before changing the chart API code again. At the initial Dashboard patch stage the suite was 7/7; after adding view-refresh and journal-warning tests it is now 9/9. Neither result tests actual Sheets rendering.
 
 ## Cross-project remaining work
 
@@ -124,3 +124,42 @@ Do not call RC9 ready until the real Google Sheets end-to-end cycle is verified:
 - Added a full return-payload regression fixture: dispatch A's allocations carry `RUN-OLD-A`; an unrelated movement exists in `RUN-LATEST`; the return payload must still build from A's original lots. Added a partial-allocation rejection test.
 - Local validation: syntax 49/49; Order Domain 16/16; Supply UX 9/9; Catalog/Order UX 12/12; System Safety UX 11/11; Dashboard 7/7; TypeScript AST 556 functions / 87 top-level vars / no parse errors or duplicate declarations.
 - **Runtime acceptance pending:** on a disposable restored copy, dispatch order A, create a later FIFO run through a separate stock operation, then return A and reconcile return lots, costs and stock valuation. No live order or stock movement was used for this patch.
+
+
+## Source-only hardening after F-01 — 25.11.2026
+
+The following issues have source changes and local regression coverage. They are **code-hardened, not runtime-accepted** until the consolidated Google Sheets acceptance on a restored test copy.
+
+| Audit ID | Source change | Remaining limitation / acceptance |
+|---|---|---|
+| **F-03** | Historical-supply confirmation dialogs moved outside the global ScriptLock. A short preflight lock builds a state snapshot; after YES, the code reacquires the lock and rechecks supply ID/status, prepared-operation identity/hash, and a fingerprint of the current form before writes. | Real dialog/LockService interleaving still needs two-session runtime acceptance. |
+| **F-04** | Operation payload serialization now fails closed above 45,000 characters before `OperationPayloads`/`Operations` writes. | This prevents oversized-cell writes but does not implement chunked payload storage or compact audit retention. |
+| **F-05** | Full-supply-edit prepared-operation retries compare the current editable-form fingerprint with the verified immutable payload fingerprint. Legacy prepared operations without a fingerprint fail closed for manual inspection. | Runtime retry/recovery and legacy-operation behavior still require a disposable copy. |
+| **F-09** | Warehouse-view refresh isolates failures per view. Stock journal can display already-recorded movements while showing a visible warning when operations are pending. | Repeated full-table reads/performance and reconciliation-safe semantics remain open; never use a journal with pending operations for reconciliation/period close. |
+| **F-11** | Supply-number preview uses a read-only peek; sequence reservation remains in the save path. | Confirm preview does not consume a number in a real Apps Script execution. |
+| **F-13** | Backup code calls `SpreadsheetApp.flush()` before reading the snapshot and before `makeCopy()`. | Actual Drive consistency, time/quota and lock duration remain unverified. |
+| **F-15** | Historical-supply mode and full-edit mode now reject enabling the other mode while one is active. | Verify hidden markers and both UI entry paths at runtime. |
+| **F-16** | Finance Dashboard resolves table columns by schema field names from `DI3_TABLE_SCHEMAS`, not numeric indexes. Added four schema-mapping regression tests. | Run against the installed schema v3 workbook and verify finance totals. |
+| **F-18** | Minor-unit conversion normalizes floating-point representation and applies symmetric half-up rounding, with safe-integer validation. | Real Sheets locale/currency inputs remain part of Money Core runtime acceptance. |
+
+### Latest local verification
+
+- Syntax: **50/50 `.gs` files PASS** (43 app modules + 7 runtime probes).
+- Local Node regression suites: **70/70 PASS** — Order Domain 17/17; Supply UX 15/15; Catalog/Order UX 12/12; System Safety UX 13/13; Warehouse Dashboard 9/9; Finance schema 4/4.
+- TypeScript AST: **570 functions / 88 top-level variables**, zero parse errors and duplicate declarations.
+- Menu audit: **68 actions / 0 missing handlers**.
+- No Google Sheets workbook, live stock, order, receipt, dispatch, return, backup, restore, schema migration or FIFO rebuild was executed.
+
+### Still open or only partially mitigated
+
+- **F-01:** code-fixed and locally tested; end-to-end return after a newer unrelated FIFO run still needs runtime acceptance.
+- **F-02:** historical sales/business date not implemented; needs policy and a future schema migration.
+- **F-04:** payload-size guard only; chunking/compaction remains a future design task.
+- **F-06/F-07:** FIFO allocation archival and stable cursors remain open; require a migration/replay design.
+- **F-09:** per-view isolation and journal warning are added, but O(N) read cost and scoped refresh remain open.
+- **F-10:** append-only reopen/close audit is still needed.
+- **F-14:** true multi-session ScriptLock contention/recovery is not proven by local tests.
+- **F-17:** delivery-method catalogue needs the user's actual options; none are invented.
+- **F-20:** reliable actor attribution still needs an approved identity model.
+- The Warehouse Dashboard chart remains blank in the user's Sheets copy. The next step is to run the existing read-only chart diagnostics on the restored test copy and inspect N1:O21 plus the chart's actual source range.
+

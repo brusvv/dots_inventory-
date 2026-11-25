@@ -173,3 +173,44 @@ Runtime acceptance (restored disposable copy only):
 5. On a separate disposable test, simulate an allocation quantity mismatch and confirm the return is rejected before any return ledger movement or lot is appended.
 
 Do not use a live order or production stock. The Node test proves that payload construction selects the old-run allocation and preserves the quantity guard, but does not emulate the full Apps Script operation executor or workbook writes. F-01 is therefore code-fixed / locally tested, but not runtime-accepted until this scenario passes in Google Sheets.
+
+
+## Consolidated source-only hardening after F-01 (25.11.2026)
+
+The current full source tree is cumulative. For a restored/test copy with the previous UX-01–UX-10 and commission-payer patch already installed, replace these changed modules and add the new test module as part of the later consolidated deployment—not as a live partial deployment:
+
+- Replace: `19_DI3_WarehouseViews.gs`, `27_DI3_OperationExecutor.gs`, `30_DI3_MoneyCore.gs`, `31_DI3_FinanceDashboard.gs`, `32_DI3_BackupRestore.gs`, `34_DI3_HistoricalSupply.gs`, `36_DI3_SupplyFullEdit.gs`, `38_DI3_WarehouseDashboardTests.gs`, `39_DI3_SupplyWorkspaceUxTests.gs`.
+- Add: `42_DI3_FinanceSchemaTests.gs`.
+- Repository-only tooling: `tools/run_finance_schema_tests.js`; updated `tools/run_supply_workspace_ux_tests.js`.
+
+No new schema migration is introduced by this source-only hardening batch. The existing v2→v3 `commission_payer` migration remains separate and must still use Dry Run + verified backup before execution.
+
+### Consolidated runtime acceptance scenarios
+
+Keep these tests for the single later acceptance session on a restored disposable copy:
+
+1. **F-03 historical receipt / lock:** start historical supply receipt and inspect the confirmation. Use a second independent Apps Script execution to change the tested supply/form state before confirmation; after YES the revalidation must detect the changed fingerprint/state and stop before writes. Also verify the dialog is not displayed while the global ScriptLock is held. Use separate disposable test documents and do not run actual receipt on the business workbook.
+2. **F-04 payload ceiling:** test a payload below the 45,000-character limit and a payload above it. The oversized payload must fail before any `OperationPayloads` or `Operations` row is written. Multi-part payload storage is not implemented.
+3. **F-05 full-edit retry:** prepare a disposable full-edit operation, then alter an editable field before retry. A matching fingerprint may resume; a changed form or legacy prepared payload without fingerprint must fail closed for manual inspection.
+4. **F-09 view refresh / stock journal:** inject a failure into one view refresh and verify remaining views still refresh. Create a pending operation in a disposable copy and verify the stock journal displays already-recorded movements with a prominent warning; do not use that journal for reconciliation while pending operations exist.
+5. **F-11 supply number:** preview the next number repeatedly and verify the counter does not advance; save a disposable draft and verify reservation occurs only in the save path.
+6. **F-13 backup:** create a test backup and verify `flush()` precedes sheet snapshot and Drive copy; compare key tables between source and backup. Record runtime, quota and lock duration.
+7. **F-15 modes:** verify historical-supply mode blocks FULL_EDIT activation and FULL_EDIT blocks historical-supply mode activation. No form context may be silently overwritten.
+8. **F-16 Finance schema:** on the migrated schema-v3 test copy, compare Finance Dashboard totals to source orders/items/snapshots/supplies; confirm that column positions do not affect the result.
+9. **F-18 rounding:** test values including 10.075, 1.005, 1234.565 and negative half values through calculator, order save/settlement and finance reporting. Expected minor units follow symmetric half-up rounding.
+10. **F-01 return:** dispatch order A, perform another stock operation creating a newer FIFO run, then accept A's return; verify source movement, quantities, lots and exact costs.
+11. **Warehouse Dashboard:** run `di3LogWarehouseDashboardChartDiagnostics()` and capture N1:O21, hidden states, actual chart source ranges/type/count/anchor, plus screenshot. The chart is still visually blank and remains unaccepted.
+
+### Current source-only test commands and evidence
+
+```bash
+bash tools/check_syntax.sh
+node tools/run_order_domain_tests.js
+node tools/run_supply_workspace_ux_tests.js
+node tools/run_system_safety_ux_tests.js
+node tools/run_catalog_order_ux_tests.js
+node tools/run_warehouse_dashboard_tests.js
+node tools/run_finance_schema_tests.js
+```
+
+Latest local results: syntax 50/50; Order Domain 17/17; Supply UX 15/15; System Safety UX 13/13; Catalog/Order UX 12/12; Warehouse Dashboard 9/9; Finance schema 4/4 (70/70 Node checks). TypeScript AST: 570 functions / 88 top-level variables, no parse errors or duplicate declarations. Menu reference audit: 68 actions / 0 missing handlers. These are local-only results and do not replace any scenario above.

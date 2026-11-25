@@ -32,6 +32,24 @@ function di3BuildOperationPayloadHash_(operationType, payload) {
   return di3BuildManualOperationPayloadHash_(source);
 }
 
+var DI3_OPERATION_PAYLOAD_MAX_CHARS = 45000;
+
+/** Serialize an immutable operation payload while respecting the Sheets cell limit. */
+function di3SerializeOperationPayloadForStorage_(payload) {
+  var serialized;
+  try {
+    serialized = JSON.stringify(payload);
+  } catch (error) {
+    throw new Error("Payload операции не удалось сериализовать: " + (error && error.message ? error.message : String(error)));
+  }
+  if (typeof serialized !== "string") throw new Error("Payload операции не удалось сериализовать в JSON.");
+  var maxChars = Number(DI3_OPERATION_PAYLOAD_MAX_CHARS) || 45000;
+  if (serialized.length > maxChars) {
+    throw new Error("Payload операции слишком велик для безопасной записи в OperationPayloads: " + serialized.length + " символов при лимите " + maxChars + ". Операция не зарегистрирована; сократи состав аудита или используй отдельное хранение снимка.");
+  }
+  return serialized;
+}
+
 function di3BuildOperationRecord_(rowNumber, values) {
   return { row_number: Number(rowNumber), values: values.slice() };
 }
@@ -117,6 +135,9 @@ function di3RegisterPreparedOperation_(spec) {
     return existing;
   }
 
+  // Serialize and validate size before creating either durable row. OperationPayloads
+  // is currently one JSON string per cell (Google Sheets limit: 50,000 chars).
+  var payloadJson = di3SerializeOperationPayloadForStorage_(spec.payload);
   if (typeof di3AssertMoneyMinorUnitsReady_ === "function") di3AssertMoneyMinorUnitsReady_();
   var operationId = di3MakeUuid_();
   var startedAt = new Date();
@@ -129,7 +150,7 @@ function di3RegisterPreparedOperation_(spec) {
 
   // Persist payload first. An orphan payload is harmless; PREPARED without a
   // payload would be an unrecoverable stock/document operation.
-  di3AppendTableRows_("OperationPayloads", [[operationId, JSON.stringify(spec.payload), startedAt]]);
+  di3AppendTableRows_("OperationPayloads", [[operationId, payloadJson, startedAt]]);
   di3AppendTableRows_("Operations", [[
     operationId, idempotencyKey, operationType, documentType, documentId,
     "PREPARED", requestedHash, startedAt, "", "", actor

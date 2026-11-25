@@ -51,11 +51,62 @@ function di3RunWarehouseDashboardUnitTests() {
     equal(di3BuildWarehouseValueChartData_(source), [["Alpha", 50], ["Beta", 50]]);
   });
 
+  test("average known FIFO unit cost is calculated from known value and known units", function () {
+    equal(di3CalculateAverageKnownUnitCost_(2940, 120), 24.5);
+  });
+
+  test("average known FIFO unit cost is null when no units are known", function () {
+    equal(di3CalculateAverageKnownUnitCost_(0, 0), null);
+    equal(di3CalculateAverageKnownUnitCost_(2940, 0), null);
+  });
+
   test("warehouse value chart does not mutate the source table rows", function () {
     var source = [row("P1", "One", 1, 1, 10), row("P2", "Two", 1, 1, 20)];
     var before = JSON.stringify(source);
     di3BuildWarehouseValueChartData_(source);
     equal(JSON.stringify(source), before);
+  });
+
+  test("stock journal shows a warning instead of disappearing while stock operations are pending", function () {
+    var warning = di3BuildStockJournalPendingWarning_([
+      { operation_type: "ORDER_DISPATCH", status: "RETRYABLE" },
+      { operation_type: "SUPPLY_RECEIVE", status: "PREPARED" },
+      { operation_type: "ORDER_RETURN", status: "QUARANTINED" },
+      { operation_type: "MANUAL_STOCK_MOVEMENT", status: "RETRYABLE" }
+    ]);
+    equal(warning.indexOf("есть 4 незавершённых складских операций") >= 0, true);
+    equal(warning.indexOf("и ещё 1") >= 0, true);
+    equal(warning.indexOf("может быть неполным") >= 0, true);
+    equal(di3BuildStockJournalPendingWarning_([]), "");
+    var buildSource = di3BuildStockJournalRows_.toString();
+    equal(buildSource.indexOf("options.allowPending !== true") >= 0, true);
+    var refreshSource = di3RefreshStockJournal.toString();
+    equal(refreshSource.indexOf("di3GetPendingStockOperations_()") >= 0, true);
+    equal(refreshSource.indexOf("di3BuildStockJournalPendingWarning_") >= 0, true);
+    equal(refreshSource.indexOf("allowPending: true") >= 0, true);
+  });
+
+  test("one failed warehouse view does not prevent other views from refreshing", function () {
+    var originalDashboard = typeof di3RefreshWarehouseDashboard === "function" ? di3RefreshWarehouseDashboard : null;
+    var originalJournal = typeof di3RefreshStockJournal === "function" ? di3RefreshStockJournal : null;
+    var originalProducts = typeof di3RefreshProductsSheet === "function" ? di3RefreshProductsSheet : null;
+    var originalFifo = typeof di3RefreshFifoHistorySheet === "function" ? di3RefreshFifoHistorySheet : null;
+    try {
+      di3RefreshWarehouseDashboard = function () { throw new Error("dashboard test failure"); };
+      di3RefreshStockJournal = function () { throw new Error("journal test failure"); };
+      di3RefreshProductsSheet = function () { return { rows: 65 }; };
+      di3RefreshFifoHistorySheet = function () { return { rows: 10 }; };
+      var result = di3RefreshWarehouseViews();
+      equal(result.dashboard.status, "FAILED");
+      equal(result.journal.status, "FAILED");
+      equal(result.products.rows, 65);
+      equal(result.fifo_history.rows, 10);
+    } finally {
+      di3RefreshWarehouseDashboard = originalDashboard || undefined;
+      di3RefreshStockJournal = originalJournal || undefined;
+      di3RefreshProductsSheet = originalProducts || undefined;
+      di3RefreshFifoHistorySheet = originalFifo || undefined;
+    }
   });
 
   return {

@@ -1,26 +1,74 @@
-Dots Inventory v3 RC8 source provenance
-Base source archive: 40.rar
-Base archive SHA-256: 2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09
-Base extracted source: 46 Apps Script files.
-The base archive hash identifies the original input only; it is not the hash of the patched working tree.
+Input archive: 40.rar
+SHA-256: 2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09
+Extraction: libarchive 3.7.4 RAR5 reader
+Extracted files: 46 .gs files
+No file contents were edited while copying the source modules.
+Additional files in this repository are documentation, reports and local tooling created during packaging.
 
-Patch history applied to the working tree on 2026-11-25:
-- UX-01 through UX-03: protect unsaved supply data; protect selected-supply switching; separate FIFO audit from rebuild.
-- UX-04 through UX-06: protect unsaved catalog/order forms; improve menu grouping and order action labels.
-- UX-07 through UX-09: add explicit confirmations for operation recovery, money/FIFO migration and period reopening.
-- UX-10: add explicit confirmation before manual warehouse stock IN/OUT movements.
-- Commission payer and Warehouse Dashboard: add BUYER/SELLER commission payer, normalize percentage inputs, apply seller-paid commission to seller revenue/profit, add average known FIFO unit cost and read-only chart diagnostics.
-- F-01: resolve order return CONSUME allocations by the original dispatch movement_id rather than the globally latest FIFO allocation run; preserve source run IDs as provenance and keep exact per-item allocated-quantity validation.
 
-F-01 regression coverage includes an old dispatch allocation followed by a newer unrelated FIFO run, full return payload construction from original lots and costs, and fail-closed rejection of incomplete allocation quantities.
+Local patch applied 2026-11-25:
+- UX-01–UX-03 changes were made after extracting the base archive.
+- Modified source modules: 11, 12, 22, 24, 34, 36.
+- Added source test module: 39_DI3_SupplyWorkspaceUxTests.gs.
+- Added local Node test runner: tools/run_supply_workspace_ux_tests.js.
+- Original archive SHA-256 remains the provenance of the unmodified base snapshot, not of the patched working tree.
 
-Local validation performed after F-01:
-- Apps Script syntax: 49 of 49 files passed.
-- Order Domain tests: 16 of 16 passed.
-- Supply Workspace UX: 9 of 9 passed.
-- Catalog and Order UX: 12 of 12 passed.
-- System Safety UX: 11 of 11 passed.
-- Warehouse Dashboard: 7 of 7 passed.
-- TypeScript AST: 556 functions, 87 top-level variables, no parse errors or duplicate declarations.
+Local patch applied 2026-11-25:
+- UX-04–UX-06 protect Catalog and Order workspaces from accidental unsaved-data loss and improve menu grouping/labels.
+- Modified source modules: 10, 17, 22. Added source test module: 40_DI3_CatalogOrderUxTests.gs.
+- Added local Node runner: tools/run_catalog_order_ux_tests.js.
+- Added current menu map: docs/MENU_STRUCTURE_CURRENT.md.
+- Duplicate product identity resolution now confirms before replacing the unsaved product card.
+- Source archive SHA-256 above remains provenance of the unmodified base archive, not the patched working tree.
 
-Runtime acceptance remains pending on a restored disposable spreadsheet. No live workbook, stock ledger, stock lots, orders or FIFO projections were modified for these source patches.
+Local patch applied 2026-11-25:
+- UX-07–UX-09 add explicit YES/NO confirmation before batch pending-operation recovery, Money Core minor-unit/FIFO migration and accounting-period reopening.
+- Modified source modules: 12, 23, 30.
+- Added test module: 41_DI3_SystemSafetyUxTests.gs.
+- Added local runner: tools/run_system_safety_ux_tests.js.
+- Base source archive SHA-256 remains the provenance of the original RAR, not of this patched working tree.
+
+Local patch applied 2026-11-25:
+- UX-10 adds a YES/NO impact summary before manual warehouse IN/OUT movements; the stock posting call occurs only after YES.
+- Modified source module: 08_DI3_WarehouseManager.gs.
+- Extended test module: 41_DI3_SystemSafetyUxTests.gs.
+- Extended local runner: tools/run_system_safety_ux_tests.js.
+- Base source archive SHA-256 remains the provenance of the original RAR, not of this patched working tree.
+
+Local patch applied 2026-11-25 — commission payer and Dashboard diagnostics:
+- Order calculator B3 now selects BUYER vs SELLER commission payer; the commission amount is calculated from the existing gross-before-discount base in both cases.
+- Percent input parsing supports native Sheets percentage cells and literal-percent cells, correcting the observed 300 ₽ × 10% → 0.30 ₽ result.
+- Added `commission_payer` to `V3_Orders`; schema version advanced to v3 with `RC8_ORDER_COMMISSION_PAYER_V3` (v2→v3). Existing orders are defaulted to BUYER.
+- Settlement and Finance Dashboard now deduct seller-paid commission from seller revenue/profit.
+- Dashboard totals include average known FIFO unit cost; chart grid compaction follows computed height; added read-only chart diagnostics.
+- Modified modules: 00, 07, 15, 16, 17, 18, 19, 28, 31, 33.
+- Added local runner: tools/run_order_domain_tests.js; added docs/UX_PATCH_COMMISSION_PAYER_AND_DASHBOARD.md.
+- Local tests: syntax 49/49; Order Domain 13/13; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7.
+- No live workbook migration, order creation, dispatch, stock mutation or actual chart rendering test was performed.
+- Base archive SHA-256 remains provenance of the unmodified 40.rar, not the patched working tree.
+
+
+Local patch applied 2026-11-25 — F-01 order return FIFO lookup:
+- Removed the incorrect dependency on the globally latest committed FIFO run when resolving dispatch allocations for a return.
+- The return selects `CONSUME` allocations by original dispatch `movement_id`; per-item quantity equality remains enforced before return operation registration.
+- Source FIFO run IDs are retained as provenance. Original source lot/pack variant and exact allocated cost remain the basis for the new return lots.
+- Modified source modules: 16_DI3_OrderWorkflow.gs and 18_DI3_OrderTests.gs; extended runner: tools/run_order_domain_tests.js. Added docs/UX_PATCH_F01_RETURN_FIFO.md.
+- Local tests: syntax 49/49; Order Domain 16/16; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7.
+- Real Apps Script return acceptance remains pending; no workbook, order, stock ledger, lot, or FIFO projection was modified for this patch.
+- Base archive SHA-256 remains provenance of the unmodified 40.rar, not of the patched working tree.
+
+
+Local source-only hardening applied 2026-11-25 after F-01:
+- F-03 historical-supply confirmation moved outside global ScriptLock; post-confirmation state/payload/form revalidation added.
+- F-04 operation payload storage now rejects JSON above 45,000 characters before operation/payload writes (no chunking implementation).
+- F-05 full-supply-edit retry requires a matching request fingerprint; legacy prepared payloads without one fail closed for manual inspection.
+- F-09 independent warehouse-view refresh and visible pending-operation warning in the stock journal; read-performance work remains open.
+- F-11 supply-number preview uses a non-reserving peek; reservation occurs only on save.
+- F-13 flush before backup snapshot and Drive copy.
+- F-15 historical-supply and FULL_EDIT modes mutually exclude each other.
+- F-16 Finance Dashboard table columns resolved by DI3_TABLE_SCHEMAS field names; Finance schema regression suite added.
+- F-18 minor-unit conversion uses symmetric half-up rounding with floating-point normalization and safe-integer validation.
+- Added src/apps_script/42_DI3_FinanceSchemaTests.gs and tools/run_finance_schema_tests.js.
+- Local checks: syntax 50/50; Node suites total 70/70; TypeScript AST 570 functions / 88 top-level vars, no parse errors or duplicates; menu audit 68 actions / 0 missing handlers.
+- No live workbook, business operation, migration, backup/restore or FIFO rebuild was executed. Runtime acceptance remains pending.
+- Base archive SHA-256 above remains provenance of the unmodified uploaded 40.rar, not of this patched working tree.

@@ -341,6 +341,9 @@ function di3CreateSpreadsheetBackupInternal_(reason) {
   var config = di3GetBackupConfig_();
   var folder = di3GetBackupFolder_();
   var sourceFile = DriveApp.getFileById(spreadsheet.getId());
+  // Ensure writes queued earlier in this execution are committed before the
+  // native file copy is taken. The caller holds the shared mutation lock.
+  if (typeof SpreadsheetApp.flush === "function") SpreadsheetApp.flush();
   var sourceSheets = di3GetSpreadsheetBackupSnapshot_(spreadsheet);
   var backupName = config.file_prefix + stamp + "_" + token;
   var backupFile = sourceFile.makeCopy(backupName, folder);

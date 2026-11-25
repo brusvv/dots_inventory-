@@ -366,8 +366,12 @@ function di3RefreshStockJournalFilters() {
   return { products: products.length, reasons: reasons.length - 1 };
 }
 
-function di3BuildStockJournalRows_() {
-  di3AssertNoPendingStockOperations_();
+function di3BuildStockJournalRows_(options) {
+  options = options || {};
+  var pendingOperations = Array.isArray(options.pendingOperations) ? options.pendingOperations : di3GetPendingStockOperations_();
+  if (pendingOperations.length && options.allowPending !== true) {
+    throw new Error("Есть незавершённые складские операции (" + pendingOperations.length + "). Сначала запусти восстановление складских операций.");
+  }
   var ledger = di3ReadTableValues_("StockLedger");
   var details = di3ReadTableValues_("StockMovementDetails");
   var lots = di3ReadTableValues_("StockLots");
@@ -439,6 +443,16 @@ function di3BuildStockJournalRows_() {
   });
 }
 
+function di3BuildStockJournalPendingWarning_(pendingOperations) {
+  var pending = Array.isArray(pendingOperations) ? pendingOperations : [];
+  if (!pending.length) return "";
+  var examples = pending.slice(0, 3).map(function (operation) {
+    return String(operation.operation_type || "операция") + " · " + String(operation.status || "ожидает");
+  });
+  var suffix = pending.length > examples.length ? " и ещё " + (pending.length - examples.length) : "";
+  return "ВНИМАНИЕ: есть " + pending.length + " незавершённых складских операций (" + examples.join("; ") + suffix + "). Журнал показывает уже записанные движения и может быть неполным или временно несогласованным. Не используй его для сверки и закрытия периода до восстановления Operations.";
+}
+
 function di3RefreshStockJournal() {
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_STOCK_JOURNAL_SHEET);
   if (!sheet) throw new Error("Сначала запусти di3SetupStockJournalSheet().");
@@ -448,7 +462,19 @@ function di3RefreshStockJournal() {
   var reasonFilter = String(sheet.getRange(DI3_STOCK_JOURNAL_FILTERS.reason).getValue() || "Все");
   var productFilter = String(sheet.getRange(DI3_STOCK_JOURNAL_FILTERS.product).getValue() || "Все");
   var search = String(sheet.getRange(DI3_STOCK_JOURNAL_FILTERS.search).getValue() || "").toLowerCase().trim();
-  var rows = di3BuildStockJournalRows_().filter(function (r) {
+  var pendingOperations = di3GetPendingStockOperations_();
+  var warning = di3BuildStockJournalPendingWarning_(pendingOperations);
+  var warningRange = sheet.getRange("A5:N5");
+  warningRange.clearContent();
+  if (warning) {
+    sheet.getRange("A5").setValue(warning);
+    warningRange.setBackground("#FFF2CC").setFontColor("#7F6000").setFontWeight("bold").setWrap(true);
+    sheet.setRowHeight(5, 42);
+  } else {
+    warningRange.setBackground("#FFFFFF").setFontColor("#202124").setFontWeight("normal").setWrap(false);
+    sheet.setRowHeight(5, 21);
+  }
+  var rows = di3BuildStockJournalRows_({ allowPending: true, pendingOperations: pendingOperations }).filter(function (r) {
     var direction = r.movement_type === "IN" ? "Приход" : "Расход";
     if (directionFilter !== "Все" && direction !== directionFilter) return false;
     if (reasonFilter !== "Все" && r.reason !== reasonFilter) return false;
@@ -529,13 +555,35 @@ function di3WarehouseViewsOnEdit(e) {
   }
 }
 
+function di3RefreshWarehouseViewSafely_(viewName, callback) {
+  try {
+    return callback();
+  } catch (error) {
+    return {
+      status: "FAILED",
+      view: String(viewName || "warehouse_view"),
+      error: error && error.message ? String(error.message) : String(error)
+    };
+  }
+}
+
 function di3RefreshWarehouseViews() {
-  return {
-    dashboard: di3RefreshWarehouseDashboard(),
-    journal: di3RefreshStockJournal(),
-    products: di3RefreshProductsSheet(),
-    fifo_history: di3RefreshFifoHistorySheet()
+  // Views are derived projections. A failure in one must not prevent the other
+  // independent views from refreshing after a committed stock operation.
+  var results = {
+    dashboard: di3RefreshWarehouseViewSafely_("dashboard", di3RefreshWarehouseDashboard),
+    journal: di3RefreshWarehouseViewSafely_("journal", di3RefreshStockJournal),
+    products: di3RefreshWarehouseViewSafely_("products", di3RefreshProductsSheet),
+    fifo_history: di3RefreshWarehouseViewSafely_("fifo_history", di3RefreshFifoHistorySheet)
   };
+  var failed = Object.keys(results).filter(function (key) {
+    return results[key] && results[key].status === "FAILED";
+  });
+  if (failed.length) {
+    var details = failed.map(function (key) { return key + ": " + results[key].error; }).join("; ");
+    try { di3GetSpreadsheet_().toast("Не все представления обновлены. Повтори обновление: " + details, "Обновление склада", 10); } catch (ignoreToast) {}
+  }
+  return results;
 }
 
 function di3OpenWarehouseDashboard() {

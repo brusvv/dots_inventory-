@@ -16,7 +16,14 @@ function di3MoneyToMinorUnits_(value, fieldName, allowNegative) {
   if (!Number.isFinite(amount) || (!allowNegative && amount < 0)) {
     throw new Error(label + (allowNegative ? " должна быть числом." : " должна быть неотрицательным числом."));
   }
-  var minorUnits = Math.round((amount + (amount >= 0 ? Number.EPSILON : -Number.EPSILON)) * DI3_MONEY_MINOR_UNIT_SCALE);
+  var scaled = amount * DI3_MONEY_MINOR_UNIT_SCALE;
+  // Normalize the usual binary floating-point representation noise before
+  // applying decimal half-up rounding (e.g. 10.075 * 100 may be 1007.499999…).
+  // Keep the exact sign-aware rule for negative values as well; Math.round()
+  // alone rounds negative halves toward +Infinity.
+  var normalized = Math.abs(scaled) < 1e15 ? Number(scaled.toPrecision(15)) : scaled;
+  var magnitude = Math.floor(Math.abs(normalized) + 0.5);
+  var minorUnits = normalized < 0 ? -magnitude : magnitude;
   if (!Number.isSafeInteger(minorUnits)) throw new Error(label + " выходит за допустимый денежный диапазон.");
   return minorUnits;
 }

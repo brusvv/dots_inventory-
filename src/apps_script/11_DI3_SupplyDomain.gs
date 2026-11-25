@@ -467,7 +467,7 @@ function di3SupplyNumberPrefixForDate_(date) {
   return yy + code + dd;
 }
 
-function di3SupplyNumberForDate_(date) {
+function di3GetSupplyNumberCandidate_(date) {
   var prefix = di3SupplyNumberPrefixForDate_(date);
   var supplyNumbers = di3ReadTableColumnValues_("V3_Supplies", 1);
   var maxSequence = 0;
@@ -480,9 +480,19 @@ function di3SupplyNumberForDate_(date) {
   var props = PropertiesService.getScriptProperties();
   var propertyKey = "DI3_SUPPLY_SEQUENCE_" + prefix;
   maxSequence = Math.max(maxSequence, Number(props.getProperty(propertyKey) || 0));
-  var next = maxSequence + 1;
-  props.setProperty(propertyKey, String(next));
-  return prefix + String(next);
+  return { prefix: prefix, property_key: propertyKey, sequence: maxSequence + 1, number: prefix + String(maxSequence + 1) };
+}
+
+/** Preview the next available number without consuming its sequence. */
+function di3PeekSupplyNumberForDate_(date) {
+  return di3GetSupplyNumberCandidate_(date).number;
+}
+
+/** Reserve a sequence number. Call only from the locked document-save path. */
+function di3SupplyNumberForDate_(date) {
+  var candidate = di3GetSupplyNumberCandidate_(date);
+  PropertiesService.getScriptProperties().setProperty(candidate.property_key, String(candidate.sequence));
+  return candidate.number;
 }
 
 function di3FindSupplyByNumber_(supplyNumber) {

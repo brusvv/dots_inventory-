@@ -3,15 +3,15 @@
   "runtime": "Local container only; not Google Apps Script runtime",
   "node_version": "v22.16.0",
   "syntax_check": {
-    "files_checked": 49,
+    "files_checked": 50,
     "failures": [],
     "status": "PASS",
     "tool": "tools/check_syntax.sh"
   },
   "typescript_ast_audit": {
-    "files": 49,
-    "functions": 556,
-    "topLevelVars": 87,
+    "files": 50,
+    "functions": 570,
+    "topLevelVars": 88,
     "parseErrors": [],
     "duplicateDeclarations": [],
     "status": "PASS",
@@ -20,58 +20,97 @@
   "menu_handler_audit": {
     "actions": 68,
     "missing_handlers": [],
+    "status": "PASS",
+    "tool": "Source parser over addItem targets and declared top-level functions"
+  },
+  "local_node_test_suites": {
+    "order_domain_unit_tests": {
+      "status": "PASS",
+      "passed": 17,
+      "failed": 0,
+      "failures": [],
+      "runner": "tools/run_order_domain_tests.js",
+      "includes": [
+        "commission percent normalization and payer split",
+        "minor-unit half-up rounding",
+        "F-01 return payload from older dispatch movement after newer unrelated FIFO run",
+        "partial/inconsistent allocation fails closed"
+      ]
+    },
+    "supply_workspace_ux_unit_tests": {
+      "status": "PASS",
+      "passed": 15,
+      "failed": 0,
+      "failures": [],
+      "runner": "tools/run_supply_workspace_ux_tests.js",
+      "includes": [
+        "dirty form/B2 safety",
+        "read-only supply number peek",
+        "FULL_EDIT/history mode mutual exclusion",
+        "historical receipt dialog outside lock and revalidation after YES",
+        "full-edit request fingerprint on retry"
+      ]
+    },
+    "catalog_order_ux_unit_tests": {
+      "status": "PASS",
+      "passed": 12,
+      "failed": 0,
+      "failures": [],
+      "runner": "tools/run_catalog_order_ux_tests.js"
+    },
+    "system_safety_ux_unit_tests": {
+      "status": "PASS",
+      "passed": 13,
+      "failed": 0,
+      "failures": [],
+      "runner": "tools/run_system_safety_ux_tests.js",
+      "includes": [
+        "payload-size guard before operation writes",
+        "flush before backup snapshot/copy",
+        "confirmed batch recovery/money migration/period reopen/manual stock actions"
+      ]
+    },
+    "warehouse_dashboard_unit_tests": {
+      "status": "PASS",
+      "passed": 9,
+      "failed": 0,
+      "failures": [],
+      "runner": "tools/run_warehouse_dashboard_tests.js",
+      "includes": [
+        "chart source/filter/sort/height",
+        "independent view refresh",
+        "pending-operation stock-journal warning"
+      ]
+    },
+    "finance_schema_unit_tests": {
+      "status": "PASS",
+      "passed": 4,
+      "failed": 0,
+      "failures": [],
+      "runner": "tools/run_finance_schema_tests.js",
+      "includes": [
+        "schema field name mapping",
+        "unknown field guard",
+        "Finance readers avoid hard-coded table column offsets"
+      ]
+    }
+  },
+  "node_test_total": {
+    "passed": 70,
+    "failed": 0,
     "status": "PASS"
-  },
-  "warehouse_dashboard_unit_tests": {
-    "status": "PASS",
-    "passed": 7,
-    "failed": 0,
-    "failures": [],
-    "runner": "tools/run_warehouse_dashboard_tests.js"
-  },
-  "supply_workspace_ux_unit_tests": {
-    "status": "PASS",
-    "passed": 9,
-    "failed": 0,
-    "failures": [],
-    "runner": "tools/run_supply_workspace_ux_tests.js"
-  },
-  "catalog_order_ux_unit_tests": {
-    "status": "PASS",
-    "passed": 12,
-    "failed": 0,
-    "failures": [],
-    "runner": "tools/run_catalog_order_ux_tests.js"
-  },
-  "system_safety_ux_unit_tests": {
-    "status": "PASS",
-    "passed": 11,
-    "failed": 0,
-    "failures": [],
-    "runner": "tools/run_system_safety_ux_tests.js"
   },
   "limitations": [
     "Local Node syntax and unit tests do not emulate Google Sheets rendering, Apps Script services, installed triggers, Drive, LockService or the full application regression harness.",
-    "Product/supply selector staging, installable onEdit routing, toast messages and real YES/NO dialogs require runtime acceptance on a restored Google Sheets test copy.",
-    "The warehouse Dashboard chart remains visually blank in the user's Google Sheets copy. The read-only diagnostic function was added, but actual chart rendering has not been validated.",
+    "The Warehouse Dashboard chart remains visually blank in the user's Sheets copy. Read-only chart diagnostics are present, but actual chart rendering and source-range behavior remain unverified.",
     "Schema v3 migration adding V3_Orders.commission_payer has not been executed; it requires Dry Run and a verified backup on a restored test copy.",
+    "F-01 order return FIFO lookup is code-fixed and locally regression-tested; end-to-end return after a later unrelated FIFO run remains pending.",
+    "F-03 lock/dialog changes still need a real two-session Apps Script acceptance; local tests cannot prove LockService scheduling.",
+    "F-04 is only a fail-closed 45,000-character payload guard; chunked payload storage is not implemented.",
+    "F-09 repeated full-table read performance and scoped refresh are still open. A stock journal with pending Operations shows a warning and must not be used for reconciliation or period close.",
+    "F-13 SpreadsheetApp.flush ordering is source-checked; real Drive consistency, quotas and lock duration are unverified.",
+    "F-16 Finance schema readers need reconciliation against a real schema-v3 test workbook.",
     "Apps Script manifest timezone could not be checked because appsscript.json was absent from the supplied source archive.",
-    "No live Google Sheets workbook, order creation/dispatch, manual stock movement, batch recovery, Money Core migration, accounting-period close/reopen, FIFO diagnostic or FIFO rebuild was executed for these patches.",
-    "F-01 order-return FIFO lookup is code-fixed and locally regression-tested; the end-to-end return after a later unrelated FIFO run still requires runtime acceptance on a restored disposable Google Sheets copy."
-  ],
-  "order_domain_unit_tests": {
-    "status": "PASS",
-    "passed": 16,
-    "failed": 0,
-    "failures": [],
-    "runner": "tools/run_order_domain_tests.js",
-    "f01_return_fifo_regressions": {
-      "status": "PASS",
-      "tests": [
-        "select original dispatch CONSUME allocations from an older run when a newer unrelated run exists",
-        "reject partial or inconsistent dispatch allocation quantity",
-        "build return payload from original dispatch lots without querying the globally latest FIFO run"
-      ]
-    }
-  }
+    "No live Google Sheets workbook, order creation/dispatch/return, receipt, manual stock movement, batch recovery, Money Core migration, accounting-period close/reopen, backup/restore, FIFO rebuild or mutation probe was executed."
+  ]
 }

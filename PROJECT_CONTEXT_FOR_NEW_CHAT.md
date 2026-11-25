@@ -1,9 +1,9 @@
 # PROJECT CONTEXT FOR NEW CHAT — Dots Inventory v3 RC8
 
 **Base context snapshot:** 24 November 2026  
-**Local UX patches:** 25 November 2026  
+**Local source patches:** 25 November 2026  
 **Base source:** user-uploaded `40.rar`, SHA-256 `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`  
-**Current working tree:** `src/apps_script/` (42 Apps Script modules) + `runtime/probes/` (7 probes), including UX-01–UX-10 patches from 25.11.2026. See `docs/UX_PATCH_UX01_UX03.md`, `docs/UX_PATCH_UX04_UX06.md`, `docs/UX_PATCH_UX07_UX09.md` and `docs/UX_PATCH_UX10.md`.
+**Current working tree:** `src/apps_script/` (43 Apps Script modules) + `runtime/probes/` (7 probes) = 50 `.gs` files. Includes UX-01–UX-10, commission payer/schema v3, Dashboard diagnostics, F-01 and the static hardening patch. See the patch logs under `docs/`.
 
 > New-chat instruction: use this repository as the actual current source snapshot. Inspect current files before proposing edits. Do not assume that old patch links or older snippets represent the installed code. Preserve the user's safe workflow: work on a restored test copy, backup first, no destructive operation without explicit approval.
 
@@ -17,19 +17,19 @@ The spreadsheet is designed as an application with visible workspaces and hidden
 
 ## 2. Current source snapshot — what is actually in this ZIP
 
-The base `40.rar` contained 39 Apps Script source modules. The current patched working tree contains those base modules plus three local regression modules (`39_DI3_SupplyWorkspaceUxTests.gs`, `40_DI3_CatalogOrderUxTests.gs`, `41_DI3_SystemSafetyUxTests.gs`), for 42 Apps Script modules total;
+The base `40.rar` contained 39 Apps Script source modules. The current patched working tree contains those base modules plus four local regression modules (`39_DI3_SupplyWorkspaceUxTests.gs`, `40_DI3_CatalogOrderUxTests.gs`, `41_DI3_SystemSafetyUxTests.gs`, `42_DI3_FinanceSchemaTests.gs`), for 43 Apps Script modules total;
 - 7 temporary runtime probes;
 - no `appsscript.json`, `.clasp.json`, Node regression harness, `package.json`, or original docs.
 
 Static audit performed while assembling this repository:
 
-- all **49** `.gs` files (42 app modules + 7 temporary probes) parse successfully with Node.js v22.16.0;
-- TypeScript AST audit: **549 top-level function declarations**, **87 top-level variable declarations**, no parse errors and no duplicate top-level names;
+- all **50** `.gs` files (43 app modules + 7 temporary probes) parse successfully with Node.js v22.16.0;
+- TypeScript AST audit: **570 top-level function declarations**, **88 top-level variable declarations**, no parse errors and no duplicate top-level names;
 - menu reference audit: **68 actions**, 0 missing handlers;
-- warehouse chart/average-cost unit tests: **7/7 PASS**;
-- Supply Workspace UX tests: **9/9 PASS**;
+- warehouse chart/average-cost/journal-warning unit tests: **9/9 PASS**;
+- Supply Workspace UX tests: **15/15 PASS**;
 - Catalog/Order UX tests: **12/12 PASS**;
-- System Safety UX tests: **11/11 PASS**.
+- System Safety UX tests: **13/13 PASS**; Finance schema tests: **4/4 PASS**; Order Domain tests: **17/17 PASS**.
 
 These are static/local checks. The full Apps Script unit-test functions in the source were not all executed in a real Google Apps Script runtime. No claim is made that all 250+ previous Node tests were rerun against this RAR, because the prior Node harness is not included.
 
@@ -197,7 +197,7 @@ The correct Top order is Wallhack Black (2,100 ₽), then KYUU DESIGN Lian (840 
 
 ### Dashboard acceptance still pending
 
-Local test of `di3RunWarehouseDashboardUnitTests()` passed 7/7 in this source package. Actual `Склад → Обновить Dashboard` rendering in the user's live/test Google Sheets is not yet confirmed from this snapshot. Verify that:
+The first Dashboard patch passed 7/7; the expanded local Dashboard suite now passes 9/9 in this source package. Actual `Склад → Обновить Dashboard` rendering in the user's live/test Google Sheets is not yet confirmed from this snapshot. Verify that:
 
 - chart labels are attached to the correct values;
 - only positive, fully valued stock appears;
@@ -327,7 +327,7 @@ The user visually tested UX-01–UX-06 and reported that all observed behavior w
 - Percent reader handles native percent formats (stored fraction, e.g. 0.1) and literal-percent formats (`0.00"%"`, stored 10). This addresses the user's screenshot: 300 ₽ × displayed 10% had yielded 0.30 ₽.
 - `V3_Orders` now has appended `commission_payer`; schema version is 3, with `RC8_ORDER_COMMISSION_PAYER_V3` v2→v3. Existing orders are backfilled as BUYER to preserve previous policy. Apply only via normal Dry Run + verified backup setup.
 - Example with goods 300 ₽, fee 30 ₽, FIFO cost 105 ₽: buyer pays → buyer total 330 ₽, seller revenue 300 ₽, profit 195 ₽; seller pays → buyer total 300 ₽, seller revenue 270 ₽, profit 165 ₽.
-- Local order-domain tests: 16/16 PASS (includes F-01 return FIFO regression).
+- Local order-domain tests: 17/17 PASS (includes F-01 return FIFO and minor-unit rounding regressions).
 
 ### Warehouse Dashboard follow-up
 
@@ -335,14 +335,23 @@ The user visually tested UX-01–UX-06 and reported that all observed behavior w
 - Added `average_known_unit_cost` to warehouse totals; for known value 2,940 ₽ and 120 known units, H11 should display 24.50 ₽.
 - Chart row retention now follows computed chart height to avoid truncating rows under a 480px chart.
 - Added read-only `di3DiagnoseWarehouseDashboardChart()` and `di3LogWarehouseDashboardChartDiagnostics()`. Run the latter from the Apps Script editor on a restored test copy and provide the execution log. It reports N1:O21 helper values, hidden columns, chart count, source ranges, chart type and anchor.
-- The actual blank-chart cause is still not identified. Local Dashboard tests are 7/7 but do not emulate real Sheets chart rendering.
+- The actual blank-chart cause is still not identified. Local Dashboard tests are 9/9 but do not emulate real Sheets chart rendering.
 
-Local validation after the patch: syntax 49/49; Order Domain 16/16; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7. No live workbook migration, order creation, dispatch, stock mutation, FIFO rebuild or actual chart runtime test was performed.
+Latest local validation: syntax 50/50; Order Domain 17/17; Supply UX 15/15; Catalog/Order UX 12/12; System Safety 13/13; Dashboard 9/9; Finance schema 4/4 (70/70 tests total). AST: 570 functions / 88 top-level variables, no parse errors or duplicate declarations; menu audit 68 actions / 0 missing handlers. No live workbook migration, order creation, dispatch, stock mutation, FIFO rebuild or actual chart runtime test was performed.
 
 
 ### F-01 — Order return FIFO lookup (25.11.2026)
 
 - Code fix is implemented in `16_DI3_OrderWorkflow.gs`: `StockAllocations` is an active projection whose valid rows can carry different `allocation_run_id` values. The old global latest-run filter has been removed.
 - The return now resolves `CONSUME` rows by each order line's original `dispatch_movement_id`; the exact allocated-quantity check remains mandatory. Source run IDs are retained as provenance; original lot IDs, pack variants and allocated cost are used to build the new return lots.
-- Regression tests cover an old dispatch allocation with a newer unrelated run, a full return-payload build and partial-quantity rejection. Order Domain suite: 16/16 PASS.
+- Regression tests cover an old dispatch allocation with a newer unrelated run, a full return-payload build and partial-quantity rejection. Order Domain suite: 17/17 PASS.
 - Runtime acceptance is still pending on a restored disposable spreadsheet. The real sequence to test is: dispatch A → perform a separate stock operation creating a later FIFO run → accept return A → reconcile new lots and costs.
+
+
+## Static hardening after F-01 — 25.11.2026
+
+Source-only changes now cover: F-03 historical-supply confirmation outside the global lock with revalidation under lock; F-04 45,000-character payload guard (fail-closed only, no chunking); F-05 immutable full-edit request fingerprint on retry; F-09 isolated warehouse-view refresh and a stock-journal warning when operations are pending (read-performance remains open); F-11 non-reserving supply-number preview; F-13 flush before backup snapshot/copy; F-15 historical/full-edit mode mutual exclusion; F-16 Finance Dashboard column lookup by schema field names; F-18 deterministic symmetric half-up minor-unit rounding. See `docs/UX_PATCH_STATIC_HARDENING.md`.
+
+New module `42_DI3_FinanceSchemaTests.gs` and runner `tools/run_finance_schema_tests.js` were added. Current local suites: **70/70 PASS** across six Node runners; syntax 50 `.gs` files; AST 570 functions / 88 variables, no errors or duplicates; menu audit 68/0. None of these results is Google Sheets runtime acceptance.
+
+Still open: F-02 historical sales/business date; F-06 archival of superseded FIFO allocations; F-07 stable FIFO cursors; F-10 append-only period history; F-14 true two-session concurrency evidence; F-17 delivery method list (user input required); F-20 actor identity policy. F-04 and F-09 remain partial. The Dashboard chart is still blank in Sheets and needs the existing read-only diagnostics. F-01 return flow, commission migration, Backup/Restore and all new dialogs still require one consolidated runtime acceptance on a restored test copy.

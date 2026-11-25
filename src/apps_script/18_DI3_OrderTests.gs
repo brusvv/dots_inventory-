@@ -23,6 +23,15 @@ function di3RunOrderDomainUnitTests() {
     }
   }
 
+  test("money minor-unit conversion rounds half-up for binary decimal edge cases", function () {
+    equal(di3MoneyToMinorUnits_(10.075, "test", true), 1008);
+    equal(di3MoneyToMinorUnits_(1.005, "test", true), 101);
+    equal(di3MoneyToMinorUnits_(1234.565, "test", true), 123457);
+    equal(di3MoneyToMinorUnits_(100.125, "test", true), 10013);
+    equal(di3MoneyToMinorUnits_(-10.075, "test", true), -1008);
+    equal(di3MoneyToMinorUnits_(-1.005, "test", true), -101);
+  });
+
   test("goods, commission, discount and payable total calculate in kopeks", function () {
     var plan = di3BuildOrderFinancialPlan_({
       commission_enabled: true, commission_rate: 0.05,

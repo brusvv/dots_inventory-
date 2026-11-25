@@ -3,9 +3,9 @@
   "source_archive": "40.rar",
   "source_archive_sha256": "2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09",
   "counts": {
-    "apps_script_modules": 42,
+    "apps_script_modules": 43,
     "runtime_probes": 7,
-    "gs_files_total": 49
+    "gs_files_total": 50
   },
   "configured_time_zone_in_source": "Europe/Helsinki",
   "schema_version_constant": 3,
@@ -146,8 +146,8 @@
     },
     {
       "path": "src/apps_script/11_DI3_SupplyDomain.gs",
-      "bytes": 83144,
-      "sha256": "28868f5ff201145ad09f919432ad9e058b047f892218dc8fb6cf9a97d1385fa2",
+      "bytes": 83649,
+      "sha256": "d5a2d2a96098f1a0376bb0291f6602a4fe8259539be15e8681b6bba6b71ba91c",
       "kind": "apps_script_module"
     },
     {
@@ -188,14 +188,14 @@
     },
     {
       "path": "src/apps_script/18_DI3_OrderTests.gs",
-      "bytes": 13187,
-      "sha256": "3f9ab9c91f2bee10f3d56d54fc8a3d058bdf05cc8aea4c60854de64e2cb37565",
+      "bytes": 13669,
+      "sha256": "fdaab8cc4f2d7a0308ba88e7746d8dff623e25f5b7487aa92aac23877f016115",
       "kind": "apps_script_module"
     },
     {
       "path": "src/apps_script/19_DI3_WarehouseViews.gs",
-      "bytes": 32922,
-      "sha256": "1c45ff844ac3b5f8c8fb374e863d13368e56600bceea5b761ec3f6c9aa534a5e",
+      "bytes": 36020,
+      "sha256": "711e53a8af42952e0cc27af0d297ca2179336ca52a22663a7fc69fc511bbc864",
       "kind": "apps_script_module"
     },
     {
@@ -242,8 +242,8 @@
     },
     {
       "path": "src/apps_script/27_DI3_OperationExecutor.gs",
-      "bytes": 40699,
-      "sha256": "6cb578593b1ec9d57b6ee3bd80b13d0e3fb4560861092e0e6862141e2d609ddb",
+      "bytes": 42031,
+      "sha256": "519a09e0af232740226ae4f6539b502ae7dc5c221c422fc356d013a0d7a14349",
       "kind": "apps_script_module"
     },
     {
@@ -260,20 +260,20 @@
     },
     {
       "path": "src/apps_script/30_DI3_MoneyCore.gs",
-      "bytes": 19024,
-      "sha256": "57f7ec59dc2ebb27a031568717ac17a8510563d888887c74cdf74ae7b977f40a",
+      "bytes": 19446,
+      "sha256": "f638a69006e0f9542bd082a038e4588639d097e084e2cd8212e1130bc583d0ae",
       "kind": "apps_script_module"
     },
     {
       "path": "src/apps_script/31_DI3_FinanceDashboard.gs",
-      "bytes": 36224,
-      "sha256": "2b6b445c2c83effc109d225114d67fd2e1491f407f2b7f67fb92e84698f76150",
+      "bytes": 39869,
+      "sha256": "848dc94fe9625c1b7095238cf42af4626c1e3fc4e4bb11ce8bc143c2637fe7ad",
       "kind": "apps_script_module"
     },
     {
       "path": "src/apps_script/32_DI3_BackupRestore.gs",
-      "bytes": 40355,
-      "sha256": "9b79e88ccdf6353b0aeb076eb9c6da196d2f5a5e9412289b1f138e899e3439e8",
+      "bytes": 40581,
+      "sha256": "293b8041a5dff2680c312dd01c78c5f7e89fff85645c7e6ff07d9ad362056052",
       "kind": "apps_script_module"
     },
     {
@@ -284,8 +284,8 @@
     },
     {
       "path": "src/apps_script/34_DI3_HistoricalSupply.gs",
-      "bytes": 21100,
-      "sha256": "8d69fda8119f5501426f5f649641632cc7c7d69dae8e62d7567beca29d043fa4",
+      "bytes": 27959,
+      "sha256": "c7949fa59cc14d4c808fcc204c90e4ddfa17e320f0d687a68b3c559ad1e38797",
       "kind": "apps_script_module"
     },
     {
@@ -296,8 +296,8 @@
     },
     {
       "path": "src/apps_script/36_DI3_SupplyFullEdit.gs",
-      "bytes": 41661,
-      "sha256": "5c820d68de86a22a7785f7b81e285b775adb823f463dbdb99ac34ca76106e1fa",
+      "bytes": 45928,
+      "sha256": "db426496b5217d12af4d292a05bb12cced05913bce6de8b5b5d35cf82df2c8e5",
       "kind": "apps_script_module"
     },
     {
@@ -308,14 +308,14 @@
     },
     {
       "path": "src/apps_script/38_DI3_WarehouseDashboardTests.gs",
-      "bytes": 3096,
-      "sha256": "d4001403d7b835cccc071abcc71fae7f1421f0dcf96b6d090c928b67aa260794",
+      "bytes": 5655,
+      "sha256": "4ea4751db95092799d23762e86bfe2694de85c4add033a9fc647f4847d8f40c3",
       "kind": "apps_script_module"
     },
     {
       "path": "src/apps_script/39_DI3_SupplyWorkspaceUxTests.gs",
-      "bytes": 5312,
-      "sha256": "ba92d43133ff3c0205ab20a550f8bfa09761a34d0840e801a59a56fc253a72d2",
+      "bytes": 9673,
+      "sha256": "9624c7eb639cf04b508ed0e61aeda7d65e10ed4816b42f996a374750aa252462",
       "kind": "apps_script_module"
     },
     {
@@ -326,8 +326,14 @@
     },
     {
       "path": "src/apps_script/41_DI3_SystemSafetyUxTests.gs",
-      "bytes": 5740,
-      "sha256": "57db7d5f456654a9b8751c5052de30a201774bfc9174454e1b4c99084154bac0",
+      "bytes": 6918,
+      "sha256": "07b65cd4e1a95442e5e78ae88f3b77ba7b98bcc9b8f5f0bc3761a956dc494897",
+      "kind": "apps_script_module"
+    },
+    {
+      "path": "src/apps_script/42_DI3_FinanceSchemaTests.gs",
+      "bytes": 4620,
+      "sha256": "a9ad530d38b01c2e32b06e31f264d2f19444a4719242588f6640b781019d8ef2",
       "kind": "apps_script_module"
     }
   ],
@@ -337,7 +343,7 @@
     "Node regression harness / package.json",
     "original repository history and full documentation"
   ],
-  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Includes UX-01–UX-10, commission-payer/schema-v3, Warehouse Dashboard diagnostics and F-01 order-return FIFO lookup fix. Dashboard rendering, schema migration and full return runtime acceptance remain pending.",
+  "working_tree_status": "Patched derivative of 2026-11-24 40.rar. Includes UX-01–UX-10, commission-payer/schema-v3, Warehouse Dashboard diagnostics, F-01 return FIFO fix and source-only hardening for F-03/F-04/F-05/F-09/F-11/F-13/F-15/F-16/F-18. Runtime acceptance, Dashboard rendering, commission migration and other schema-sensitive behaviors remain pending.",
   "patch_scope": {
     "UX-01_UX-03": {
       "modified_modules": [
@@ -423,6 +429,50 @@
       ],
       "schema_version": 3,
       "migration_key": "RC8_ORDER_COMMISSION_PAYER_V3"
+    },
+    "STATIC_HARDENING_2026_11_25": {
+      "modified_modules": [
+        "19_DI3_WarehouseViews.gs",
+        "27_DI3_OperationExecutor.gs",
+        "30_DI3_MoneyCore.gs",
+        "31_DI3_FinanceDashboard.gs",
+        "32_DI3_BackupRestore.gs",
+        "34_DI3_HistoricalSupply.gs",
+        "36_DI3_SupplyFullEdit.gs",
+        "38_DI3_WarehouseDashboardTests.gs",
+        "39_DI3_SupplyWorkspaceUxTests.gs"
+      ],
+      "added_modules": [
+        "42_DI3_FinanceSchemaTests.gs"
+      ],
+      "added_tools": [
+        "run_finance_schema_tests.js"
+      ],
+      "modified_tools": [
+        "run_supply_workspace_ux_tests.js"
+      ],
+      "audit_items": {
+        "F-03": "historical receipt confirmation moved outside global lock with post-confirmation revalidation",
+        "F-04": "45,000-character payload-size fail-closed guard; no chunking",
+        "F-05": "immutable full-edit request fingerprint on retries; legacy payloads without fingerprint fail closed",
+        "F-09": "per-view refresh isolation and pending-operation warning in stock journal; read-performance remains open",
+        "F-11": "read-only supply-number peek separate from save-time reservation",
+        "F-13": "SpreadsheetApp.flush before backup snapshot and Drive copy",
+        "F-15": "mutual exclusion between historical-supply mode and FULL_EDIT",
+        "F-16": "Finance Dashboard resolves table columns by schema field names",
+        "F-18": "symmetric half-up minor-unit rounding with safe-integer guard"
+      },
+      "local_tests": {
+        "syntax_files": 50,
+        "order_domain": 17,
+        "supply_ux": 15,
+        "system_safety_ux": 13,
+        "catalog_order_ux": 12,
+        "warehouse_dashboard": 9,
+        "finance_schema": 4,
+        "node_total": 70,
+        "runtime_acceptance": "PENDING"
+      }
     }
   },
   "local_patch_2026_11_25": {
@@ -461,6 +511,27 @@
       ],
       "behavior": "Select active CONSUME allocations by original order-line dispatch movement_id; do not filter by latest global FIFO run_id.",
       "runtime_acceptance": "PENDING: dispatch an order, create a later unrelated FIFO run, accept return, and reconcile source lots/costs."
+    },
+    "static_hardening": {
+      "modified_modules": [
+        "19_DI3_WarehouseViews.gs",
+        "27_DI3_OperationExecutor.gs",
+        "30_DI3_MoneyCore.gs",
+        "31_DI3_FinanceDashboard.gs",
+        "32_DI3_BackupRestore.gs",
+        "34_DI3_HistoricalSupply.gs",
+        "36_DI3_SupplyFullEdit.gs",
+        "38_DI3_WarehouseDashboardTests.gs",
+        "39_DI3_SupplyWorkspaceUxTests.gs"
+      ],
+      "added_modules": [
+        "42_DI3_FinanceSchemaTests.gs"
+      ],
+      "added_tools": [
+        "tools/run_finance_schema_tests.js"
+      ],
+      "local_tests": "syntax 50/50; Order Domain 17/17; Supply UX 15/15; System Safety UX 13/13; Catalog/Order UX 12/12; Warehouse Dashboard 9/9; Finance schema 4/4; AST 570 functions/88 vars; menu 68 actions/0 missing handlers",
+      "scope": "Source-only hardening; no live workbook actions or migrations were executed."
     }
   }
 }

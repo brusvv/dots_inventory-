@@ -96,6 +96,80 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     includes(source, "CANCELLED_BY_USER");
   });
 
+  test("full-edit retry compares the current request fingerprint before reusing an immutable operation", function () {
+    var source = di3SaveFullSupplyEdit.toString();
+    var readPayload = source.indexOf("di3ReadVerifiedOperationPayload_(existingOperation)");
+    var compare = source.indexOf("savedPayload.request_fingerprint");
+    var execute = source.indexOf("di3ExecutePreparedOperation_(existingOperation)");
+    equal(readPayload >= 0 && compare > readPayload && execute > compare, true);
+    includes(source, "Форма поставки отличается от неизменяемого payload");
+    includes(source, "Автоматическое возобновление остановлено");
+  });
+
+  test("full-edit request fingerprint changes when a business input changes but ignores preview pack IDs", function () {
+    var plan = {
+      input: {
+        supplier: "Vendor", seller_discount_amount: 0, partner_discount_amount: 0, shipping_amount: 5,
+        notes: "note", supplier_order_date: new Date("2026-01-01T12:00:00Z"),
+        expected_received_date: "", sent_at: "", awaiting_at: "", received_at: ""
+      },
+      plan: { lines: [{ product_id: "P1", pack_variant_id: "PREVIEW:P1:10", units_per_pack: 10, packs: 2, purchase_price_per_pack: 100 }] },
+      target_number: "26JA011", status: "Создан", reason: "Fix"
+    };
+    var first = di3BuildSupplyFullEditRequestFingerprint_(plan);
+    var persistedVariantPlan = {
+      input: plan.input,
+      plan: { lines: [{
+        product_id: "P1", pack_variant_id: "PACK-PERSISTED-ID", units_per_pack: 10,
+        packs: 2, purchase_price_per_pack: 100
+      }] },
+      target_number: plan.target_number, status: plan.status, reason: plan.reason
+    };
+    equal(di3BuildSupplyFullEditRequestFingerprint_(persistedVariantPlan), first);
+    persistedVariantPlan.plan.lines[0].packs = 3;
+    equal(di3BuildSupplyFullEditRequestFingerprint_(persistedVariantPlan) === first, false);
+  });
+
+  test("number preview peeks without reserving a sequence", function () {
+    includes(di3RecalculateSupplyNumberInFullEdit.toString(), "di3PeekSupplyNumberForDate_");
+    equal(di3PeekSupplyNumberForDate_.toString().indexOf("setProperty") === -1, true);
+    includes(di3SupplyNumberForDate_.toString(), "setProperty");
+  });
+
+  test("historical entry and full edit modes are mutually exclusive in both directions", function () {
+    var source = di3EnableFullSupplyEditMode.toString();
+    var guard = source.indexOf("DI3_SUPPLY_FORM.historicalMode");
+    var enter = source.indexOf("DI3_SUPPLY_FORM.fullEditMode).setValue");
+    equal(guard >= 0 && enter > guard, true);
+    includes(source, "взаимоисключают друг друга");
+  });
+
+  test("historical supply confirmation dialog is outside the ScriptLock critical section", function () {
+    var source = di3CommitHistoricalSupplyEntry.toString();
+    var alertAt = source.indexOf("ui.alert(");
+    var lockAfterConfirmation = source.indexOf("di3WithLock_(function () { return di3CommitHistoricalSupplyEntryLocked_(preflight); })", alertAt);
+    equal(alertAt >= 0 && lockAfterConfirmation > alertAt, true);
+    var preflight = di3BuildHistoricalSupplyCommitPreflight_.toString();
+    equal(preflight.indexOf("getUi") === -1 && preflight.indexOf("alert(") === -1, true);
+    includes(preflight, "di3WithLock_");
+    var lockedCommit = di3CommitHistoricalSupplyEntryLocked_.toString();
+    equal(lockedCommit.indexOf("getUi") === -1 && lockedCommit.indexOf("alert(") === -1, true);
+  });
+
+  test("historical supply commit revalidates the exact form fingerprint and operation identity after confirmation", function () {
+    var source = di3CommitHistoricalSupplyEntryLocked_.toString();
+    includes(source, "DI3_SUPPLY_FORM.historicalMode");
+    includes(source, "preflight.operation_id");
+    includes(source, "preflight.payload_hash");
+    includes(source, "di3BuildHistoricalSupplySnapshotFingerprint_(snapshot)");
+    includes(source, "Состояние поставки или операции приёмки изменилось");
+    var fingerprint = di3BuildHistoricalSupplySnapshotFingerprint_.toString();
+    includes(fingerprint, "received_at");
+    includes(fingerprint, "pack_variant_id");
+    includes(fingerprint, "purchase_price_per_pack");
+    includes(fingerprint, "final_amount");
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply Workspace UX tests failed: " + JSON.stringify(failed));
   return report;

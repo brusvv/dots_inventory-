@@ -138,7 +138,8 @@ function di3SetSupplyHistoricalPreReceiptState_(supply, sentAt, awaitingAt) {
   return { status: "PREPARED", supply_id: supply.supply_id };
 }
 
-function di3CommitHistoricalSupplyEntry() {
+/** Build a read-only confirmation snapshot while holding the lock only briefly. */
+function di3BuildHistoricalSupplyCommitPreflight_() {
   return di3WithLock_(function () {
     di3EnsureStockCoreSchemas_();
     var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
@@ -150,56 +151,53 @@ function di3CommitHistoricalSupplyEntry() {
     var supplyId = String(sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "").trim();
     var supply = supplyId ? di3GetSupplyById_(supplyId) : null;
     var receiptOperation = supply ? di3GetSupplyReceiptOperation_(supply.supply_id) : null;
+    var operationStatus = receiptOperation ? String(receiptOperation.values[5] || "") : "";
 
-    // If a receipt operation was already prepared, its verified immutable payload owns G7.
-    // Resume it without generating new movement/lot IDs or asking the user to re-enter a date.
-    if (supply && receiptOperation && ["PREPARED", "RETRYABLE"].indexOf(String(receiptOperation.values[5])) !== -1) {
+    // Validate the immutable receipt envelope under a short lock, then release
+    // the lock before displaying the user's confirmation dialog.
+    if (supply && receiptOperation && ["PREPARED", "RETRYABLE"].indexOf(operationStatus) !== -1) {
       var savedPayload = di3ReadVerifiedOperationPayload_(receiptOperation);
       var resumeDate = new Date(savedPayload.received_at);
-      var resumeConfirmation = SpreadsheetApp.getUi().alert(
-        "Продолжить незавершённую приёмку",
-        "Для поставки " + supply.supply_number + " уже существует подготовленная операция приёмки с неизменяемой датой " +
-          Utilities.formatDate(resumeDate, di3GetConfiguredTimeZone_(), "dd.MM.yyyy HH:mm") + ". Будут продолжены именно эта операция и её исходные складские движения. Продолжить?",
-        SpreadsheetApp.getUi().ButtonSet.YES_NO
-      );
-      if (resumeConfirmation !== SpreadsheetApp.getUi().Button.YES) return { status: "CANCELLED_BY_USER", supply_number: supply.supply_number };
-      var resumed = di3ReceiveSupply_(supply, resumeDate);
-      if (["COMMITTED", "ALREADY_RECEIVED"].indexOf(String(resumed.status)) !== -1) {
-        sheet.getRange(DI3_SUPPLY_FORM.historicalMode).clearContent();
-        var finalSupply = di3GetSupplyById_(supply.supply_id);
-        di3RefreshSupplyDatePanel_(finalSupply);
-        sheet.getRange("M2").setValue("Просмотр / этапы: " + finalSupply.supply_number + " — " + di3GetSupplyStatusLabel_(finalSupply.status));
-        if (typeof di3RefreshWarehouseViewsAfterCommit_ === "function") di3RefreshWarehouseViewsAfterCommit_("Внесение старой поставки " + supply.supply_number);
-      }
-      return resumed;
+      if (isNaN(resumeDate.getTime())) throw new Error("В payload незавершённой приёмки сохранена некорректная дата получения.");
+      return {
+        action: "RESUME_RECEIPT",
+        supply_id: supplyId,
+        supply_number: String(supply.supply_number),
+        supply_status: di3NormalizeSupplyStatus_(supply.status),
+        operation_id: String(receiptOperation.values[0]),
+        operation_status: operationStatus,
+        payload_hash: String(receiptOperation.values[6] || ""),
+        received_at: resumeDate.toISOString(),
+        confirmation_title: "Продолжить незавершённую приёмку",
+        confirmation_message: "Для поставки " + supply.supply_number + " уже существует подготовленная операция приёмки с неизменяемой датой " +
+          Utilities.formatDate(resumeDate, di3GetConfiguredTimeZone_(), "dd.MM.yyyy HH:mm") + ". Будут продолжены именно эта операция и её исходные складские движения. Продолжить?"
+      };
     }
 
     var status = supply ? di3NormalizeSupplyStatus_(supply.status) : "";
-    if (receiptOperation && ["QUARANTINED", "REJECTED"].indexOf(String(receiptOperation.values[5])) !== -1) {
-      throw new Error("Операция SUPPLY_RECEIVE находится в терминальном состоянии " + String(receiptOperation.values[5]) + ". Повторное оприходование запрещено; сначала требуется отдельная проверка журнала Operations.");
+    if (receiptOperation && ["QUARANTINED", "REJECTED"].indexOf(operationStatus) !== -1) {
+      throw new Error("Операция SUPPLY_RECEIVE находится в терминальном состоянии " + operationStatus + ". Повторное оприходование запрещено; сначала требуется отдельная проверка журнала Operations.");
     }
-    if (receiptOperation && String(receiptOperation.values[5]) === "COMMITTED" && status !== DI3_SUPPLY_STATUS.RECEIVED) {
+    if (receiptOperation && operationStatus === "COMMITTED" && status !== DI3_SUPPLY_STATUS.RECEIVED) {
       throw new Error("Операция SUPPLY_RECEIVE уже COMMITTED, но статус документа не «Получена». Автоматическое повторное оприходование запрещено; требуется сверка документа и журнала Operations.");
     }
     if (supply && status === DI3_SUPPLY_STATUS.RECEIVED) {
-      if (!receiptOperation || String(receiptOperation.values[5]) !== "COMMITTED") {
+      if (!receiptOperation || operationStatus !== "COMMITTED") {
         throw new Error("Поставка отмечена как полученная, но подтверждённая операция SUPPLY_RECEIVE не найдена. Автоматическое повторное оприходование запрещено.");
       }
-      sheet.getRange(DI3_SUPPLY_FORM.historicalMode).clearContent();
-      var alreadyFinalSupply = di3GetSupplyById_(supply.supply_id);
-      di3RefreshSupplyDatePanel_(alreadyFinalSupply);
-      sheet.getRange("M2").setValue("Просмотр / этапы: " + alreadyFinalSupply.supply_number + " — Получена");
-      di3RefreshSupplyFormValidations();
-      return { status: "ALREADY_RECEIVED", supply_number: alreadyFinalSupply.supply_number, operation_id: receiptOperation.values[0] };
+      return {
+        action: "ALREADY_RECEIVED",
+        supply_id: supplyId,
+        supply_number: String(supply.supply_number),
+        operation_id: String(receiptOperation.values[0]),
+        operation_status: operationStatus
+      };
     }
 
     var snapshot = di3GetHistoricalSupplyFormSnapshot_();
-    // Period locks are checked before any document write. The receipt executor repeats
-    // its own guard and FIFO preflight before posting stock movements.
     di3AssertPeriodOpen_(snapshot.sent_at, "Историческая дата отправки");
     di3AssertPeriodOpen_(snapshot.awaiting_at, "Историческая дата ожидания получения");
     di3AssertPeriodOpen_(snapshot.received_at, "Историческая приёмка");
-
     var totalUnits = snapshot.plan.lines.reduce(function (sum, line) { return sum + Number(line.received_units || 0); }, 0);
     var datesText = [
       "Заказ: " + Utilities.formatDate(snapshot.order_date, di3GetConfiguredTimeZone_(), "dd.MM.yyyy"),
@@ -207,79 +205,195 @@ function di3CommitHistoricalSupplyEntry() {
       "Ожидание получения: " + Utilities.formatDate(snapshot.awaiting_at, di3GetConfiguredTimeZone_(), "dd.MM.yyyy HH:mm"),
       "Получение: " + Utilities.formatDate(snapshot.received_at, di3GetConfiguredTimeZone_(), "dd.MM.yyyy HH:mm")
     ].join("\n");
-    var confirmation = SpreadsheetApp.getUi().alert(
-      "Подтверждение внесения старой поставки",
-      "Будет создана новая поставка и выполнена одна фактическая складская приёмка.\n\n" + datesText +
+    return {
+      action: "COMMIT",
+      supply_id: supplyId,
+      supply_status: status,
+      receipt_operation_id: receiptOperation ? String(receiptOperation.values[0]) : "",
+      receipt_operation_status: operationStatus,
+      snapshot_fingerprint: di3BuildHistoricalSupplySnapshotFingerprint_(snapshot),
+      confirmation_title: "Подтверждение внесения старой поставки",
+      confirmation_message: "Будет создана новая поставка и выполнена одна фактическая складская приёмка.\n\n" + datesText +
         "\n\nТоварных строк: " + snapshot.plan.lines.length +
         "\nКоличество единиц: " + totalUnits +
         "\nТовары: " + snapshot.plan.goods_amount.toFixed(2) + " ₽" +
         "\nСкидки: " + snapshot.plan.discount_total.toFixed(2) + " ₽" +
         "\nДоставка: " + snapshot.plan.shipping_amount.toFixed(2) + " ₽" +
         "\nИтого к учёту: " + snapshot.plan.final_amount.toFixed(2) + " ₽" +
-        "\n\nБудут созданы SUPPLY_RECEIVE, StockLedger, FIFO-партии и записи истории себестоимости. Дублирующее оприходование будет заблокировано ключом идемпотентности. Продолжить?",
-      SpreadsheetApp.getUi().ButtonSet.YES_NO
-    );
-    if (confirmation !== SpreadsheetApp.getUi().Button.YES) return { status: "CANCELLED_BY_USER" };
-
-    // First persist the normal supply document and lines. The form-mode flag remains set,
-    // preserving all three historical dates if execution is interrupted during this step.
-    if (!supply) {
-      var saved = di3SaveSupplyDraft({ skipInitialStatusHistory: true });
-      supplyId = String(saved.supply_id || sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "");
-      supply = supplyId ? di3GetSupplyById_(supplyId) : null;
-      if (!supply) throw new Error("Черновик старой поставки не найден после сохранения. Повтори команду; служебный контекст защитит от дублирования.");
-      sheet.getRange("M2").setValue("Внесение старой поставки: " + supply.supply_number + " — " + di3GetSupplyStatusLabel_(supply.status));
-    } else if (status === DI3_SUPPLY_STATUS.CREATED) {
-      di3SaveSupplyDraft({ skipInitialStatusHistory: true });
-      supply = di3GetSupplyById_(supplyId);
-      sheet.getRange("M2").setValue("Внесение старой поставки: " + supply.supply_number + " — " + di3GetSupplyStatusLabel_(supply.status));
-    }
-
-    // Only a CREATED document is moved into the pre-receipt state here. On retry from
-    // AWAITING, the saved dates are verified and no status/date is rewritten.
-    var currentStatus = di3NormalizeSupplyStatus_(supply.status);
-    if (currentStatus === DI3_SUPPLY_STATUS.CREATED) {
-      di3SetSupplyHistoricalPreReceiptState_(supply, snapshot.sent_at, snapshot.awaiting_at);
-      supply = di3GetSupplyById_(supplyId);
-      sheet.getRange("M2").setValue("Внесение старой поставки: " + supply.supply_number + " — " + di3GetSupplyStatusLabel_(supply.status));
-    } else if (currentStatus === DI3_SUPPLY_STATUS.AWAITING) {
-      if (di3ToMillis_(supply.sent_at) !== snapshot.sent_at.getTime() || di3ToMillis_(supply.awaiting_at) !== snapshot.awaiting_at.getTime()) {
-        throw new Error("Сохранённые даты G5/G6 не совпадают с введёнными. Ничего не изменено; загрузи актуальную поставку и сверь даты.");
-      }
-    } else {
-      throw new Error("Нельзя продолжить внесение старой поставки из статуса «" + di3GetSupplyStatusLabel_(supply.status) + "».");
-    }
-
-    // Record all historical business stages, preserving the real system created_at separately.
-    var orderEffectiveAt = new Date(snapshot.order_date.getTime());
-    orderEffectiveAt.setHours(0, 0, 0, 0);
-    di3EnsureSupplyStatusHistory_(supplyId, "", DI3_SUPPLY_STATUS.CREATED, orderEffectiveAt, "", "Внесение старой поставки: дата заказа в магазине");
-    di3EnsureSupplyStatusHistory_(supplyId, DI3_SUPPLY_STATUS.CREATED, DI3_SUPPLY_STATUS.SENT, snapshot.sent_at, "", "Историческая дата отправки");
-    di3EnsureSupplyStatusHistory_(supplyId, DI3_SUPPLY_STATUS.SENT, DI3_SUPPLY_STATUS.AWAITING, snapshot.awaiting_at, "", "Историческая дата ожидания получения");
-
-    var receiptResult = di3ReceiveSupply_(supply, snapshot.received_at);
-    if (["COMMITTED", "ALREADY_RECEIVED"].indexOf(String(receiptResult.status)) === -1) {
-      throw new Error("Историческая поставка сохранена, но складская приёмка не завершена. Статус документа: " + di3GetSupplyStatusLabel_(di3GetSupplyById_(supplyId).status) + ". Не создавай новую поставку; повтори команду после проверки журнала Operations.");
-    }
-
-    sheet.getRange(DI3_SUPPLY_FORM.historicalMode).clearContent();
-    var finalSupply = di3GetSupplyById_(supplyId);
-    di3RefreshSupplyDatePanel_(finalSupply);
-    sheet.getRange("M2").setValue("Просмотр / этапы: " + finalSupply.supply_number + " — " + di3GetSupplyStatusLabel_(finalSupply.status));
-    di3RefreshSupplyFormValidations();
-    if (typeof di3RefreshWarehouseViewsAfterCommit_ === "function") {
-      di3RefreshWarehouseViewsAfterCommit_("Внесение старой поставки " + finalSupply.supply_number);
-    }
-    di3GetSpreadsheet_().toast("Старая поставка внесена и оприходована", "Поставка " + finalSupply.supply_number, 6);
-    return {
-      status: receiptResult.status,
-      supply_id: supplyId,
-      supply_number: finalSupply.supply_number,
-      units_received: totalUnits,
-      final_amount: snapshot.plan.final_amount,
-      receipt: receiptResult
+        "\n\nБудут созданы SUPPLY_RECEIVE, StockLedger, FIFO-партии и записи истории себестоимости. Дублирующее оприходование будет заблокировано ключом идемпотентности. Продолжить?"
     };
   });
+}
+
+/** Stable digest of the dates and exact financial/quantity plan shown in the confirmation. */
+function di3BuildHistoricalSupplySnapshotFingerprint_(snapshot) {
+  snapshot = snapshot || {};
+  function dateValue(value) {
+    return value instanceof Date && !isNaN(value.getTime()) ? value.toISOString() : "";
+  }
+  var plan = snapshot.plan || {};
+  return di3BuildManualOperationPayloadHash_({
+    order_date: dateValue(snapshot.order_date),
+    expected_date: dateValue(snapshot.expected_date),
+    sent_at: dateValue(snapshot.sent_at),
+    awaiting_at: dateValue(snapshot.awaiting_at),
+    received_at: dateValue(snapshot.received_at),
+    plan: {
+      currency: String(plan.currency || ""),
+      goods_amount: Number(plan.goods_amount || 0),
+      seller_discount_amount: Number(plan.seller_discount_amount || 0),
+      partner_discount_amount: Number(plan.partner_discount_amount || 0),
+      discount_total: Number(plan.discount_total || 0),
+      shipping_amount: Number(plan.shipping_amount || 0),
+      final_amount: Number(plan.final_amount || 0),
+      lines: (plan.lines || []).map(function (line) {
+        return {
+          product_id: String(line.product_id || ""),
+          pack_variant_id: String(line.pack_variant_id || ""),
+          units_per_pack: Number(line.units_per_pack || 0),
+          packs: Number(line.packs || 0),
+          purchase_price_per_pack: Number(line.purchase_price_per_pack || 0),
+          received_units: Number(line.received_units || 0),
+          final_line_amount: Number(line.final_line_amount || 0),
+          unit_cost: Number(line.unit_cost || 0)
+        };
+      })
+    }
+  });
+}
+
+function di3FinalizeHistoricalSupplyReceipt_(sheet, supplyId, sourceLabel, receiptResult) {
+  if (["COMMITTED", "ALREADY_RECEIVED"].indexOf(String(receiptResult.status)) === -1) return receiptResult;
+  sheet.getRange(DI3_SUPPLY_FORM.historicalMode).clearContent();
+  var finalSupply = di3GetSupplyById_(supplyId);
+  if (!finalSupply) throw new Error("Поставка исчезла после завершения приёмки. Проверь Operations и supply_id " + supplyId + ".");
+  di3RefreshSupplyDatePanel_(finalSupply);
+  sheet.getRange("M2").setValue("Просмотр / этапы: " + finalSupply.supply_number + " — " + di3GetSupplyStatusLabel_(finalSupply.status));
+  di3RefreshSupplyFormValidations();
+  if (typeof di3RefreshWarehouseViewsAfterCommit_ === "function") di3RefreshWarehouseViewsAfterCommit_(sourceLabel + " " + finalSupply.supply_number);
+  return receiptResult;
+}
+
+/** Apply a previously confirmed historical-supply request under the mutation lock. */
+function di3CommitHistoricalSupplyEntryLocked_(preflight) {
+  di3EnsureStockCoreSchemas_();
+  var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  var mode = String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "");
+  if (mode !== DI3_HISTORICAL_SUPPLY_MODE_VALUE) {
+    throw new Error("Режим исторической поставки изменился после подтверждения. Ничего не проведено; повтори команду после проверки формы.");
+  }
+  var supplyId = String(sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "").trim();
+  if (supplyId !== String(preflight.supply_id || "")) {
+    throw new Error("Выбранная поставка изменилась после подтверждения. Ничего не проведено; проверь форму и подтверди операцию заново.");
+  }
+  var supply = supplyId ? di3GetSupplyById_(supplyId) : null;
+  var receiptOperation = supply ? di3GetSupplyReceiptOperation_(supply.supply_id) : null;
+  var operationStatus = receiptOperation ? String(receiptOperation.values[5] || "") : "";
+
+  if (preflight.action === "ALREADY_RECEIVED") {
+    if (!supply || di3NormalizeSupplyStatus_(supply.status) !== DI3_SUPPLY_STATUS.RECEIVED || !receiptOperation ||
+        String(receiptOperation.values[0]) !== preflight.operation_id || operationStatus !== "COMMITTED") {
+      throw new Error("Состояние уже полученной поставки изменилось после предварительной проверки. Повтори команду и проверь журнал Operations.");
+    }
+    var already = di3FinalizeHistoricalSupplyReceipt_(sheet, supplyId, "Внесение старой поставки", {
+      status: "ALREADY_RECEIVED", supply_number: supply.supply_number, operation_id: receiptOperation.values[0]
+    });
+    return already;
+  }
+
+  if (preflight.action === "RESUME_RECEIPT") {
+    if (!supply || !receiptOperation || String(receiptOperation.values[0]) !== preflight.operation_id ||
+        operationStatus !== preflight.operation_status || String(receiptOperation.values[6] || "") !== preflight.payload_hash) {
+      throw new Error("Подготовленная операция приёмки изменилась после подтверждения. Повторно проверь журнал Operations; старая команда не будет исполнена.");
+    }
+    var savedPayload = di3ReadVerifiedOperationPayload_(receiptOperation);
+    var resumeDate = new Date(savedPayload.received_at);
+    if (isNaN(resumeDate.getTime()) || resumeDate.toISOString() !== preflight.received_at) {
+      throw new Error("Дата в неизменяемом payload отличается от даты, показанной при подтверждении. Приёмка остановлена.");
+    }
+    var resumed = di3ReceiveSupply_(supply, resumeDate);
+    return di3FinalizeHistoricalSupplyReceipt_(sheet, supplyId, "Внесение старой поставки", resumed);
+  }
+
+  if (preflight.action !== "COMMIT") throw new Error("Неизвестный тип подтверждённой операции исторической поставки.");
+  if ((supply ? di3NormalizeSupplyStatus_(supply.status) : "") !== String(preflight.supply_status || "") ||
+      (receiptOperation ? String(receiptOperation.values[0]) : "") !== String(preflight.receipt_operation_id || "") ||
+      operationStatus !== String(preflight.receipt_operation_status || "")) {
+    throw new Error("Состояние поставки или операции приёмки изменилось после подтверждения. Ничего не проведено; проверь документ и подтверди заново.");
+  }
+
+  var snapshot = di3GetHistoricalSupplyFormSnapshot_();
+  if (di3BuildHistoricalSupplySnapshotFingerprint_(snapshot) !== preflight.snapshot_fingerprint) {
+    throw new Error("Данные формы изменились после подтверждения. Приёмка не проведена; проверь даты и позиции, затем подтверди заново.");
+  }
+  di3AssertPeriodOpen_(snapshot.sent_at, "Историческая дата отправки");
+  di3AssertPeriodOpen_(snapshot.awaiting_at, "Историческая дата ожидания получения");
+  di3AssertPeriodOpen_(snapshot.received_at, "Историческая приёмка");
+
+  var totalUnits = snapshot.plan.lines.reduce(function (sum, line) { return sum + Number(line.received_units || 0); }, 0);
+  // First persist the normal supply document and lines. The form-mode flag remains set,
+  // preserving all three historical dates if execution is interrupted during this step.
+  if (!supply) {
+    var saved = di3SaveSupplyDraft({ skipInitialStatusHistory: true });
+    supplyId = String(saved.supply_id || sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "");
+    supply = supplyId ? di3GetSupplyById_(supplyId) : null;
+    if (!supply) throw new Error("Черновик старой поставки не найден после сохранения. Повтори команду; служебный контекст защитит от дублирования.");
+    sheet.getRange("M2").setValue("Внесение старой поставки: " + supply.supply_number + " — " + di3GetSupplyStatusLabel_(supply.status));
+  } else if (di3NormalizeSupplyStatus_(supply.status) === DI3_SUPPLY_STATUS.CREATED) {
+    di3SaveSupplyDraft({ skipInitialStatusHistory: true });
+    supply = di3GetSupplyById_(supplyId);
+    sheet.getRange("M2").setValue("Внесение старой поставки: " + supply.supply_number + " — " + di3GetSupplyStatusLabel_(supply.status));
+  }
+
+  var currentStatus = di3NormalizeSupplyStatus_(supply.status);
+  if (currentStatus === DI3_SUPPLY_STATUS.CREATED) {
+    di3SetSupplyHistoricalPreReceiptState_(supply, snapshot.sent_at, snapshot.awaiting_at);
+    supply = di3GetSupplyById_(supplyId);
+    sheet.getRange("M2").setValue("Внесение старой поставки: " + supply.supply_number + " — " + di3GetSupplyStatusLabel_(supply.status));
+  } else if (currentStatus === DI3_SUPPLY_STATUS.AWAITING) {
+    if (di3ToMillis_(supply.sent_at) !== snapshot.sent_at.getTime() || di3ToMillis_(supply.awaiting_at) !== snapshot.awaiting_at.getTime()) {
+      throw new Error("Сохранённые даты G5/G6 не совпадают с введёнными. Ничего не изменено; загрузи актуальную поставку и сверь даты.");
+    }
+  } else {
+    throw new Error("Нельзя продолжить внесение старой поставки из статуса «" + di3GetSupplyStatusLabel_(supply.status) + "».");
+  }
+
+  var orderEffectiveAt = new Date(snapshot.order_date.getTime());
+  orderEffectiveAt.setHours(0, 0, 0, 0);
+  di3EnsureSupplyStatusHistory_(supplyId, "", DI3_SUPPLY_STATUS.CREATED, orderEffectiveAt, "", "Внесение старой поставки: дата заказа в магазине");
+  di3EnsureSupplyStatusHistory_(supplyId, DI3_SUPPLY_STATUS.CREATED, DI3_SUPPLY_STATUS.SENT, snapshot.sent_at, "", "Историческая дата отправки");
+  di3EnsureSupplyStatusHistory_(supplyId, DI3_SUPPLY_STATUS.SENT, DI3_SUPPLY_STATUS.AWAITING, snapshot.awaiting_at, "", "Историческая дата ожидания получения");
+
+  var receiptResult = di3ReceiveSupply_(supply, snapshot.received_at);
+  if (["COMMITTED", "ALREADY_RECEIVED"].indexOf(String(receiptResult.status)) === -1) {
+    throw new Error("Историческая поставка сохранена, но складская приёмка не завершена. Статус документа: " + di3GetSupplyStatusLabel_(di3GetSupplyById_(supplyId).status) + ". Не создавай новую поставку; повтори команду после проверки журнала Operations.");
+  }
+
+  var finalResult = di3FinalizeHistoricalSupplyReceipt_(sheet, supplyId, "Внесение старой поставки", receiptResult);
+  di3GetSpreadsheet_().toast("Старая поставка внесена и оприходована", "Поставка " + supply.supply_number, 6);
+  return {
+    status: finalResult.status,
+    supply_id: supplyId,
+    supply_number: supply.supply_number,
+    units_received: totalUnits,
+    final_amount: snapshot.plan.final_amount,
+    receipt: finalResult
+  };
+}
+
+function di3CommitHistoricalSupplyEntry() {
+  // The preflight lock is released before opening a modal dialog. All mutable state
+  // and the exact request fingerprint are checked again after the user confirms.
+  var preflight = di3BuildHistoricalSupplyCommitPreflight_();
+  if (preflight.action === "ALREADY_RECEIVED") {
+    return di3WithLock_(function () { return di3CommitHistoricalSupplyEntryLocked_(preflight); });
+  }
+  var ui = SpreadsheetApp.getUi();
+  var confirmation = ui.alert(preflight.confirmation_title, preflight.confirmation_message, ui.ButtonSet.YES_NO);
+  if (confirmation !== ui.Button.YES) {
+    return { status: "CANCELLED_BY_USER", supply_number: preflight.supply_number || "" };
+  }
+  return di3WithLock_(function () { return di3CommitHistoricalSupplyEntryLocked_(preflight); });
 }
 
 function di3DiagnoseHistoricalSupplyMode() {
