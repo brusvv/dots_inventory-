@@ -110,8 +110,7 @@ function di3CloseAccountingPeriod(periodKey, note) {
       }
     }
     di3AssertNoPendingOperationsBeforePeriodClose_();
-    var actor = "";
-    actor = di3GetActorEmail_();
+    var actor = di3GetActorEmail_();
     // Never overwrite a prior LOCKED/REOPENED event. A re-close is a new event.
     var row = [bounds.period_key, bounds.start, bounds.end, "LOCKED", now, actor, "", "", "", String(note || "")];
     di3AppendTableRows_("PeriodLocks", [row]);
