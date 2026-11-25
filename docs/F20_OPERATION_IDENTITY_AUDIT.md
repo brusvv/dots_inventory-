@@ -179,3 +179,5 @@ The new tests are committed but **have not been executed**. Syntax checks and re
 The supply receipt detail writer was also updated after the initial slice: its existing `StockMovementDetails.actor` slot now records the registered initiator from `Operations.actor`. The regression test checks this writer as well.
 
 Manual warehouse stock movements were included in the same pass: the existing `StockMovementDetails.actor` slot is now populated from the operation's persisted initiator. The source regression check covers this writer too.
+
+The existing local runner `tools/run_system_safety_ux_tests.js` was extended to load the source modules required by these assertions (`00`, `07), `15`, and `29`) in addition to its previous modules. This prevents the new checks from referring to functions that are absent from the test VM. The runner itself remains unexecuted here.
