@@ -56,7 +56,26 @@ var DI3_TABLE_SCHEMAS = Object.freeze({
   ],
   FifoAllocationRuns: [
     "run_id", "run_sequence", "status", "reason", "created_at", "committed_at",
-    "ledger_rows_count", "allocation_rows_count", "products_count", "error"
+    "ledger_rows_count", "allocation_rows_count", "products_count", "error",
+    "operation_id", "replay_id", "scope_type", "scope_json", "input_fingerprint"
+  ],
+  FifoAllocationArchive: [
+    "archive_row_id", "replay_id", "archived_at", "archive_reason",
+    "source_allocation_id", "source_allocation_run_id", "movement_id", "lot_id",
+    "product_id", "allocation_type", "quantity", "unit_cost", "cost_status",
+    "allocated_cost", "effective_at", "recorded_at", "reverses_allocation_id",
+    "allocated_cost_minor"
+  ],
+  FifoLotCacheArchive: [
+    "archive_row_id", "replay_id", "lot_id", "product_id",
+    "previous_remaining_quantity", "archived_at"
+  ],
+  FifoReplayEvents: [
+    "replay_event_id", "replay_id", "event_sequence", "event_type",
+    "fifo_run_id", "operation_id", "scope_type", "scope_json", "input_fingerprint",
+    "source_allocations_fingerprint", "target_allocations_fingerprint",
+    "source_lot_cache_fingerprint", "target_lot_cache_fingerprint",
+    "created_at", "details_json"
   ],
   FifoProductState: [
     "product_id", "last_effective_at", "last_recorded_at", "last_movement_id",
