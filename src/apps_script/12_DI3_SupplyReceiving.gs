@@ -336,7 +336,7 @@ function di3BuildSupplyReceiptRows_(operationId, payload) {
     ledgerRows.push([
       line.movement_id, operationId, line.event_key, line.product_id,
       "SUPPLY", payload.supply_id, line.quantity, new Date(line.effective_at),
-      new Date(line.recorded_at), "", "", "Приёмка поставки " + payload.supply_number, line.ledger_sequence
+      new Date(line.recorded_at), "", "", "Приёмка поставки " + payload.supply_number, di3RequireLedgerSequence_(line.ledger_sequence, line.movement_id)
     ]);
     detailRows.push([
       line.movement_id, line.display_code, "IN", "SUPPLY_RECEIVE", "", "",
