@@ -1117,7 +1117,7 @@ function di3ApplyManualStockOperation_(operationRecord, storedPayload) {
   var ledgerRow = existingMovement ? existingMovement.values : [
     movementId, operationId, eventKey, storedPayload.product_id, "MANUAL_STOCK",
     movementId, storedPayload.direction === "IN" ? storedPayload.quantity : -storedPayload.quantity,
-    effectiveAt, recordedAt, "", "", storedPayload.note, storedPayload.ledger_sequence
+    effectiveAt, recordedAt, "", "", storedPayload.note, di3RequireLedgerSequence_(storedPayload.ledger_sequence, movementId)
   ];
   if (existingMovement) ledgerRow._di3RowNumber = Number(existingMovement.row_number);
   var revenue = storedPayload.direction === "OUT" && storedPayload.reason_code === "OFFLINE_SALE"
