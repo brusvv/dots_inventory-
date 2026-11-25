@@ -252,3 +252,13 @@ The following issues have source changes and local regression coverage. They are
 - Supply receipt `StockMovementDetails.actor` is now populated from the same immutable initiator record; its regression assertion was added.
 - Manual warehouse stock movement details now also record the original operation initiator in `StockMovementDetails.actor`; regression coverage was extended.
 - Extended `tools/run_system_safety_ux_tests.js` to load the actor helper, settings accessor, and manual-stock source modules referenced by the expanded suite. Runner execution remains pending.
+
+
+## F-20 — remaining manual and administrative audit paths — 26.11.2026
+
+- Confirmed supply draft history and settings/manual review use the centralized active-user accessor.
+- Confirmed full supply-document edits persist `edited_by` in the immutable operation payload and reuse it for status history during recovery.
+- Confirmed period close/reopen and schema migration records use the centralized accessor; period events remain append-only.
+- Simplified redundant actor lookup wrappers.
+- Extended the system-safety runner to load the supply-domain, schema-versioning and full-edit modules; added structural assertions for these paths.
+- **Not verified:** no runner or syntax check was executed. Restored-workbook acceptance remains required.
