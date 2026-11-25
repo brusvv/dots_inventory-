@@ -79,13 +79,13 @@ Do not keep a separately incremented `next_sequence` counter in _AppMeta. Updati
 
 Instead, allocate under the existing ScriptLock:
 
-1. Read only the `ledger_sequence` column from StockLedger.
+1. Read only the `movement_id`, `product_id` and `ledger_sequence` columns from StockLedger.
 2. Validate that every populated sequence is a positive integer and that there are no duplicates.
 3. Find the maximum existing sequence.
 4. Assign the next contiguous block `max + 1 ... max + N` to the new operation's lines.
 5. Store these values in the immutable operation payload before the operation is registered.
 
-This is an O(N) read of one narrow column, not a full-width ledger read. It is robust to physical sorting or moving of ledger rows. For the expected small-to-medium inventory ledger, correctness is preferred over a fragile counter optimization. Benchmark this column-only scan in C-01 before considering a more elaborate index.
+This is an O(N) read of three narrow columns, not a full-width ledger read. It is robust to physical sorting or moving of ledger rows. For the expected small-to-medium inventory ledger, correctness is preferred over a fragile counter optimization. Benchmark this column-only scan in C-01 before considering a more elaborate index.
 
 A rejected operation may leave a sequence gap only if its sequence was persisted in a rejected immutable payload but no ledger event was appended. Gaps are valid; uniqueness and monotonic allocation among newly created operations matter more than contiguity. A pending operation blocks other stock mutations, so a lower sequence from a still-recoverable operation cannot be appended after the global cursor has advanced past it.
 
@@ -124,7 +124,7 @@ A stable sequence must also work if StockLedger rows are sorted or moved. Theref
 
 Implement a narrow-column tail reader:
 
-1. Read the sequence column values and their sheet row positions.
+1. Read the movement ID, product ID and sequence columns with their sheet row positions; validate that every populated event has all three values.
 2. Select rows whose sequence is greater than the global cursor.
 3. Fetch full StockLedger rows for only those row positions, grouped into contiguous ranges to reduce service calls.
 4. Attach sequence values to the returned row arrays using the schema index.
@@ -167,4 +167,4 @@ This is O(N) over one numeric column and O(K) full-width reads for K tail rows. 
 
 ## Performance notes
 
-The proposed algorithm deliberately trades one narrow-column scan for independence from physical row positions. It avoids downloading the full width of the ledger for normal tail discovery. C-01 must measure this at 500, 1,000, 2,000 and larger synthetic movement counts. If the one-column scan becomes dominant, consider a separately designed immutable sequence index; do not revert to row-number cursor semantics.
+The proposed algorithm deliberately trades a three-column narrow scan for independence from physical row positions. It avoids downloading the full width of the ledger for normal tail discovery. C-01 must measure this at 500, 1,000, 2,000 and larger synthetic movement counts. If the one-column scan becomes dominant, consider a separately designed immutable sequence index; do not revert to row-number cursor semantics.
