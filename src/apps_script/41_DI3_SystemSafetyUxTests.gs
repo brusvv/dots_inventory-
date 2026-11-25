@@ -166,6 +166,16 @@ function di3RunSystemSafetyUxUnitTests() {
     includes(di3BuildOrderReturnRows_.toString(), "di3GetOperationInitiatorActor_");
   });
 
+  test("remaining manual and administrative audit writers use the centralized actor accessor", function () {
+    includes(di3RequeueQuarantinedOperation.toString(), "di3SettingsActor_()");
+    includes(di3RequeueQuarantinedOperation.toString(), '"MANUAL_REOPEN"');
+    includes(di3CloseAccountingPeriod.toString(), "di3GetActorEmail_()");
+    includes(di3ReopenAccountingPeriod.toString(), "di3GetActorEmail_()");
+    includes(di3CreateSchemaMigrationRecord_.toString(), "di3GetActorEmail_()");
+    includes(di3BuildSupplyFullEditOperationPayload_.toString(), "edited_by: di3GetActorEmail_()");
+    includes(di3ApplySupplyFullEditOperation_.toString(), "payload.edited_by");
+  });
+
   test("operation attempt diagnostics preserve the executor actor across recovery and manual review", function () {
     var originalGetSpreadsheet = di3GetSpreadsheet_;
     var originalReadTableValues = di3ReadTableValues_;
