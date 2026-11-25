@@ -1,34 +1,35 @@
-# Dots Inventory v3 — RC8 source snapshot
+# Dots Inventory v3 — RC8
 
-**Snapshot date:** 2026-11-24  
-**Source archive:** user-supplied `DI3_RC8_Repository_2026-11-24(1).zip`  
-**Source tree:** `src/apps_script/` (39 Apps Script modules) and `runtime/probes/` (7 probes).
+This repository is initialized for the Dots Inventory v3 RC8 source snapshot dated 2026-11-24.
 
-## Contents
+> **Import status:** the source archive has not yet been imported into this repository. The only committed file currently present is this README.
 
-- `src/apps_script/` — current RC8 source modules and Apps Script tests.
-- `runtime/probes/` — temporary runtime probes. Review each probe's safety classification before use; some are mutating.
-- `docs/` — project context, roadmap, runtime acceptance, module index, probe notes and supply menu notes.
-- `reports/` — source provenance, checksums, inventory and validation record.
-- `tools/` — JavaScript syntax and Warehouse Dashboard unit-test helpers.
+## Import the supplied archive
 
-## Reproduce local checks
+1. Download `DI3_RC8_Repository_2026-11-24(1).zip` from the ChatGPT conversation.
+2. Extract it. The archive contains a top-level folder named `DI3_RC8_Repository`.
+3. Clone this repository and copy the *contents* of that folder into the clone root (not the folder itself).
+4. Review the staged files, then commit and push:
 
-```bash
-bash tools/check_syntax.sh
-node tools/run_warehouse_dashboard_tests.js
+```powershell
+git clone https://github.com/brusvv/dots_inventory-.git
+cd dots_inventory-
+
+# Replace this path with the folder where you extracted the archive.
+Copy-Item "C:\PATH\TO\DI3_RC8_Repository\*" . -Recurse -Force
+
+git status --short
+git add .
+git commit -m "Import Dots Inventory v3 RC8 source snapshot (2026-11-24)"
+git push origin main
 ```
 
-These checks do not emulate Google Sheets rendering or a complete Apps Script runtime.
+The archive's `.gitignore` excludes `.clasp.json`. Do not add local Apps Script bindings, script IDs, credentials, or secrets.
 
-## Important omissions
+## Source snapshot notes
 
-The supplied snapshot does not include `appsscript.json`, `.clasp.json`, the previous full Node regression harness, or the original repository history. No manifest, script ID, secrets or deployment binding has been fabricated. Recover the actual manifest and local clasp binding from the bound Apps Script project before deployment; do not commit `.clasp.json`.
+The archive preserves 39 Apps Script modules in `src/apps_script/`, seven runtime probes in `runtime/probes/`, project documentation, source inventory, checksums, and static-validation evidence. It deliberately does not include `appsscript.json`, `.clasp.json`, a complete Node regression harness, or original repository history.
 
-## Safety
+See `PROJECT_CONTEXT_FOR_NEW_CHAT.md` in the imported archive for architecture, known runtime status, roadmap, and operating safeguards.
 
-Use a restored/test spreadsheet. Back up before code replacement or risky setup. Never rewrite committed StockLedger, StockLots or operation payloads directly. Received-supply cost/quantity corrections require a separately designed `SUPPLY_CORRECTION` operation, which is not implemented in this snapshot.
-
-## Source of truth
-
-Treat `src/apps_script/` in this commit as the supplied RC8 source snapshot dated 2026-11-24. Runtime acceptance remains separate from static/local tests.
+The repository is currently **public**.
