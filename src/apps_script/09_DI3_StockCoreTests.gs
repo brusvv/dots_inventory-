@@ -338,6 +338,14 @@ function di3RunStockCoreUnitTests() {
       equal(tail[0]._di3RowNumber, 2);
       equal(tail[1]._di3RowNumber, 4);
       equal(fullReads.length, 2, "Non-contiguous tail rows should be fetched as two narrow ranges");
+      var stableRows = rows.map(function (row) { return row.slice(); });
+      var staleIndex = di3ReadLedgerSequenceIndex_();
+      rows[0] = stableRows[1].slice();
+      rows[1] = stableRows[0].slice();
+      var concurrentReorderThrew = false;
+      try { di3ReadFifoLedgerTail_(4, staleIndex); }
+      catch (error) { concurrentReorderThrew = /изменился во время чтения/.test(error.message); }
+      equal(concurrentReorderThrew, true, "Concurrent physical sorting must fail closed");
     } finally { di3GetSheetOrThrow_ = originalGetSheet; }
   });
 
