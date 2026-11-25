@@ -153,11 +153,11 @@ The following issues have source changes and local regression coverage. They are
 ### Still open or only partially mitigated
 
 - **F-01:** code-fixed and locally tested; end-to-end return after a newer unrelated FIFO run still needs runtime acceptance.
-- **F-02:** historical sales/business date not implemented; needs policy and a future schema migration.
+- **F-02:** source audit and v3→v4 design documented in `docs/F02_HISTORICAL_SALES_DESIGN.md`; implementation is not started. Requires an explicit same-day dispatch-time precision rule before coding.
 - **F-04:** payload-size guard only; chunking/compaction remains a future design task.
 - **F-06/F-07:** FIFO allocation archival and stable cursors remain open; require a migration/replay design.
 - **F-09:** per-view isolation and journal warning are added, but O(N) read cost and scoped refresh remain open.
-- **F-10:** PeriodLocks now appends immutable `LOCKED` / `REOPENED` events; current state is derived from the latest event per period. No schema migration is needed. Runtime acceptance and local test execution remain pending; previously overwritten legacy history cannot be recovered.
+- **F-10:** PeriodLocks now appends `LOCKED` / `REOPENED` events; current state is derived from the latest event per period. Structural tests were added, but local execution and close → reopen → re-close runtime acceptance remain pending. Previously overwritten legacy history cannot be recovered.
 - **F-14:** true multi-session ScriptLock contention/recovery is not proven by local tests.
 - **F-17:** delivery-method catalogue needs the user's actual options; none are invented.
 - **F-20:** reliable actor attribution still needs an approved identity model.
@@ -174,3 +174,14 @@ The following issues have source changes and local regression coverage. They are
 - Added three structural regression checks to `41_DI3_SystemSafetyUxTests.gs`.
 - **Not yet verified:** the tests were added through GitHub source editing and have not been executed here. Run syntax + all six local Node suites before relying on the patch. Then use a restored test workbook to verify close → reopen → re-close, one appended row per transition, immutable prior rows and correct PeriodGuard blocking.
 - **Legacy limitation:** historical rows that were overwritten by earlier versions cannot be recovered; the append-only guarantee applies from this patch onward.
+
+
+## F-02 source audit and v4 design — 25.11.2026
+
+- Audited the current order creation/dispatch/completion flow, v3 order schema, OperationExecutor, PeriodGuard and FIFO replay.
+- Confirmed the existing FIFO engine orders stock events by `effective_at`, then `recorded_at`, and can trigger product replay for a backdated movement. Its replay rejects insufficient historical stock.
+- Identified that the current order-draft validator uses today's available quantity and the dispatch validator requires `dispatched_at >= created_at`; both require a controlled historical-mode path.
+- Proposed append-only `business_date` in `V3_Orders` (schema v3→v4), preserving `created_at` as actual record-entry time, with dispatch and completion timestamps remaining separate.
+- Proposed retry-safe orchestration using the existing `ORDER_CREATE` and `ORDER_DISPATCH` operations plus the existing completion settlement transition; no second FIFO engine or new operation type unless tests prove the existing lifecycle cannot safely resume.
+- **Not implemented:** no source behavior, schema, menu, tests or workbook data changed for F-02. The design is documented in `docs/F02_HISTORICAL_SALES_DESIGN.md`.
+- **Decision required before UI implementation:** exact dispatch date/time is recommended. A date-only value is ambiguous because same-day FIFO events are secondarily ordered by actual `recorded_at`; silently choosing midnight/noon/end-of-day could change historical lot attribution.
