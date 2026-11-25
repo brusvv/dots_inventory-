@@ -523,6 +523,78 @@ function di3RunStockCoreUnitTests() {
     }
   });
 
+  test("FIFO projection archives before replacement and rolls back after allocation append failure", function () {
+    var originals = {
+      read: di3ReadTaggedRowsByColumnValue_,
+      prepare: di3PrepareFifoReplay_,
+      remove: di3DeleteStockAllocationRows_,
+      append: di3AppendTableRows_,
+      restoreLots: di3RestoreLotRemainingSnapshot_,
+      updateLots: di3UpdateLotRemainingRows_
+    };
+    var calls = [], appendCount = 0, sourceRow = ["source-allocation"];
+    try {
+      di3ReadTaggedRowsByColumnValue_ = function () { return [sourceRow]; };
+      di3PrepareFifoReplay_ = function () { calls.push("PREPARED_ARCHIVE"); return { already_target: false, source_rows: [sourceRow] }; };
+      di3DeleteStockAllocationRows_ = function () { calls.push("DELETE_ACTIVE"); return 1; };
+      di3AppendTableRows_ = function (table, rows) {
+        appendCount++;
+        calls.push(appendCount === 1 ? "APPEND_TARGET" : "RESTORE_SOURCE");
+        if (appendCount === 1) throw new Error("simulated target append failure");
+      };
+      di3UpdateLotRemainingRows_ = function () { calls.push("UPDATE_LOTS"); };
+      di3RestoreLotRemainingSnapshot_ = function () { calls.push("RESTORE_LOTS"); };
+      var threw = false;
+      try {
+        di3ReplaceFifoProjectionSafely_(function () { return true; }, [["target-allocation"]], [], {}, null,
+          { replay_id: "replay-1" });
+      } catch (error) { threw = /simulated target append failure/.test(error.message); }
+      equal(threw, true);
+      equal(calls.join("|"), "PREPARED_ARCHIVE|DELETE_ACTIVE|APPEND_TARGET|DELETE_ACTIVE|RESTORE_SOURCE|RESTORE_LOTS");
+    } finally {
+      di3ReadTaggedRowsByColumnValue_ = originals.read;
+      di3PrepareFifoReplay_ = originals.prepare;
+      di3DeleteStockAllocationRows_ = originals.remove;
+      di3AppendTableRows_ = originals.append;
+      di3RestoreLotRemainingSnapshot_ = originals.restoreLots;
+      di3UpdateLotRemainingRows_ = originals.updateLots;
+    }
+  });
+
+  test("FIFO projection rolls back allocations and lot cache after lot update failure", function () {
+    var originals = {
+      read: di3ReadTaggedRowsByColumnValue_,
+      prepare: di3PrepareFifoReplay_,
+      remove: di3DeleteStockAllocationRows_,
+      append: di3AppendTableRows_,
+      restoreLots: di3RestoreLotRemainingSnapshot_,
+      updateLots: di3UpdateLotRemainingRows_
+    };
+    var calls = [], appendCount = 0, sourceRow = ["source-allocation"];
+    try {
+      di3ReadTaggedRowsByColumnValue_ = function () { return [sourceRow]; };
+      di3PrepareFifoReplay_ = function () { calls.push("PREPARED_ARCHIVE"); return { already_target: false, source_rows: [sourceRow] }; };
+      di3DeleteStockAllocationRows_ = function () { calls.push("DELETE_ACTIVE"); return 1; };
+      di3AppendTableRows_ = function (table, rows) { appendCount++; calls.push(appendCount === 1 ? "APPEND_TARGET" : "RESTORE_SOURCE"); };
+      di3UpdateLotRemainingRows_ = function () { calls.push("UPDATE_LOTS"); throw new Error("simulated lot update failure"); };
+      di3RestoreLotRemainingSnapshot_ = function () { calls.push("RESTORE_LOTS"); };
+      var threw = false;
+      try {
+        di3ReplaceFifoProjectionSafely_(function () { return true; }, [["target-allocation"]], [], {}, null,
+          { replay_id: "replay-2" });
+      } catch (error) { threw = /simulated lot update failure/.test(error.message); }
+      equal(threw, true);
+      equal(calls.join("|"), "PREPARED_ARCHIVE|DELETE_ACTIVE|APPEND_TARGET|UPDATE_LOTS|DELETE_ACTIVE|RESTORE_SOURCE|RESTORE_LOTS");
+    } finally {
+      di3ReadTaggedRowsByColumnValue_ = originals.read;
+      di3PrepareFifoReplay_ = originals.prepare;
+      di3DeleteStockAllocationRows_ = originals.remove;
+      di3AppendTableRows_ = originals.append;
+      di3RestoreLotRemainingSnapshot_ = originals.restoreLots;
+      di3UpdateLotRemainingRows_ = originals.updateLots;
+    }
+  });
+
   test("pending product replay is reconstructed and state watermark is refreshed", function () {
     var originals = {
       pending: di3GetPendingFifoReplayEventsForRun_,
