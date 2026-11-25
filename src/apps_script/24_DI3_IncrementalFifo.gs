@@ -70,6 +70,15 @@ function di3AssignLedgerSequencesToLines_(lines) {
   return sequences;
 }
 
+/** Fail before a domain handler appends an event whose immutable sequence is absent or invalid. */
+function di3RequireLedgerSequence_(value, movementId) {
+  var sequence = Number(value);
+  if (!Number.isSafeInteger(sequence) || sequence <= 0) {
+    throw new Error("Для складского движения " + String(movementId || "") + " отсутствует корректный ledger_sequence.");
+  }
+  return sequence;
+}
+
 /** Read full rows only for events whose immutable sequence exceeds the committed cursor. */
 function di3ReadFifoLedgerTail_(cursor, sequenceIndex) {
   cursor = Number(cursor);
