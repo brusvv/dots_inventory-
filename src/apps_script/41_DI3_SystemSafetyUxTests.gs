@@ -111,6 +111,16 @@ function di3RunSystemSafetyUxUnitTests() {
   });
 
 
+  test("actor identity is captured centrally and never falls back to effective user", function () {
+    var source = di3CaptureActorContext_.toString();
+    includes(source, "Session.getActiveUser().getEmail()");
+    includes(source, 'identity_status: email ? "IDENTIFIED" : "UNAVAILABLE"');
+    includes(source, 'identity_source: email ? "ACTIVE_USER" : "NONE"');
+    equal(source.indexOf("getEffectiveUser"), -1, "Effective user must never be used as a fallback");
+    includes(di3GetActorEmail_.toString(), "di3CaptureActorContext_()");
+    includes(di3SettingsActor_.toString(), "di3GetActorEmail_()");
+  });
+
   test("operation attempt diagnostics preserve the executor actor across recovery and manual review", function () {
     var originalGetSpreadsheet = di3GetSpreadsheet_;
     var originalReadTableValues = di3ReadTableValues_;
