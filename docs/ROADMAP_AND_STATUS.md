@@ -239,3 +239,12 @@ The following issues have source changes and local regression coverage. They are
 - Added a structural regression check in `di3RunSystemSafetyUxUnitTests()`.
 - **Not verified:** test suite and syntax checks have not been run. No deployment or workbook changes were made.
 - **Still open:** propagate the persisted initiating actor from `Operations.actor` into domain audit events during recovery; preserve the actual executor in `OperationAttempts.actor`; add identity-status persistence only after schema and runtime semantics are reviewed.
+
+
+## F-20 — operation initiator attribution — 25.11.2026
+
+- Added `di3GetOperationInitiatorActor_(operationId)`, which resolves the initiator from immutable `Operations.actor`. A blank/missing operation actor remains blank; it is not replaced by the recovery executor.
+- Order creation/status history and order dispatch/return movement details now use the original initiator. Supply receipt status history uses the same rule.
+- `OperationAttempts.actor` remains the actual executor for each attempt.
+- Added regression coverage for initiator A vs recovery executor B, blank/missing actor cases, and the relevant order/supply audit writers.
+- **Not verified:** source tests and syntax checks have not been run; restored-workbook recovery acceptance is pending. No workbook or deployment changes.
