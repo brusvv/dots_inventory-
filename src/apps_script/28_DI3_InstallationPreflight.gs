@@ -1,5 +1,51 @@
 /** Read-only installation preflight. Must run before setup performs any workbook mutation. */
 
+/** Visible sheets owned by the application; unknown populated tabs are never silently overwritten. */
+var DI3_MANAGED_WORKSPACE_SHEET_NAMES = Object.freeze([
+  "Продукты", "Карточка продукта", "Поставка v3", "Реестр поставок v3",
+  "Управление складом", "Менеджер склада", "Склад", "Журнал склада",
+  "История FIFO", "Калькулятор заказа v3", "Реестр заказов v3",
+  "Настройки", "Финансы"
+]);
+
+function di3FindUnexpectedPopulatedTabs_(sheets) {
+  var allowed = Object.create(null);
+  DI3_CORE_TABLE_NAMES.forEach(function (name) { allowed[name] = true; });
+  DI3_MANAGED_WORKSPACE_SHEET_NAMES.forEach(function (name) { allowed[name] = true; });
+  ["Sheet1", "Лист1", "Лист 1"].forEach(function (name) { allowed[name] = true; });
+  return (sheets || []).filter(function (sheet) {
+    var name = String(sheet.getName());
+    if (allowed[name]) return false;
+    var hasCells = Number(sheet.getLastRow()) > 0 || Number(sheet.getLastColumn()) > 0;
+    var hasCharts = !!(sheet.getCharts && sheet.getCharts().length);
+    return hasCells || hasCharts;
+  }).map(function (sheet) {
+    return {
+      name: String(sheet.getName()),
+      last_row: Number(sheet.getLastRow()) || 0,
+      last_column: Number(sheet.getLastColumn()) || 0,
+      charts: sheet.getCharts ? sheet.getCharts().length : 0,
+      hidden: !!(sheet.isSheetHidden && sheet.isSheetHidden())
+    };
+  });
+}
+
+function di3PreflightUnknownPopulatedTabs_() {
+  var spreadsheet = di3GetSpreadsheet_();
+  var unexpected = di3FindUnexpectedPopulatedTabs_(spreadsheet.getSheets());
+  return {
+    status: unexpected.length ? "BLOCKED" : "READY",
+    checked_tabs: spreadsheet.getSheets().length,
+    unexpected_tabs: unexpected,
+    issues: unexpected.map(function (item) {
+      return "Неизвестный лист «" + item.name + "» содержит данные или диаграммы (" +
+        item.last_row + " строк × " + item.last_column + " столбцов). Dry Run не будет переименовывать, очищать или удалять этот лист. Перенеси данные или убери лист вручную после резервного копирования.";
+    }),
+    warnings: [],
+    planned_changes: []
+  };
+}
+
 function di3PreflightCellText_(sheet, a1) {
   return di3NormalizeHeader_(sheet.getRange(a1).getDisplayValue());
 }
@@ -332,14 +378,17 @@ function di3DryRunInstallation() {
     ? di3GetSchemaVersioningReport_() : { status: "READY", current_version: 0, target_version: 0, issues: [], warnings: [], planned_changes: [] };
   var timeZone = typeof di3PreflightTimeZoneConfig_ === "function"
     ? di3PreflightTimeZoneConfig_() : { issues: [], warnings: [], planned_changes: [] };
-  var issues = core.issues.concat(workspace.issues, settings.issues, timeZone.issues, schemaVersioning.issues || []);
-  var warnings = core.warnings.concat(workspace.warnings, settings.warnings, timeZone.warnings, schemaVersioning.warnings || []);
-  var planned = core.planned_changes.concat(workspace.planned_changes, timeZone.planned_changes, schemaVersioning.planned_changes || []);
+  var unknownTabs = di3PreflightUnknownPopulatedTabs_();
+  var issues = core.issues.concat(workspace.issues, settings.issues, timeZone.issues, schemaVersioning.issues || [], unknownTabs.issues);
+  var warnings = core.warnings.concat(workspace.warnings, settings.warnings, timeZone.warnings, schemaVersioning.warnings || [], unknownTabs.warnings);
+  var planned = core.planned_changes.concat(workspace.planned_changes, timeZone.planned_changes, schemaVersioning.planned_changes || [], unknownTabs.planned_changes);
   return {
     status: issues.length ? "BLOCKED" : "READY",
     read_only: true,
     checked_at: new Date(),
     checked_system_sheets: DI3_CORE_TABLE_NAMES.length,
+    checked_workbook_tabs: unknownTabs.checked_tabs,
+    unexpected_populated_tabs: unknownTabs.unexpected_tabs,
     time_zone: timeZone,
     schema_versioning: schemaVersioning,
     issues: issues,
