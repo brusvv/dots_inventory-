@@ -186,7 +186,7 @@ function di3EnsureSupplyStatusHistory_(supplyId, oldStatus, newStatus, effective
   actor = di3GetActorEmail_();
   di3AppendTableRows_("DocumentStatusHistory", [[
     di3MakeUuid_(), "SUPPLY", supplyId, oldStatus || "", newStatus,
-    effectiveAt, actor, operationId || "", comment || ""
+    effectiveAt, operationId ? di3GetOperationInitiatorActor_(operationId) : di3GetActorEmail_(), operationId || "", comment || ""
   ]]);
   return true;
 }
