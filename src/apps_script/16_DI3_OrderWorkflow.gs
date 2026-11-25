@@ -340,6 +340,7 @@ function di3BuildOrderReturnPayload_(order, items, effectiveAt) {
 
 function di3BuildOrderReturnRows_(operationId, payload) {
   var ledger = [], details = [], lots = [];
+  var actor = di3GetOperationInitiatorActor_(operationId);
   payload.lines.forEach(function (line) {
     ledger.push([
       line.movement_id, operationId, line.event_key, line.product_id,
@@ -349,7 +350,7 @@ function di3BuildOrderReturnRows_(operationId, payload) {
     ]);
     details.push([
       line.movement_id, line.display_code, "IN", "ORDER_RETURN", "", "",
-      line.cost_status, line.original_dispatch_movement_id, di3GetActorEmail_(),
+      line.cost_status, line.original_dispatch_movement_id, actor,
       "Возврат исходной FIFO-партии " + line.source_lot_id, "ORDER"
     ]);
     lots.push([
