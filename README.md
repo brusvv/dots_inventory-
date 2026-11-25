@@ -1,7 +1,7 @@
 # Dots Inventory v3 — RC8 source repository snapshot
 
 **Base source snapshot:** 2026-11-24  
-**Local patches:** 2026-11-25 (UX-01–UX-10, commission payer/schema v3, Dashboard diagnostics, F-01 and source-only hardening F-03/F-04/F-05/F-09/F-11/F-13/F-15/F-16/F-18)  
+**Local patches:** 2026-11-25 (UX-01–UX-10, commission payer/schema v3, Dashboard diagnostics, F-01, source-only hardening F-03/F-04/F-05/F-09/F-11/F-13/F-15/F-16/F-18, and F-10 append-only period events)  
 **Source archive supplied in this chat:** `40.rar`  
 **SHA-256 of source archive:** `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`
 
@@ -87,3 +87,10 @@ This fix is locally tested but **not runtime-accepted** in Google Sheets. The ru
 The current working tree also contains source-only hardening for historical-supply lock scope (F-03), fail-closed payload size validation (F-04 mitigation), immutable full-edit retry fingerprint checks (F-05), independent warehouse-view refresh plus a pending-operation warning in the stock journal (F-09 partial), non-reserving supply-number preview (F-11), `SpreadsheetApp.flush()` before backup snapshot/copy (F-13), mutual exclusion of historical-supply and full-edit modes (F-15), schema-name-based Finance Dashboard column access (F-16), and symmetric half-up minor-unit rounding (F-18). Details and limitations are in `docs/UX_PATCH_STATIC_HARDENING.md`.
 
 **Important limitations:** F-04 is a 45,000-character fail-closed guard, not chunked payload storage. F-09 repeated-read performance remains open. Backup/lock behavior and all dialogs still require runtime acceptance. The Warehouse Dashboard chart is still visibly blank in the user's Sheets copy; source changes and local tests have not identified or closed the rendering defect.
+
+
+## F-10 — append-only accounting-period events — 25.11.2026
+
+Period close/reopen no longer overwrites the existing `PeriodLocks` row. Each transition appends a new `LOCKED` or `REOPENED` event; PeriodGuard derives the current state from the last event for each period. The existing 10-column schema is reused, so this source patch does not require a schema migration. Three structural regression checks were added to `41_DI3_SystemSafetyUxTests.gs`; they have not yet been executed in this GitHub-only continuation. Existing historical rows remain readable, but previously overwritten reopen history cannot be reconstructed retroactively. See `docs/UX_PATCH_F10_APPEND_ONLY_PERIOD_AUDIT.md`.
+
+**Acceptance pending:** run the complete local syntax and Node suites, then verify close → reopen → re-close on a restored test workbook. Confirm each transition adds exactly one row, earlier rows remain byte-for-byte unchanged, and PeriodGuard status/operation blocking follows the latest event.
