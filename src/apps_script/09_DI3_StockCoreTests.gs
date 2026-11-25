@@ -567,6 +567,7 @@ function di3RunStockCoreUnitTests() {
   test("FIFO projection rolls back allocations and lot cache after lot update failure", function () {
     var originals = {
       read: di3ReadTaggedRowsByColumnValue_,
+      readTable: di3ReadTableValues_,
       prepare: di3PrepareFifoReplay_,
       remove: di3DeleteStockAllocationRows_,
       append: di3AppendTableRows_,
@@ -576,6 +577,7 @@ function di3RunStockCoreUnitTests() {
     var calls = [], appendCount = 0, sourceRow = ["source-allocation"];
     try {
       di3ReadTaggedRowsByColumnValue_ = function () { return [sourceRow]; };
+      di3ReadTableValues_ = function (name) { if (name !== "StockAllocations") throw new Error("Unexpected table " + name); return [sourceRow]; };
       di3PrepareFifoReplay_ = function () { calls.push("PREPARED_ARCHIVE"); return { already_target: false, source_rows: [sourceRow] }; };
       di3DeleteStockAllocationRows_ = function () { calls.push("DELETE_ACTIVE"); return 1; };
       di3AppendTableRows_ = function (table, rows) { appendCount++; calls.push(appendCount === 1 ? "APPEND_TARGET" : "RESTORE_SOURCE"); };
@@ -590,6 +592,7 @@ function di3RunStockCoreUnitTests() {
       equal(calls.join("|"), "PREPARED_ARCHIVE|DELETE_ACTIVE|APPEND_TARGET|UPDATE_LOTS|DELETE_ACTIVE|RESTORE_SOURCE|RESTORE_LOTS");
     } finally {
       di3ReadTaggedRowsByColumnValue_ = originals.read;
+      di3ReadTableValues_ = originals.readTable;
       di3PrepareFifoReplay_ = originals.prepare;
       di3DeleteStockAllocationRows_ = originals.remove;
       di3AppendTableRows_ = originals.append;
