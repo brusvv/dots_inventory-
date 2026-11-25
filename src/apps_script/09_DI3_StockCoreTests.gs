@@ -12,8 +12,10 @@ function di3RunStockCoreUnitTests() {
   function near(actual, expected, epsilon, message) {
     if (Math.abs(actual - expected) > (epsilon || 1e-8)) throw new Error((message || "Values differ") + ": expected " + expected + ", got " + actual);
   }
+  var rowLedgerSequence = 0;
   function rowLedger(id, productId, delta, date, recorded) {
-    return [id, "op-" + id, "event-" + id, productId, "TEST", id, delta, new Date(date), new Date(recorded || date), "", "", ""];
+    rowLedgerSequence++;
+    return [id, "op-" + id, "event-" + id, productId, "TEST", id, delta, new Date(date), new Date(recorded || date), "", "", "", rowLedgerSequence];
   }
   function rowDetail(id, type, reason) {
     return [id, "MOV-000001", type, reason || "TEST", "", "", "", "", "", "", "TESTS"];
@@ -162,7 +164,7 @@ function di3RunStockCoreUnitTests() {
     lot2[13] = "";
     lot2[14] = 2500;
     var state = [["p1", new Date("2026-01-02T09:00:00Z"), new Date("2026-01-02T09:00:00Z"),
-      "out1", 3, 2, 6, new Date("2026-01-02T09:01:00Z")]];
+      "out1", ledger[1][12], 2, 6, new Date("2026-01-02T09:01:00Z")]];
     var tailIn = ledger[2].slice();
     var tailOut = ledger[3].slice();
     tailIn._di3RowNumber = 4;
@@ -206,7 +208,7 @@ function di3RunStockCoreUnitTests() {
     backdatedLot[13] = "";
     backdatedLot[14] = 5000;
     var state = [["p1", new Date("2026-01-03T09:00:00Z"), new Date("2026-01-03T10:00:00Z"),
-      "out1", 3, 2, 5, new Date("2026-01-03T10:01:00Z")]];
+      "out1", ledger[1][12], 2, 5, new Date("2026-01-03T10:01:00Z")]];
     var tailPlan = di3BuildFifoTailPlanForProduct_("p1", [backdatedLedger],
       [backdatedDetail], [lot1, backdatedLot], [], state);
     equal(tailPlan.mode, "PRODUCT_REPLAY_REQUIRED");
@@ -227,7 +229,7 @@ function di3RunStockCoreUnitTests() {
     lot[13] = 8;
     lot[14] = 10000;
     var state = [["p1", new Date("2026-01-03T09:00:00Z"), new Date("2026-01-03T10:00:00Z"),
-      "out1", 3, 2, 8, new Date("2026-01-03T10:01:00Z")]];
+      "out1", ledger[0][12] - 1, 2, 8, new Date("2026-01-03T10:01:00Z")]];
     var existingPartialAllocation = [["allocation-1", "run-old", "out2", "l1", "p1",
       "CONSUME", 1, 10, "KNOWN", 10, new Date("2026-01-04T09:00:00Z"),
       new Date("2026-01-04T09:00:00Z"), "", 1000]];
@@ -285,6 +287,80 @@ function di3RunStockCoreUnitTests() {
         [rowLot("l2", "p1", "z-in", 2, 10, "KNOWN", sameEffective, sameRecorded)], null);
     } catch (error) { threw = /Недостаточно остатка/.test(error.message); }
     equal(threw, true);
+  });
+
+  test("FifoProductState stores the maximum ledger sequence independently of business event order", function () {
+    var ledger = [
+      ["backdated", "op", "event", "p1", "TEST", "doc", 1, new Date("2026-01-01"), new Date("2026-01-10"), "", "", "", 18],
+      ["later", "op", "event", "p1", "TEST", "doc", 1, new Date("2026-01-05"), new Date("2026-01-06"), "", "", "", 11]
+    ];
+    var state = di3BuildFifoProductStateRows_(["p1"], ledger, []);
+    equal(state[0][3], "later", "Business watermark remains based on effective/recorded event order");
+    equal(state[0][4], 18, "Sequence watermark is the maximum ingested sequence");
+  });
+
+  test("incremental product state advances sequence watermark without changing business event watermark", function () {
+    var previous = ["p1", new Date("2026-01-05"), new Date("2026-01-06"), "latest-business-event", 18, 4, 7, new Date()];
+    var backdated = ["backdated-new", "op", "event", "p1", "TEST", "doc", 1,
+      new Date("2026-01-01"), new Date("2026-01-11"), "", "", "", 23];
+    var state = di3BuildIncrementalFifoProductStateRow_("p1", [backdated], [], previous);
+    equal(state[3], "latest-business-event");
+    equal(state[4], 23);
+    equal(state[5], 5);
+  });
+
+  test("ledger sequence tail reader finds appended events after physical row reordering", function () {
+    var originalGetSheet = di3GetSheetOrThrow_;
+    var fullReads = [];
+    var rows = [
+      ["m5", "op", "e5", "p1", "T", "d", 1, new Date("2026-01-01"), new Date("2026-01-01"), "", "", "", 5],
+      ["m2", "op", "e2", "p1", "T", "d", 1, new Date("2026-01-02"), new Date("2026-01-02"), "", "", "", 2],
+      ["m7", "op", "e7", "p1", "T", "d", 1, new Date("2026-01-03"), new Date("2026-01-03"), "", "", "", 7]
+    ];
+    var sheet = {
+      getLastRow: function () { return 4; },
+      getRange: function (row, column, count, width) {
+        if (width === 1 && column === 1) return { getValues: function () { return rows.slice(row - 2, row - 2 + count).map(function (x) { return [x[0]]; }); } };
+        if (width === 1 && column === 13) return { getValues: function () { return rows.slice(row - 2, row - 2 + count).map(function (x) { return [x[12]]; }); } };
+        fullReads.push({ row: row, count: count });
+        return { getValues: function () { return rows.slice(row - 2, row - 2 + count).map(function (x) { return x.slice(); }); } };
+      }
+    };
+    try {
+      di3GetSheetOrThrow_ = function (name) { equal(name, "StockLedger"); return sheet; };
+      var index = di3ReadLedgerSequenceIndex_();
+      equal(index.max_sequence, 7);
+      var tail = di3ReadFifoLedgerTail_(4, index);
+      equal(tail.length, 2);
+      equal(tail[0][0], "m5");
+      equal(tail[1][0], "m7");
+      equal(tail[0]._di3RowNumber, 2);
+      equal(tail[1]._di3RowNumber, 4);
+      equal(fullReads.length, 2, "Non-contiguous tail rows should be fetched as two narrow ranges");
+    } finally { di3GetSheetOrThrow_ = originalGetSheet; }
+  });
+
+  test("ledger sequence index rejects missing and duplicate populated values", function () {
+    var originalGetSheet = di3GetSheetOrThrow_;
+    function fakeSheet(ids, seqs) {
+      return {
+        getLastRow: function () { return ids.length + 1; },
+        getRange: function (row, column, count) {
+          var values = column === 1 ? ids : seqs;
+          return { getValues: function () { return values.slice(row - 2, row - 2 + count).map(function (x) { return [x]; }); } };
+        }
+      };
+    }
+    try {
+      di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [1, 1]); };
+      var duplicateThrew = false;
+      try { di3ReadLedgerSequenceIndex_(); } catch (error) { duplicateThrew = /повторяется ledger_sequence/.test(error.message); }
+      equal(duplicateThrew, true);
+      di3GetSheetOrThrow_ = function () { return fakeSheet(["m1", "m2"], [1, ""]); };
+      var missingThrew = false;
+      try { di3ReadLedgerSequenceIndex_(); } catch (error) { missingThrew = /отсутствует ledger_sequence/.test(error.message); }
+      equal(missingThrew, true);
+    } finally { di3GetSheetOrThrow_ = originalGetSheet; }
   });
 
   test("offline sale revenue is separate from FIFO cost", function () {
