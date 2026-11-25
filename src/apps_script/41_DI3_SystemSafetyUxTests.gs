@@ -111,11 +111,29 @@ function di3RunSystemSafetyUxUnitTests() {
   });
 
 
-  test("actor identity is captured centrally and never falls back to effective user", function () {
+  test("actor identity capture distinguishes identified and unavailable Sessions", function () {
+    var identified = di3CaptureActorContext_({
+      getActiveUser: function () { return { getEmail: function () { return "initiator@example.test"; } }; }
+    });
+    equal(identified.email, "initiator@example.test");
+    equal(identified.identity_status, "IDENTIFIED");
+    equal(identified.identity_source, "ACTIVE_USER");
+
+    var empty = di3CaptureActorContext_({
+      getActiveUser: function () { return { getEmail: function () { return ""; } }; }
+    });
+    equal(empty.email, "");
+    equal(empty.identity_status, "UNAVAILABLE");
+    equal(empty.identity_source, "NONE");
+
+    var unavailable = di3CaptureActorContext_({
+      getActiveUser: function () { throw new Error("identity unavailable"); }
+    });
+    equal(unavailable.email, "");
+    equal(unavailable.identity_status, "UNAVAILABLE");
+    equal(unavailable.identity_source, "NONE");
+
     var source = di3CaptureActorContext_.toString();
-    includes(source, "Session.getActiveUser().getEmail()");
-    includes(source, 'identity_status: email ? "IDENTIFIED" : "UNAVAILABLE"');
-    includes(source, 'identity_source: email ? "ACTIVE_USER" : "NONE"');
     equal(source.indexOf("getEffectiveUser"), -1, "Effective user must never be used as a fallback");
     includes(di3GetActorEmail_.toString(), "di3CaptureActorContext_()");
     includes(di3SettingsActor_.toString(), "di3GetActorEmail_()");
