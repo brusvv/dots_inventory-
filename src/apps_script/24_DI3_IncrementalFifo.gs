@@ -237,6 +237,36 @@ function di3SetAllLotRemainingFromReplay_(lotRows, replayPlan) {
 }
 
 
+/** Pure selector for an interrupted FIFO run; ambiguous or changed identity fails closed. */
+function di3SelectReusableFifoRun_(candidateRows, options) {
+  options = options || {};
+  var operationId = String(options.operation_id || "");
+  var scopeType = String(options.scope_type || (options.full_replay ? "FULL" : "PRODUCT_SET"));
+  var scopeJson = String(options.scope_json || "[]");
+  var inputFingerprint = String(options.input_fingerprint || "");
+  var pending = (candidateRows || []).filter(function (match) {
+    var row = match.values || match;
+    var status = String(row[2] || "");
+    if (status !== "PREPARED" && status !== "FAILED") return false;
+    if (operationId) return String(row[10] || "") === operationId;
+    return !String(row[10] || "") && scopeType === "FULL" &&
+      String(row[12] || "") === "FULL";
+  });
+  if (!pending.length) return null;
+  if (pending.length !== 1) throw new Error("Найдено несколько незавершённых FIFO run для одной операции/области. Автоматическое продолжение запрещено.");
+  var match = pending[0], row = match.values || match;
+  if (String(row[12] || "") !== scopeType || String(row[13] || "") !== scopeJson ||
+      String(row[14] || "") !== inputFingerprint) {
+    throw new Error("Незавершённый FIFO run имеет другой scope или input fingerprint. Новое исполнение заблокировано до сверки.");
+  }
+  return {
+    run_id: String(row[0]), run_sequence: Number(row[1]), row_number: Number(match.row_number || 0),
+    operation_id: String(row[10] || ""), replay_id: String(row[11] || ""),
+    scope_type: String(row[12] || ""), scope_json: String(row[13] || ""),
+    input_fingerprint: String(row[14] || ""), status: String(row[2] || "")
+  };
+}
+
 /** Stable SHA-256 fingerprint for replay inputs and projection snapshots. */
 function di3BuildFifoFingerprint_(value) {
   if (typeof di3BuildManualOperationPayloadHash_ !== "function") {
@@ -249,6 +279,24 @@ function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount, o
   options = options || {};
   var sheet = di3GetSheetOrThrow_("FifoAllocationRuns");
   var lastRow = sheet.getLastRow();
+  var operationId = String(options.operation_id || "");
+  var scopeType = String(options.scope_type || (options.full_replay ? "FULL" : "PRODUCT_SET"));
+  var scopeJson = String(options.scope_json || "[]");
+  var inputFingerprint = String(options.input_fingerprint || "");
+  var candidates = operationId
+    ? di3ReadRowsByColumnValue_("FifoAllocationRuns", 10, operationId)
+    : (scopeType === "FULL" ? di3ReadRowsByColumnValue_("FifoAllocationRuns", 12, "FULL").filter(function (match) {
+        return !String(match.values[10] || "");
+      }) : []);
+  var reusable = di3SelectReusableFifoRun_(candidates, {
+    operation_id: operationId, scope_type: scopeType, scope_json: scopeJson,
+    input_fingerprint: inputFingerprint, full_replay: !!options.full_replay
+  });
+  if (reusable) {
+    if (reusable.status === "FAILED") di3UpdateFifoRunStatus_(reusable.row_number, "PREPARED", "", "", null);
+    reusable.status = "PREPARED";
+    return reusable;
+  }
   // Run records are append-only. Read the last sequence, not the entire history.
   var lastSequence = lastRow >= 2 ? Number(sheet.getRange(lastRow, 2, 1, 1).getValue()) : 0;
   if (!Number.isFinite(lastSequence) || lastSequence < 0) {
@@ -258,11 +306,7 @@ function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount, o
   }
   var sequence = lastSequence + 1;
   var runId = di3MakeUuid_();
-  var operationId = String(options.operation_id || "");
   var replayId = String(options.replay_id || (operationId ? "OP:" + operationId : "FULL:" + runId));
-  var scopeType = String(options.scope_type || (options.full_replay ? "FULL" : "PRODUCT_SET"));
-  var scopeJson = String(options.scope_json || "[]");
-  var inputFingerprint = String(options.input_fingerprint || "");
   var row = [runId, sequence, "PREPARED", reason || "INCREMENTAL_FIFO", new Date(), "",
     ledgerCount, allocationCount, productCount, "", operationId, replayId, scopeType, scopeJson, inputFingerprint];
   di3AppendTableRows_("FifoAllocationRuns", [row]);
