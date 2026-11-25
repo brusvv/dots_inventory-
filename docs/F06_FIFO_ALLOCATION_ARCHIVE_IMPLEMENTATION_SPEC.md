@@ -13,7 +13,7 @@
 
 **Not implemented yet:** deterministic allocation IDs; idempotent archive snapshot writes; PREPARED/COMMITTED event transitions; stable child replay IDs for each product replay; pending-run reuse; crash recovery and quarantine. F-06 remains incomplete and no active projection is archived yet.
 
-**Source verification:** GitHub Actions run `45710629961` passed syntax checks for 50 `.gs` files and all seven Node suites (99/99). This validates the source/test harness only; Apps Script runtime fault-injection and backup/restore acceptance remain pending.
+**Source verification:** GitHub Actions run `45710935351` passed syntax checks for 50 `.gs` files and all seven Node suites (99/99). This validates the source/test harness only; Apps Script runtime fault-injection and backup/restore acceptance remain pending.
 ## 1. Цель и границы
 
 F-06 должен сохранять каждую вытесненную версию активных FIFO-распределений и обеспечивать восстановление после остановки Apps Script между отдельными записями Google Sheets.
