@@ -177,3 +177,5 @@ The new tests are committed but **have not been executed**. Syntax checks and re
 
 
 The supply receipt detail writer was also updated after the initial slice: its existing `StockMovementDetails.actor` slot now records the registered initiator from `Operations.actor`. The regression test checks this writer as well.
+
+Manual warehouse stock movements were included in the same pass: the existing `StockMovementDetails.actor` slot is now populated from the operation's persisted initiator. The source regression check covers this writer too.
