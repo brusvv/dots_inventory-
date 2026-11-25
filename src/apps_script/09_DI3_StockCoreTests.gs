@@ -397,6 +397,38 @@ function di3RunStockCoreUnitTests() {
     equal(threw, true);
   });
 
+  test("FIFO integrity diagnostics validate append-only replay archives and pending states", function () {
+    var originalFingerprint = di3BuildFifoFingerprint_;
+    try {
+      di3BuildFifoFingerprint_ = function (value) { return JSON.stringify(value); };
+      var sourceAllocation = ["alloc-1", "old-run", "move-1", "lot-1", "p1", "CONSUME", 2, 5,
+        "KNOWN", 10, new Date("2026-01-01"), new Date("2026-01-01"), "", 1000];
+      var allocationArchive = ["archive-alloc-1", "replay-1", new Date("2026-01-02"), "TEST"].concat(sourceAllocation);
+      var lotArchive = ["archive-lot-1", "replay-1", "lot-1", "p1", 3, new Date("2026-01-02")];
+      var allocationFingerprint = di3BuildFifoAllocationSnapshotFingerprint_([sourceAllocation]);
+      var lotFingerprint = di3BuildFifoFingerprint_([["lot-1", "p1", 3]]);
+      var run = ["run-1", 1, "PREPARED", "TEST", new Date(), "", 2, 1, 1, "", "", "RUN:run-1", "PRODUCT_SET", '["p1"]', "input"];
+      var event = ["event-1", "replay-1", 1, "PREPARED", "run-1", "", "PRODUCT", '["p1"]',
+        "input", allocationFingerprint, "target-alloc", lotFingerprint, "target-lot", new Date(), "{}"];
+      var valid = di3BuildFifoReplayArchiveDiagnostics_([run], [allocationArchive], [lotArchive], [event]);
+      equal(valid.ok, true);
+      equal(valid.summary.pending_runs, 1);
+      equal(valid.summary.pending_replays, 1);
+      equal(valid.summary.allocation_archive_rows, 1);
+      equal(valid.warnings.some(function (warning) { return warning.indexOf("PREPARED") >= 0; }), true);
+
+      var corruptedAllocation = allocationArchive.slice();
+      corruptedAllocation[10] = 9;
+      var corrupted = di3BuildFifoReplayArchiveDiagnostics_([run], [corruptedAllocation], [lotArchive], [event]);
+      equal(corrupted.ok, false);
+      equal(corrupted.errors.some(function (error) { return error.indexOf("source snapshot fingerprint") >= 0; }), true);
+
+      var orphan = di3BuildFifoReplayArchiveDiagnostics_([run], [allocationArchive], [lotArchive], []);
+      equal(orphan.ok, true);
+      equal(orphan.warnings.some(function (warning) { return warning.indexOf("не имеет PREPARED event") >= 0; }), true);
+    } finally { di3BuildFifoFingerprint_ = originalFingerprint; }
+  });
+
   test("clean FIFO baseline includes sequence and append-only replay archive schemas", function () {
     equal(DI3_TABLE_SCHEMAS.StockLedger[12], "ledger_sequence");
     equal(DI3_TABLE_SCHEMAS.FifoProductState[4], "last_processed_ledger_sequence");
