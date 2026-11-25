@@ -438,6 +438,117 @@ function di3RunStockCoreUnitTests() {
     }
   });
 
+  test("pending product replay is reconstructed and state watermark is refreshed", function () {
+    var originals = {
+      pending: di3GetPendingFifoReplayEventsForRun_,
+      readTable: di3ReadTableValues_,
+      inputFingerprint: di3BuildFifoReplayInputFingerprint_,
+      replayPlan: di3BuildProductFifoReplayPlan_,
+      allocationRows: di3BuildFifoAllocationRows_,
+      replace: di3ReplaceFifoProjectionSafely_,
+      stateRows: di3BuildFifoProductStateRows_,
+      upsert: di3UpsertFifoProductStateRows_
+    };
+    var replaceCalls = 0, upsertRows = null;
+    var ledger = [["m1", "op", "evt", "p1", "T", "d", -1, new Date("2026-01-01"), new Date("2026-01-01"), "", "", "", 8]];
+    var details = [["m1", "code", "OUT", "SALE", "", "", "KNOWN", "", "", "", "TEST"]];
+    var lots = [["l1", "p1", "m0", "SUPPLY", "s1", "pv1", new Date("2026-01-01"), new Date("2026-01-01"), 2, 5, "KNOWN", "EUR", "", 0, 1000]];
+    var event = ["evt-1", "OP:op-1:PRODUCT:p1", 1, "PREPARED", "run-1", "op-1",
+      "PRODUCT", '["p1"]', "input-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
+    try {
+      di3GetPendingFifoReplayEventsForRun_ = function () { return [{ row_number: 2, values: event }]; };
+      di3ReadTableValues_ = function (name) {
+        if (name === "StockLedger") return ledger;
+        if (name === "StockMovementDetails") return details;
+        if (name === "StockLots") return lots;
+        throw new Error("Unexpected table " + name);
+      };
+      di3BuildFifoReplayInputFingerprint_ = function () { return "input-fp"; };
+      di3BuildProductFifoReplayPlan_ = function () {
+        return { allocations: [{ movement_id: "m1", lot_id: "l1", product_id: "p1", allocation_type: "CONSUME",
+          quantity: 1, unit_cost: 5, cost_status: "KNOWN", allocated_cost: 5, effective_at: new Date(), recorded_at: new Date(), allocated_cost_minor: 500 }],
+          remaining_lots: [{ lot_id: "l1", remaining_quantity: 1 }], movement_count: 1 };
+      };
+      di3BuildFifoAllocationRows_ = function () { return [["target-allocation"]]; };
+      di3ReplaceFifoProjectionSafely_ = function (predicate, targetRows, lotRows, remaining, productId, context) {
+        replaceCalls++;
+        equal(context.replay_id, "OP:op-1:PRODUCT:p1");
+        equal(context.target_rows.length, 1);
+        equal(remaining.l1, 1);
+        return { allocations_removed: 1, allocations_written: 1 };
+      };
+      di3BuildFifoProductStateRows_ = function (ids, productLedgerRows) {
+        equal(ids[0], "p1");
+        equal(productLedgerRows.length, 1);
+        return [["p1-state"]];
+      };
+      di3UpsertFifoProductStateRows_ = function (rows) { upsertRows = rows; };
+      var result = di3RecoverPendingFifoReplaysForRun_({ run_id: "run-1", created_at: new Date() }, "TEST");
+      equal(result.recovered, 1);
+      equal(result.products[0], "p1");
+      equal(replaceCalls, 1);
+      equal(upsertRows[0][0], "p1-state");
+    } finally {
+      di3GetPendingFifoReplayEventsForRun_ = originals.pending;
+      di3ReadTableValues_ = originals.readTable;
+      di3BuildFifoReplayInputFingerprint_ = originals.inputFingerprint;
+      di3BuildProductFifoReplayPlan_ = originals.replayPlan;
+      di3BuildFifoAllocationRows_ = originals.allocationRows;
+      di3ReplaceFifoProjectionSafely_ = originals.replace;
+      di3BuildFifoProductStateRows_ = originals.stateRows;
+      di3UpsertFifoProductStateRows_ = originals.upsert;
+    }
+  });
+
+  test("pending replay with changed immutable inputs is quarantined before projection writes", function () {
+    var originals = {
+      pending: di3GetPendingFifoReplayEventsForRun_,
+      readTable: di3ReadTableValues_,
+      inputFingerprint: di3BuildFifoReplayInputFingerprint_,
+      appendEvent: di3AppendFifoReplayEvent_,
+      replace: di3ReplaceFifoProjectionSafely_
+    };
+    var quarantineType = "";
+    var event = ["evt-1", "OP:op-1:PRODUCT:p1", 1, "PREPARED", "run-1", "op-1",
+      "PRODUCT", '["p1"]', "expected-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
+    try {
+      di3GetPendingFifoReplayEventsForRun_ = function () { return [{ row_number: 2, values: event }]; };
+      di3ReadTableValues_ = function (name) { return name === "StockLedger" ? [] : []; };
+      di3BuildFifoReplayInputFingerprint_ = function () { return "different-fp"; };
+      di3AppendFifoReplayEvent_ = function (context, type) { quarantineType = type; return {}; };
+      var replaceCalls = 0;
+      di3ReplaceFifoProjectionSafely_ = function () { replaceCalls++; };
+      var threw = false;
+      try { di3RecoverPendingFifoReplaysForRun_({ run_id: "run-1", created_at: new Date() }, "TEST"); }
+      catch (error) { threw = /quarantine/.test(error.message); }
+      equal(threw, true);
+      equal(quarantineType, "QUARANTINED");
+      equal(replaceCalls, 0);
+    } finally {
+      di3GetPendingFifoReplayEventsForRun_ = originals.pending;
+      di3ReadTableValues_ = originals.readTable;
+      di3BuildFifoReplayInputFingerprint_ = originals.inputFingerprint;
+      di3AppendFifoReplayEvent_ = originals.appendEvent;
+      di3ReplaceFifoProjectionSafely_ = originals.replace;
+    }
+  });
+
+  test("unresolved FIFO run blocks allocation of new stock sequences", function () {
+    var originalGetSheet = di3GetSheetOrThrow_;
+    try {
+      di3GetSheetOrThrow_ = function (name) {
+        equal(name, "FifoAllocationRuns");
+        return {
+          getLastRow: function () { return 3; },
+          getRange: function () { return { getValues: function () { return [["COMMITTED"], ["PREPARED"]]; } }; }
+        };
+      };
+      var threw = false;
+      try { di3AssertNoPendingFifoRuns_(); } catch (error) { threw = /Незавершённый FIFO run/.test(error.message); }
+      equal(threw, true);
+    } finally { di3GetSheetOrThrow_ = originalGetSheet; }
+  });
+
   test("FifoProductState stores the maximum ledger sequence independently of business event order", function () {
     var ledger = [
       ["backdated", "op", "event", "p1", "TEST", "doc", 1, new Date("2026-01-01"), new Date("2026-01-10"), "", "", "", 18],
