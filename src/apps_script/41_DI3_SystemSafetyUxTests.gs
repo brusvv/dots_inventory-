@@ -166,6 +166,7 @@ function di3RunSystemSafetyUxUnitTests() {
           display_code: "P-1", sale_unit_price: 100, line_revenue: 100 }]
       });
       equal(dispatch.details[0][8], "user-a@example.test", "Dispatch detail must record the initiator");
+      equal(dispatch.ledger[0][12], 1, "Dispatch ledger row must persist its assigned sequence");
 
       var returned = di3BuildOrderReturnRows_("operation-a", {
         order_id: "order-1", order_number: "ORD-1", returned_at: "2026-11-25T12:00:00Z",
@@ -175,6 +176,7 @@ function di3RunSystemSafetyUxUnitTests() {
           source_lot_id: "lot-1", lot_id: "lot-return", pack_variant_id: "pack-1", unit_cost: 50, total_cost_minor: 5000 }]
       });
       equal(returned.details[0][8], "user-a@example.test", "Return detail must record the initiator");
+      equal(returned.ledger[0][12], 2, "Return ledger row must persist its assigned sequence");
 
       var receipt = di3BuildSupplyReceiptRows_("operation-a", {
         supply_id: "supply-1", supply_number: "SUP-1",
@@ -185,6 +187,7 @@ function di3RunSystemSafetyUxUnitTests() {
           supply_item_id: "item-1" }]
       });
       equal(receipt.details[0][8], "user-a@example.test", "Supply receipt detail must record the initiator");
+      equal(receipt.ledger[0][12], 3, "Supply ledger row must persist its assigned sequence");
     } finally {
       di3FindRowByFirstColumn_ = originalFind;
       di3GetActorEmail_ = originalGetActor;
