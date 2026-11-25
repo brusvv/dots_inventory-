@@ -336,7 +336,7 @@ function di3BuildSupplyReceiptRows_(operationId, payload) {
     ledgerRows.push([
       line.movement_id, operationId, line.event_key, line.product_id,
       "SUPPLY", payload.supply_id, line.quantity, new Date(line.effective_at),
-      new Date(line.recorded_at), "", "", "Приёмка поставки " + payload.supply_number
+      new Date(line.recorded_at), "", "", "Приёмка поставки " + payload.supply_number, line.ledger_sequence
     ]);
     detailRows.push([
       line.movement_id, line.display_code, "IN", "SUPPLY_RECEIVE", "", "",
@@ -370,6 +370,7 @@ function di3CreateSupplyReceiptOperation_(supply, effectiveAt) {
     }
   });
   var payload = di3BuildSupplyReceiptPayload_(supply, items, effectiveAt, new Date());
+  di3AssignLedgerSequencesToLines_(payload.lines);
   payload.lines.forEach(function (line) {
     di3AssertNoBackdatedMovementBeforeReturnedOrder_(line.product_id, line.effective_at, "приёмка поставки");
   });
