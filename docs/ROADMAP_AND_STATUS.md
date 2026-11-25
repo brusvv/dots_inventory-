@@ -236,7 +236,7 @@ The following issues have source changes and local regression coverage. They are
 - Added `di3CaptureActorContext_()` as the single source for active-user identity, with explicit `IDENTIFIED` / `UNAVAILABLE` status and `ACTIVE_USER` / `NONE` source.
 - Preserved `di3GetActorEmail_()` as the backwards-compatible string API and routed the duplicated actor reads in supply, order, period, schema migration, operation executor and settings paths through it.
 - Removed the direct Session fallback from operation registration/execution. No effective-user fallback is introduced.
-- Added a structural regression check in `di3RunSystemSafetyUxUnitTests()`.
+- Added regression checks in `di3RunSystemSafetyUxUnitTests()` for identified, empty-email and unavailable Session contexts, as well as the absence of effective-user fallback.
 - **Not verified:** test suite and syntax checks have not been run. No deployment or workbook changes were made.
 - **Still open:** propagate the persisted initiating actor from `Operations.actor` into domain audit events during recovery; preserve the actual executor in `OperationAttempts.actor`; add identity-status persistence only after schema and runtime semantics are reviewed.
 
