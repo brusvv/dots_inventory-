@@ -289,6 +289,23 @@ function di3RunStockCoreUnitTests() {
     equal(threw, true);
   });
 
+  test("replay allocation IDs are deterministic for the same replay and ordinal", function () {
+    var allocations = [
+      { movement_id: "m1", lot_id: "l1", product_id: "p1", allocation_type: "CONSUME",
+        quantity: 2, unit_cost: 5, cost_status: "KNOWN", allocated_cost: 10,
+        effective_at: new Date("2026-01-01"), recorded_at: new Date("2026-01-01"), allocated_cost_minor: 1000 },
+      { movement_id: "m1", lot_id: "l2", product_id: "p1", allocation_type: "CONSUME",
+        quantity: 1, unit_cost: 6, cost_status: "KNOWN", allocated_cost: 6,
+        effective_at: new Date("2026-01-01"), recorded_at: new Date("2026-01-01"), allocated_cost_minor: 600 }
+    ];
+    var first = di3BuildFifoAllocationRows_("run-1", allocations, "OP:op-1:PRODUCT:p1");
+    var retry = di3BuildFifoAllocationRows_("run-1", allocations, "OP:op-1:PRODUCT:p1");
+    equal(first[0][0], retry[0][0]);
+    equal(first[1][0], retry[1][0]);
+    equal(first[0][0] === first[1][0], false);
+    equal(first[0][0].indexOf("F06:OP:op-1:PRODUCT:p1:") === 0, true);
+  });
+
   test("pending FIFO run reuse preserves operation identity and rejects changed scope", function () {
     var row = ["run-1", 7, "PREPARED", "ORDER_DISPATCH", new Date(), "", 12, 4, 1, "",
       "op-1", "OP:op-1", "PRODUCT_SET", '["p1"]', "fingerprint-a"];
