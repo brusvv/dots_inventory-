@@ -111,7 +111,7 @@ function di3CloseAccountingPeriod(periodKey, note) {
     }
     di3AssertNoPendingOperationsBeforePeriodClose_();
     var actor = "";
-    try { actor = Session.getActiveUser().getEmail() || ""; } catch (ignore) {}
+    actor = di3GetActorEmail_();
     // Never overwrite a prior LOCKED/REOPENED event. A re-close is a new event.
     var row = [bounds.period_key, bounds.start, bounds.end, "LOCKED", now, actor, "", "", "", String(note || "")];
     di3AppendTableRows_("PeriodLocks", [row]);
@@ -130,7 +130,7 @@ function di3ReopenAccountingPeriod(periodKey, reason) {
       throw new Error("Можно открыть только последний закрытый период.");
     }
     var actor = "";
-    try { actor = Session.getActiveUser().getEmail() || ""; } catch (ignore) {}
+    actor = di3GetActorEmail_();
     var row = [
       latest.period_key, latest.period_start, latest.period_end, "REOPENED", latest.locked_at,
       latest.locked_by, new Date(), actor, why, latest.note
