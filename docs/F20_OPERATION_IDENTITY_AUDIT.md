@@ -197,3 +197,5 @@ The follow-up source audit covered the remaining actor-bearing administrative pa
 The system-safety test runner now loads the source modules needed to check these additional paths. Added source assertions for manual quarantine review, period close/reopen, schema migration, and supply full-edit payload/history attribution.
 
 **Still not executed:** the runner, JavaScript syntax checks, and restored-workbook acceptance. The runner update only establishes its module list; it is not evidence that the suite passes.
+
+The initiator regression test was strengthened beyond source-string checks: it now builds representative dispatch, return and supply-receipt detail rows with a stubbed initiator and asserts that the persisted actor column contains the initiator email. This exercises the row builders without accessing a spreadsheet.
