@@ -250,3 +250,4 @@ The following issues have source changes and local regression coverage. They are
 - **Not verified:** source tests and syntax checks have not been run; restored-workbook recovery acceptance is pending. No workbook or deployment changes.
 
 - Supply receipt `StockMovementDetails.actor` is now populated from the same immutable initiator record; its regression assertion was added.
+- Manual warehouse stock movement details now also record the original operation initiator in `StockMovementDetails.actor`; regression coverage was extended.
