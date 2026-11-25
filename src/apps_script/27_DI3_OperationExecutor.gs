@@ -298,7 +298,7 @@ function di3StartOperationAttempt_(operationRecord) {
   var currentStatus = String(operationRecord.values[5] || "");
   var executionMode = maxAttempt === 0 ? "INITIAL" : "RECOVERY";
   var actor = "";
-  try { actor = typeof di3GetActorEmail_ === "function" ? di3GetActorEmail_() : (Session.getActiveUser().getEmail() || ""); } catch (ignoreActor) {}
+  try { actor = di3GetActorEmail_(); } catch (ignoreActor) {}
   var values = [attemptId, operationId, maxAttempt + 1, String(operationRecord.values[2] || ""),
     currentStatus, executionMode, startedAt, "", "STARTED", "", "", actor];
   // Audit row must be durable before the domain handler can write business data.
