@@ -1,6 +1,7 @@
 /** Dots Inventory v3 — explicit schema version and migration journal. */
 var DI3_SCHEMA_VERSION = 3;
-var DI3_SCHEMA_BASELINE_MIGRATION_KEY = "RC8_SCHEMA_BASELINE_ADOPTION";\nvar DI3_CLEAN_BASELINE_MIGRATION_KEY = "CLEAN_FINAL_BASELINE_ADOPTION";
+var DI3_SCHEMA_BASELINE_MIGRATION_KEY = "RC8_SCHEMA_BASELINE_ADOPTION";
+var DI3_CLEAN_BASELINE_MIGRATION_KEY = "CLEAN_FINAL_BASELINE_ADOPTION";
 var DI3_SCHEMA_MIGRATION_DEFINITIONS = Object.freeze([
   { key: "RC8_SUPPLY_PLANNING_DATES_V2", from: 1, to: 2,
     details: "Append supplier_order_date and expected_received_date to V3_Supplies; preserve all legacy columns and rows." },
