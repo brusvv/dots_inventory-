@@ -561,6 +561,23 @@ function di3RunStockCoreUnitTests() {
     }
   });
 
+  test("a second FIFO replay cannot start while another run is unresolved", function () {
+    var originalRead = di3ReadTableValues_;
+    try {
+      di3ReadTableValues_ = function () {
+        return [
+          ["run-1", 1, "PREPARED", "PRODUCT_REPLAY", new Date(), "", 4, 2, 1, "", "op-1", "OP:op-1", "PRODUCT_SET", '["p1"]', "fp"],
+          ["run-2", 2, "COMMITTED", "INCREMENTAL", new Date(), new Date(), 4, 2, 1, "", "op-2", "OP:op-2", "PRODUCT_SET", '["p2"]', "fp2"]
+        ];
+      };
+      var threw = false;
+      try { di3AssertNoConflictingPendingFifoRuns_(""); }
+      catch (error) { threw = /другой незавершённый FIFO run/.test(error.message); }
+      equal(threw, true);
+      di3AssertNoConflictingPendingFifoRuns_("run-1");
+    } finally { di3ReadTableValues_ = originalRead; }
+  });
+
   test("unresolved FIFO run blocks allocation of new stock sequences", function () {
     var originalGetSheet = di3GetSheetOrThrow_;
     try {
