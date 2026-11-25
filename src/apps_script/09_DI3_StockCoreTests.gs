@@ -289,6 +289,34 @@ function di3RunStockCoreUnitTests() {
     equal(threw, true);
   });
 
+  test("replay input fingerprint ignores mutable lot cache and physical row order", function () {
+    var originalHash = di3BuildManualOperationPayloadHash_;
+    try {
+      di3BuildManualOperationPayloadHash_ = function (value) { return JSON.stringify(value); };
+      var ledger = [
+        ["m2", "op2", "evt2", "p1", "T", "d", -1, new Date("2026-01-02"), new Date("2026-01-02"), "", "", "", 2],
+        ["m1", "op1", "evt1", "p1", "T", "d", 1, new Date("2026-01-01"), new Date("2026-01-01"), "", "", "", 1]
+      ];
+      var details = [
+        ["m2", "c2", "OUT", "SALE", "", "", "KNOWN", "", "", "", "n2"],
+        ["m1", "c1", "IN", "SUPPLY", "", "", "KNOWN", "", "", "", "n1"]
+      ];
+      var lots = [
+        ["l2", "p1", "m1", "SUPPLY", "s2", "pv", new Date("2026-01-01"), new Date("2026-01-01"), 2, 5, "KNOWN", "EUR", "", 1, 1000],
+        ["l1", "p1", "m0", "SUPPLY", "s1", "pv", new Date("2025-12-31"), new Date("2025-12-31"), 3, 4, "KNOWN", "EUR", "", 2, 1200]
+      ];
+      var first = di3BuildFifoReplayInputFingerprint_(null, ledger, details, lots);
+      var reorderedLedger = ledger.slice().reverse();
+      var reorderedDetails = details.slice().reverse();
+      var changedCache = lots.map(function (row) { var copy = row.slice(); copy[13] = 99; return copy; }).reverse();
+      var second = di3BuildFifoReplayInputFingerprint_(null, reorderedLedger, reorderedDetails, changedCache);
+      equal(first, second);
+      changedCache[0][9] = 77;
+      var changedImmutableInput = di3BuildFifoReplayInputFingerprint_(null, reorderedLedger, reorderedDetails, changedCache);
+      equal(first === changedImmutableInput, false);
+    } finally { di3BuildManualOperationPayloadHash_ = originalHash; }
+  });
+
   test("replay allocation IDs are deterministic for the same replay and ordinal", function () {
     var allocations = [
       { movement_id: "m1", lot_id: "l1", product_id: "p1", allocation_type: "CONSUME",
