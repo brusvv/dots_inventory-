@@ -1,7 +1,7 @@
 # Clean baseline schema and versioning strategy
 
 Date: 2026-11-26  
-Status: design audit only. No application code or workbook changed.
+Status: architecture design with partial source implementation. Unknown populated-tab preflight and FIFO archive schemas/backup priority are implemented and CI-checked; clean-baseline schema adoption and runtime setup acceptance are still pending.
 
 ## Why this is required
 
@@ -53,7 +53,7 @@ The final schema must be designed as one coherent release and include:
 
 - StockLedger.ledger_sequence (F-07).
 - FifoProductState.last_processed_ledger_sequence (F-07).
-- FifoAllocationHistory / archive event log with replay identity, source allocation identity, provenance, and PREPARED/COMMITTED event states (F-06; exact table name and columns to be frozen during implementation).
+- FifoAllocationArchive, FifoLotCacheArchive and FifoReplayEvents, with replay identity, source allocation identity, provenance and PREPARED/COMMITTED/QUARANTINED events (F-06 schema is now defined in `00_DI3_SchemaRegistry.gs`).
 - V3_Orders.business_date and any required historical-sale fields (F-02; exact field semantics depend on the unresolved date/time decision).
 - Existing commission_payer and money-minor-unit fields.
 - All metadata keys and version gates for FIFO, money calculations, application version and configured timezone.
@@ -81,8 +81,9 @@ Do not freeze the final schema version number until F-02 field semantics and F-0
 8. Backup/restore-as-new round-trip preserves all new tables, metadata and schema identity.
 9. New workbook accepts supply receipt, dispatch, return and finance flows without any migration.
 
-## Additional source finding: installation preflight boundary
+## Additional source findings and partial implementation
 
-Inspection of `di3DryRunInstallation()` in `28_DI3_InstallationPreflight.gs` shows that it combines checks for known core system sheets, known workspaces, settings and timezone. It does not currently perform a general inventory that blocks on every unknown populated tab in the spreadsheet. The clean-baseline implementation must add that explicit inventory/classification step; the current preflight must not be described as already enforcing the unknown-tab rule.
-
-Likewise, the setup flow in `04_DI3_Setup.gs` runs schema versioning after `di3EnsureCoreFoundationSchemas_(true)` has created/initialized the current schema. The new clean-baseline adoption should be implemented in that established sequence, but must not use the existing RC8 baseline-v1 + v2 + v3 migration chain to describe a workbook that was created directly with the final headers.
+- `di3DryRunInstallation()` now inventories every workbook tab. Known system tables, current/legacy managed workspaces and the default blank tab names are allowlisted. Any other tab containing cells or charts is reported as a blocking issue; the preflight does not rename, clear or delete it. This is source-implemented and covered by the System Safety UX Node suite, but still needs a real Google Sheets Dry Run check.
+- Backup hashing priority now explicitly includes `FifoAllocationArchive`, `FifoLotCacheArchive` and `FifoReplayEvents`; a regression test protects that priority. Backup snapshots still enumerate all spreadsheet tabs.
+- The setup flow in `04_DI3_Setup.gs` still runs schema versioning after `di3EnsureCoreFoundationSchemas_(true)` has created/initialized the current schema. The clean-baseline adoption path remains to be implemented; do not use the existing RC8 baseline-v1 + v2 + v3 migration chain to describe a workbook created directly with final headers.
+- Current source CI validates 50 Apps Script files and 118/118 Node tests. This is not Google Sheets runtime acceptance.
