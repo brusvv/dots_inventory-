@@ -289,6 +289,15 @@ function di3RunStockCoreUnitTests() {
     equal(threw, true);
   });
 
+  test("clean FIFO baseline includes sequence and append-only replay archive schemas", function () {
+    equal(DI3_TABLE_SCHEMAS.StockLedger[12], "ledger_sequence");
+    equal(DI3_TABLE_SCHEMAS.FifoProductState[4], "last_processed_ledger_sequence");
+    equal(DI3_TABLE_SCHEMAS.FifoAllocationRuns.length, 15);
+    equal(DI3_TABLE_SCHEMAS.FifoAllocationArchive.length, 18);
+    equal(DI3_TABLE_SCHEMAS.FifoLotCacheArchive.length, 6);
+    equal(DI3_TABLE_SCHEMAS.FifoReplayEvents.length, 15);
+  });
+
   test("FifoProductState stores the maximum ledger sequence independently of business event order", function () {
     var ledger = [
       ["backdated", "op", "event", "p1", "TEST", "doc", 1, new Date("2026-01-01"), new Date("2026-01-10"), "", "", "", 18],
