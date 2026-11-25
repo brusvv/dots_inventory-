@@ -253,8 +253,7 @@ function di3SelectReusableFifoRun_(candidateRows, options) {
     var status = String(row[2] || "");
     if (status !== "PREPARED" && status !== "FAILED") return false;
     if (operationId) return String(row[10] || "") === operationId;
-    return !String(row[10] || "") && scopeType === "FULL" &&
-      String(row[12] || "") === "FULL";
+    return !String(row[10] || "") && String(row[12] || "") === scopeType;
   });
   if (!pending.length) return null;
   if (pending.length !== 1) throw new Error("Найдено несколько незавершённых FIFO run для одной операции/области. Автоматическое продолжение запрещено.");
@@ -724,9 +723,9 @@ function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount, o
   var inputFingerprint = String(options.input_fingerprint || "");
   var candidates = operationId
     ? di3ReadRowsByColumnValue_("FifoAllocationRuns", 10, operationId)
-    : (scopeType === "FULL" ? di3ReadRowsByColumnValue_("FifoAllocationRuns", 12, "FULL").filter(function (match) {
+    : di3ReadRowsByColumnValue_("FifoAllocationRuns", 12, scopeType).filter(function (match) {
         return !String(match.values[10] || "");
-      }) : []);
+      });
   var reusable = di3SelectReusableFifoRun_(candidates, {
     operation_id: operationId, scope_type: scopeType, scope_json: scopeJson,
     input_fingerprint: inputFingerprint, full_replay: !!options.full_replay,
