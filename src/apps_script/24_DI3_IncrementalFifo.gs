@@ -1466,6 +1466,14 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
     events.forEach(function (event, index) {
       var sequence = Number(event[2]), type = String(event[3] || "");
       if (sequence !== index + 1) errors.push("FifoReplayEvents: пропуск или неверный порядок event_sequence для replay " + replayId + ".");
+      if (index > 0) {
+        var first = events[0];
+        [4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(function (column) {
+          if (String(event[column] || "") !== String(first[column] || "")) {
+            errors.push("FifoReplayEvents: immutable replay identity/fingerprint изменён между событиями " + replayId + ".");
+          }
+        });
+      }
       if (index === 0 && type !== "PREPARED") errors.push("FifoReplayEvents: первое событие replay " + replayId + " должно быть PREPARED.");
       if (index > 0 && (terminal || (type !== "COMMITTED" && type !== "QUARANTINED"))) {
         errors.push("FifoReplayEvents: недопустимый переход состояния для replay " + replayId + ".");
