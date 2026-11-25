@@ -43,9 +43,9 @@ node tools/run_system_safety_ux_tests.js
 node tools/run_finance_schema_tests.js
 ```
 
-A GitHub Actions workflow `.github/workflows/quality-gates.yml` now runs syntax checks and all local regression runners on source changes. The new FIFO sequence tests are included in `tools/run_fifo_replay_tests.js`; the current 99/99 result includes them.
+A GitHub Actions workflow `.github/workflows/quality-gates.yml` runs syntax checks and all local regression runners on source changes. FIFO sequence/replay, archive recovery, rollback and clean-install preflight regressions are included in the quality gates.
 
-The syntax command checks all **50** `.gs` files (43 app modules + 7 temporary probes). The seven local Node suites pass **118/118**: FIFO replay 41/41, Order Domain 17/17, Supply Workspace UX 15/15, Catalog/Order UX 12/12, System Safety UX 20/20, Warehouse Dashboard 9/9 and Finance schema 4/4. GitHub Actions run: https://github.com/brusvv/dots_inventory-/actions/runs/45721449653. The TypeScript AST audit reports 570 top-level functions and 88 top-level variable declarations, with no parse errors or duplicate declarations. The menu audit finds 68 actions and no missing handlers. These checks do not emulate Google Sheets rendering, Apps Script services, installed triggers, Drive, LockService or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or live stock operation was executed during local validation.
+The syntax command checks all **50** `.gs` files (43 app modules + 7 temporary probes). The seven local Node suites pass **118/118**: FIFO replay 41/41, Order Domain 17/17, Supply Workspace UX 15/15, Catalog/Order UX 12/12, System Safety UX 20/20, Warehouse Dashboard 9/9 and Finance schema 4/4. GitHub Actions run: https://github.com/brusvv/dots_inventory-/actions/runs/45721449653. These checks do not emulate Google Sheets rendering, Apps Script services, installed triggers, Drive, LockService or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or live stock operation was executed during local validation.
 
 ## Safe operating rules
 
