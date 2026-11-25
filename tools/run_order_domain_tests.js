@@ -8,7 +8,10 @@ const context = vm.createContext({
   isNaN, parseInt, parseFloat
 });
 const files = [
+  "src/apps_script/00_DI3_SchemaRegistry.gs",
+  "src/apps_script/02_DI3_ProductsRepository.gs",
   "src/apps_script/30_DI3_MoneyCore.gs",
+  "src/apps_script/07_DI3_StockCore.gs",
   "src/apps_script/15_DI3_OrderDomain.gs",
   "src/apps_script/16_DI3_OrderWorkflow.gs",
   "src/apps_script/18_DI3_OrderTests.gs"

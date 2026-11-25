@@ -176,8 +176,8 @@
     },
     {
       "path": "src/apps_script/16_DI3_OrderWorkflow.gs",
-      "bytes": 35904,
-      "sha256": "3174ec5e69785c6ed8ad7acec48ff143553857aa7499c697ab7508ab1c9e2867",
+      "bytes": 37571,
+      "sha256": "bf9263823604662badd2bab40eb0dc38c66ecc5845dae4f0cae7825f8733b3e4",
       "kind": "apps_script_module"
     },
     {
@@ -188,8 +188,8 @@
     },
     {
       "path": "src/apps_script/18_DI3_OrderTests.gs",
-      "bytes": 7547,
-      "sha256": "f5abc0e2378fe780f208f48bdd4c13c1565b80a7fc0d700989e2f5602f97da79",
+      "bytes": 13187,
+      "sha256": "3f9ab9c91f2bee10f3d56d54fc8a3d058bdf05cc8aea4c60854de64e2cb37565",
       "kind": "apps_script_module"
     },
     {
@@ -337,7 +337,7 @@
     "Node regression harness / package.json",
     "original repository history and full documentation"
   ],
-  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Includes UX-01–UX-10 plus commission-payer/schema-v3 and Warehouse Dashboard diagnostics patch; actual chart rendering and schema migration remain pending runtime acceptance.",
+  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Includes UX-01–UX-10, commission-payer/schema-v3, Warehouse Dashboard diagnostics and F-01 order-return FIFO lookup fix. Dashboard rendering, schema migration and full return runtime acceptance remain pending.",
   "patch_scope": {
     "UX-01_UX-03": {
       "modified_modules": [
@@ -447,6 +447,20 @@
       ],
       "schema_version": 3,
       "migration_key": "RC8_ORDER_COMMISSION_PAYER_V3"
+    },
+    "f01_order_return_fifo": {
+      "modified_modules": [
+        "16_DI3_OrderWorkflow.gs",
+        "18_DI3_OrderTests.gs"
+      ],
+      "modified_tools": [
+        "tools/run_order_domain_tests.js"
+      ],
+      "added_docs": [
+        "docs/UX_PATCH_F01_RETURN_FIFO.md"
+      ],
+      "behavior": "Select active CONSUME allocations by original order-line dispatch movement_id; do not filter by latest global FIFO run_id.",
+      "runtime_acceptance": "PENDING: dispatch an order, create a later unrelated FIFO run, accept return, and reconcile source lots/costs."
     }
   }
 }

@@ -55,7 +55,7 @@
 - `setNumHeaders(1)` (not the unsupported `useFirstRowAsHeaders()` method);
 - protection against clearing M25+ dashboard table cells during setup.
 
-`38_DI3_WarehouseDashboardTests.gs`: five pure tests passed locally on this snapshot.
+`38_DI3_WarehouseDashboardTests.gs`: seven pure tests passed locally on the current patched snapshot.
 
 **Open:** actual rendering/refresh in Google Sheets. The user confirmed the chart remains blank in the live test copy. The latest local patch adds:
 - `average_known_unit_cost` (known inventory value / known units), fixing the missing H11 KPI value;
@@ -69,7 +69,8 @@ The actual empty-chart cause is still unknown. Run the read-only diagnostics on 
 ### FIFO / stock / sales
 - C-01: benchmark in real GAS at 500/1,000/2,000 movements; measure runtime, Sheets reads/writes, TextFinder, quotas.
 - C-02: runtime acceptance for PeriodGuard, historical profit and `OrderCostSnapshots`.
-- C-03: implement partial returns; agree policy first.
+- **F-01:** return FIFO lookup is fixed in source and locally regression-tested; runtime scenario (dispatch A → later unrelated FIFO run → return A) remains pending on a restored copy.
+- C-03: implement partial returns; agree policy first. This is separate from the full-return F-01 defect.
 - C-04/C-05: real Apps Script fault/recovery acceptance for OperationExecutor flows.
 - C-06: test LockService with two independent execution sessions, including receipt/cancel/dispatch races.
 - C-07: verify installed unified onEdit triggers and routing.
@@ -108,8 +109,18 @@ Do not call RC9 ready until the real Google Sheets end-to-end cycle is verified:
 - Reinterpreted order calculator B3 as **Комиссию оплачивает покупатель**. Checked: fee is added to buyer payment. Unchecked: fee is deducted from seller revenue and profit. The commission base remains gross goods before seller discount.
 - Added `commission_payer` to `V3_Orders` and schema v3 migration `RC8_ORDER_COMMISSION_PAYER_V3` (v2→v3). Existing orders are backfilled to `BUYER`.
 - Settlement and Finance Dashboard use the stored payer; commission remains separately reported.
-- Added 13 Order Domain tests, including 300 ₽ / 10% / 105 ₽ FIFO examples for both payer modes.
+- Added 13 Order Domain tests for commission payer/percentage handling, including 300 ₽ / 10% / 105 ₽ FIFO examples for both payer modes.
 - Dashboard totals now calculate average known FIFO unit cost. Chart row retention is aligned to chart height. Added read-only chart diagnostics.
-- Local validation: syntax 49/49; Order Domain 13/13; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7.
+- Local validation after the commission/Dashboard patch: syntax 49/49; Order Domain 13/13; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7.
 - User visually accepted UX-01–UX-06 except duplicate-product-identity test, which remains untested.
 - No live schema migration, order creation, dispatch, stock mutation or chart runtime test was performed.
+
+
+## Latest local patch — F-01 order return FIFO lookup (25.11.2026)
+
+- Fixed `di3BuildOrderReturnPayload_()`: the active `StockAllocations` projection can contain valid active rows from several FIFO runs, so return lookup must not filter by the globally latest `FifoAllocationRuns.run_id`.
+- Return allocations are now selected by the original order-line `dispatch_movement_id` and `allocation_type=CONSUME`. Per-line allocated-quantity equality remains fail-closed and is checked before registering the return operation.
+- FIFO run IDs remain provenance only (`source_fifo_run_ids`; `source_fifo_run_id` is set only when one source run is present). Source lot IDs, pack variants and exact allocated cost are retained for new return lots.
+- Added a full return-payload regression fixture: dispatch A's allocations carry `RUN-OLD-A`; an unrelated movement exists in `RUN-LATEST`; the return payload must still build from A's original lots. Added a partial-allocation rejection test.
+- Local validation: syntax 49/49; Order Domain 16/16; Supply UX 9/9; Catalog/Order UX 12/12; System Safety UX 11/11; Dashboard 7/7; TypeScript AST 556 functions / 87 top-level vars / no parse errors or duplicate declarations.
+- **Runtime acceptance pending:** on a disposable restored copy, dispatch order A, create a later FIFO run through a separate stock operation, then return A and reconcile return lots, costs and stock valuation. No live order or stock movement was used for this patch.

@@ -20,9 +20,9 @@ The base `.gs` modules came from the supplied `40.rar`. The current working tree
 | `13_DI3_CatalogAndSupplyTests.gs` | Catalog/supply tests |
 | `14_DI3_SupplyReceivingTests.gs` | Receiving tests |
 | `15_DI3_OrderDomain.gs` | Order domain, buyer/seller commission payer split, percent input normalization and additive V3_Orders schema migration |
-| `16_DI3_OrderWorkflow.gs` | Order creation, dispatch and returns; settlement applies commission payer to seller revenue and buyer payment |
+| `16_DI3_OrderWorkflow.gs` | Order creation, dispatch and returns; return FIFO allocations are resolved by original dispatch movement ID rather than latest global FIFO run; settlement applies commission payer to seller revenue and buyer payment |
 | `17_DI3_OrderWorkspace.gs` | Order form / register workspace; B3 selects who pays platform commission |
-| `18_DI3_OrderTests.gs` | Order tests |
+| `18_DI3_OrderTests.gs` | Order-domain calculation, transition and F-01 return/FIFO regression tests |
 | `19_DI3_WarehouseViews.gs` | Warehouse dashboard, value chart and stock journal; chart diagnostics and height-aware grid retention |
 | `20_DI3_FifoHistoryWorkspace.gs` | FIFO history workspace |
 | `21_DI3_ReleaseDiagnostics.gs` | Release diagnostics |
@@ -47,4 +47,4 @@ The base `.gs` modules came from the supplied `40.rar`. The current working tree
 | `40_DI3_CatalogOrderUxTests.gs` | UX-04–UX-06 regression tests for Catalog, Order and navigation |
 | `41_DI3_SystemSafetyUxTests.gs` | UX-07–UX-10 regression tests for confirmations before batch recovery, Money/FIFO migration, period reopening and manual warehouse movement |
 
-| `tools/run_order_domain_tests.js` | Local Node runner for 13 order-calculation and percentage-input tests |
+| `tools/run_order_domain_tests.js` | Local Node runner for 16 order calculation, commission, percent-input and return/FIFO regression tests |

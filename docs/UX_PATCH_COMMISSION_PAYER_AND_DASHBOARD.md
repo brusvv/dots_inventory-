@@ -44,6 +44,8 @@ Settlement and Finance Dashboard logic now use the stored payer:
 - Warehouse Dashboard pure tests: 7/7.
 - No live workbook, schema migration, order creation, stock mutation, FIFO rebuild or chart rendering test was executed.
 
+The Order Domain suite was subsequently extended to 16/16 by the separate F-01 return FIFO patch. See `docs/UX_PATCH_F01_RETURN_FIFO.md` for its scope and runtime acceptance.
+
 ## Runtime acceptance required
 
 On a restored test copy, after a fresh backup and setup Dry Run:

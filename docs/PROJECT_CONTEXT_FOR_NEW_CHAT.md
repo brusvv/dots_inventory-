@@ -1,8 +1,9 @@
 # PROJECT CONTEXT FOR NEW CHAT — Dots Inventory v3 RC8
 
-**Context snapshot:** 24 November 2026  
-**Source of truth:** user-uploaded `40.rar`, SHA-256 `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`  
-**Repository folder:** `src/apps_script/` (42 Apps Script modules, including UX regression tests) + `runtime/probes/` (7 probes)
+**Base context snapshot:** 24 November 2026  
+**Local UX patches:** 25 November 2026  
+**Base source:** user-uploaded `40.rar`, SHA-256 `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`  
+**Current working tree:** `src/apps_script/` (42 Apps Script modules) + `runtime/probes/` (7 probes), including UX-01–UX-10 patches from 25.11.2026. See `docs/UX_PATCH_UX01_UX03.md`, `docs/UX_PATCH_UX04_UX06.md`, `docs/UX_PATCH_UX07_UX09.md` and `docs/UX_PATCH_UX10.md`.
 
 > New-chat instruction: use this repository as the actual current source snapshot. Inspect current files before proposing edits. Do not assume that old patch links or older snippets represent the installed code. Preserve the user's safe workflow: work on a restored test copy, backup first, no destructive operation without explicit approval.
 
@@ -16,19 +17,19 @@ The spreadsheet is designed as an application with visible workspaces and hidden
 
 ## 2. Current source snapshot — what is actually in this ZIP
 
-The base `40.rar` contains:
-
-- 39 numbered Apps Script modules (including production modules and Apps Script unit-test modules);
-- the current patched tree adds three UX regression modules, for 42 modules total;
+The base `40.rar` contained 39 Apps Script source modules. The current patched working tree contains those base modules plus three local regression modules (`39_DI3_SupplyWorkspaceUxTests.gs`, `40_DI3_CatalogOrderUxTests.gs`, `41_DI3_SystemSafetyUxTests.gs`), for 42 Apps Script modules total;
 - 7 temporary runtime probes;
 - no `appsscript.json`, `.clasp.json`, Node regression harness, `package.json`, or original docs.
 
 Static audit performed while assembling this repository:
 
-- all 49 `.gs` files parsed successfully with Node.js v22.16.0;
-- TypeScript AST audit: 521 top-level function declarations, 86 top-level variable declarations, no parse errors and no duplicate top-level names;
-- warehouse chart/average-cost tests: **7/7 PASS**; Order Domain: **13/13 PASS**; Supply Workspace UX: **9/9 PASS**; Catalog/Order UX: **12/12 PASS**; System Safety UX: **11/11 PASS**.
-- TypeScript AST: **554 functions / 87 top-level variables**, no parse errors or duplicate declarations; menu audit: **68 actions / 0 missing handlers**.
+- all **49** `.gs` files (42 app modules + 7 temporary probes) parse successfully with Node.js v22.16.0;
+- TypeScript AST audit: **549 top-level function declarations**, **87 top-level variable declarations**, no parse errors and no duplicate top-level names;
+- menu reference audit: **68 actions**, 0 missing handlers;
+- warehouse chart/average-cost unit tests: **7/7 PASS**;
+- Supply Workspace UX tests: **9/9 PASS**;
+- Catalog/Order UX tests: **12/12 PASS**;
+- System Safety UX tests: **11/11 PASS**.
 
 These are static/local checks. The full Apps Script unit-test functions in the source were not all executed in a real Google Apps Script runtime. No claim is made that all 250+ previous Node tests were rerun against this RAR, because the prior Node harness is not included.
 
@@ -143,14 +144,19 @@ Still unverified from the user's screenshots alone: unchanged `supply_id`, uncha
 
 ## 5. Supply menu in this snapshot
 
-`22_DI3_MenuAndFilterUtils.gs` currently groups the `Поставки` menu into four submenus:
+`22_DI3_MenuAndFilterUtils.gs` groups the `Поставки` menu into four submenus. The 25.11.2026 UX patch also:
 
 1. **Создание** — New supply, Enter historical supply, Save and receive historical supply.
 2. **Выбор и просмотр** — Load selected supply, Open supply register, Refresh register.
 3. **Редактирование** — Calculate supply, Save supply, Update draft, enable full editing, preview changes, recalculate number by G2, save changes, cancel edit.
 4. **Проведение и отмена** — Apply next stage, cancel selected supply, refresh form validation lists.
 
-This grouping is implemented in the provided source. It still needs a real Sheets UX acceptance: check menu labels, availability and workflow clarity, and verify that switching modes cannot discard unsaved changes. The user specifically wants a workflow/menus audit added to the plan.
+- protects dirty forms before `Новая поставка` clears data;
+- stages a changed B2 selection and restores the old selector until the user confirms via `Загрузить выбранную поставку…`;
+- blocks B2 switching during FULL_EDIT;
+- separates `Проверить целостность FIFO (без изменений)` from `Перестроить FIFO полностью…`, which now asks for explicit confirmation before lock/backup/rebuild.
+
+These changes pass local structural tests, but real Sheets alert/toast and installable-trigger behavior remain unverified until runtime acceptance on a restored test copy.
 
 ## 6. Warehouse Dashboard — current source and issue
 
@@ -223,14 +229,19 @@ Don't infer runtime acceptance from these modules existing. Inspect each module/
 
 ## 8. Immediate next work (priority order)
 
-1. **Finish verification of `26JY021` full-edit operation**: prove the same `supply_id`, same `created_at`, one committed `SUPPLY_DOCUMENT_EDIT` with reason/payload, and unchanged stock/FIFO rows.
-2. **Test G6 on a separate sent test supply**: enter a valid historical awaiting date, preview `PREVIEW_ONLY`, save and verify target status becomes `Ожидает получения`, G5 remains unchanged, no stock receipt/ledger/lots are created, audit history is correct.
-3. **Test all full-edit fields on a disposable pre-receipt supply**: supplier, notes, seller discount, partner discount, shipping, price, quantity, add/remove/reorder items, number recalculation with collision protection, preserving IDs where appropriate. No receipt in this test.
-4. **Test normal G7 receipt path** on a separate pending supply. For a supply already in the warehouse, do not use `Внести старую поставку` again.
-5. **Supply UX/menu audit**: confirm four submenu structure, improve contextual availability/labels, ensure mode switching prompts before discarding unsaved edits and actions are not shown in inappropriate states.
-6. **Warehouse Dashboard runtime test** after the current `19_DI3_WarehouseViews.gs` is installed. Confirm chart rendering and top-20 correct labels/values using the screenshot fixture. No stock mutations.
-7. **Implement Phase C `SUPPLY_CORRECTION`**: immutable corrective operation for received supplies, compensating movements, FIFO candidate replay, ProductCostHistory and downstream order COGS re-evaluation. Not implemented yet; design and failure/retry coverage required.
-8. After all historical purchases and sales have been entered, run full historical stock/FIFO/financial reconciliation. The user has intentionally postponed final acceptance of historical supply entries until then.
+1. **F-01 return FIFO runtime acceptance:** on a restored disposable copy, dispatch order A, create a later unrelated FIFO run, accept A's return, and verify source-lot quantities/costs. Code and local regression tests are complete; real Sheets execution is still pending.
+2. **Finish verification of `26JY021` full-edit operation**: prove the same `supply_id`, same `created_at`, one committed `SUPPLY_DOCUMENT_EDIT` with reason/payload, and unchanged stock/FIFO rows.
+3. **Test G6 on a separate sent test supply**: enter a valid historical awaiting date, preview `PREVIEW_ONLY`, save and verify target status becomes `Ожидает получения`, G5 remains unchanged, no stock receipt/ledger/lots are created, audit history is correct.
+4. **Test all full-edit fields on a disposable pre-receipt supply**: supplier, notes, seller discount, partner discount, shipping, price, quantity, add/remove/reorder items, number recalculation with collision protection, preserving IDs where appropriate. No receipt in this test.
+5. **Test normal G7 receipt path** on a separate pending supply. For a supply already in the warehouse, do not use `Внести старую поставку` again.
+6. **Supply UX/menu runtime acceptance**: validate UX-01–UX-10 prompts, selector behavior, manual warehouse confirmations and menu actions in a restored Google Sheets copy. Live runtime acceptance is still pending.
+7. **Warehouse Dashboard runtime test** after the current `19_DI3_WarehouseViews.gs` is installed. Confirm chart rendering and top-20 correct labels/values using the screenshot fixture. No stock mutations.
+8. **Implement Phase C `SUPPLY_CORRECTION`**: immutable corrective operation for received supplies, compensating movements, FIFO candidate replay, ProductCostHistory and downstream order COGS re-evaluation. Not implemented yet; design and failure/retry coverage required.
+9. After all historical purchases and sales have been entered, run full historical stock/FIFO/financial reconciliation.
+
+### Prior supply-specific acceptance details
+
+The detailed supply checks are unchanged: verify G5/G6/G7 chronology and backend evidence on separate disposable supplies; do not duplicate an already-received historical supply.
 
 ## 9. Remaining project roadmap
 
@@ -249,7 +260,7 @@ Don't infer runtime acceptance from these modules existing. Inspect each module/
 - C-12: runtime acceptance for SettingsRepository, margin migration and timezone switch.
 - C-13: check tab order in real Sheets.
 - C-14: test delivery-method creation/selection/order flow.
-- C-15: verify BUYER vs SELLER commission payer calculations and settlement/Finance Dashboard on real test orders; local logic now distinguishes both.
+- C-15: reconcile buyer-paid commission vs seller revenue/profit on a real order.
 - C-16: runtime/visual Finance Dashboard acceptance using control orders, discounts, commissions, FIFO snapshots, UNKNOWN COGS, filters/charts and period boundaries.
 - C-17 phase 2: charts, conditional formatting, filters, tab order and permission/protection review (do not auto-enable protections without a role model).
 
@@ -262,7 +273,7 @@ Don't infer runtime acceptance from these modules existing. Inspect each module/
 - BM-05: periodic isolated restore test, default monthly proposal, PASS/FAIL evidence.
 - BM-06: release acceptance and backup runbooks.
 - Selective document/ledger export/import: separate future feature with referential-integrity validation.
-- Schema versioning: real baseline and v1→v2 runtime acceptance on empty/non-empty copies; define v3+ migration path. Reverse migrations are not implemented; rollback via verified backup/restore.
+- Schema versioning: real baseline and v1→v2 runtime acceptance on empty/non-empty copies; v2→v3 commission-payer migration is now defined; runtime acceptance remains pending. Reverse migrations are not implemented; rollback via verified backup/restore.
 
 ### RC9 release gate
 
@@ -302,14 +313,6 @@ Never install all probes into the production app as normal modules. Use them tem
 "Прочитай `PROJECT_CONTEXT_FOR_NEW_CHAT.md` и `README.md` в приложенном репозитории. Считай исходники `src/apps_script/` текущей версией проекта. Сначала кратко подтверди фактическое состояние кода и ближайшие задачи. Продолжим приёмку полного редактирования: проверить `26JY021` — `supply_id`, `created_at`, `SUPPLY_DOCUMENT_EDIT`, неизменность StockLedger/StockLots/FIFO; затем проверим G6 на отдельной отправленной тестовой поставке. Не меняй файлы и не запускай операции до согласования следующего шага."
 
 
-## Current local UX patch status (25.11.2026)
-
-UX-01–UX-10 are implemented in the local working tree. UX-07 protects batch pending-operation recovery, UX-08 protects the Money Core integer-minor-unit migration, and UX-09 protects reopening the latest accounting period with explicit YES/NO confirmation. Install/accept only on a restored test copy. Their No paths remain to be validated in the real Google Sheets UI. See `docs/UX_PATCH_UX07_UX09.md`.
-
-
-UX-10 adds a confirmation summary before manually posting warehouse IN/OUT movements. It displays the stock/FIFO consequences and returns before posting when the user selects No. Validate this No path on a restored copy; do not confirm Yes solely for a UX test. See `docs/UX_PATCH_UX10.md`.
-
-
 ## Latest user feedback and local patch — 25.11.2026
 
 The user visually tested UX-01–UX-06 and reported that all observed behavior works except the duplicate-product-identity scenario, which they have not tested yet. The remaining visible problems are the blank Warehouse Dashboard chart and incorrect order commission calculation.
@@ -324,7 +327,7 @@ The user visually tested UX-01–UX-06 and reported that all observed behavior w
 - Percent reader handles native percent formats (stored fraction, e.g. 0.1) and literal-percent formats (`0.00"%"`, stored 10). This addresses the user's screenshot: 300 ₽ × displayed 10% had yielded 0.30 ₽.
 - `V3_Orders` now has appended `commission_payer`; schema version is 3, with `RC8_ORDER_COMMISSION_PAYER_V3` v2→v3. Existing orders are backfilled as BUYER to preserve previous policy. Apply only via normal Dry Run + verified backup setup.
 - Example with goods 300 ₽, fee 30 ₽, FIFO cost 105 ₽: buyer pays → buyer total 330 ₽, seller revenue 300 ₽, profit 195 ₽; seller pays → buyer total 300 ₽, seller revenue 270 ₽, profit 165 ₽.
-- Local order-domain tests: 13/13 PASS.
+- Local order-domain tests: 16/16 PASS (includes F-01 return FIFO regression).
 
 ### Warehouse Dashboard follow-up
 
@@ -334,4 +337,12 @@ The user visually tested UX-01–UX-06 and reported that all observed behavior w
 - Added read-only `di3DiagnoseWarehouseDashboardChart()` and `di3LogWarehouseDashboardChartDiagnostics()`. Run the latter from the Apps Script editor on a restored test copy and provide the execution log. It reports N1:O21 helper values, hidden columns, chart count, source ranges, chart type and anchor.
 - The actual blank-chart cause is still not identified. Local Dashboard tests are 7/7 but do not emulate real Sheets chart rendering.
 
-Local validation after the patch: syntax 49/49; Order Domain 13/13; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7. No live workbook migration, order creation, dispatch, stock mutation, FIFO rebuild or actual chart runtime test was performed.
+Local validation after the patch: syntax 49/49; Order Domain 16/16; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7. No live workbook migration, order creation, dispatch, stock mutation, FIFO rebuild or actual chart runtime test was performed.
+
+
+### F-01 — Order return FIFO lookup (25.11.2026)
+
+- Code fix is implemented in `16_DI3_OrderWorkflow.gs`: `StockAllocations` is an active projection whose valid rows can carry different `allocation_run_id` values. The old global latest-run filter has been removed.
+- The return now resolves `CONSUME` rows by each order line's original `dispatch_movement_id`; the exact allocated-quantity check remains mandatory. Source run IDs are retained as provenance; original lot IDs, pack variants and allocated cost are used to build the new return lots.
+- Regression tests cover an old dispatch allocation with a newer unrelated run, a full return-payload build and partial-quantity rejection. Order Domain suite: 16/16 PASS.
+- Runtime acceptance is still pending on a restored disposable spreadsheet. The real sequence to test is: dispatch A → perform a separate stock operation creating a later FIFO run → accept return A → reconcile new lots and costs.

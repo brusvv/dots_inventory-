@@ -1,11 +1,11 @@
 # Dots Inventory v3 — RC8 source repository snapshot
 
 **Base source snapshot:** 2026-11-24  
-**Local patches:** 2026-11-25 (UX-01–UX-10, commission payer and Dashboard diagnostics)  
+**Local patches:** 2026-11-25 (UX-01–UX-10, commission payer, Dashboard diagnostics and F-01 order return fix)  
 **Source archive supplied in this chat:** `40.rar`  
 **SHA-256 of source archive:** `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`
 
-The base source package was assembled from the user's uploaded `40.rar`. The working tree is a **patched derivative** of the 2026-11-24 base snapshot. Local UX-01–UX-10 patches add unsaved-form protection, safer navigation, and explicit confirmations for recovery, money/FIFO migration, period reopening and manual warehouse movements. The latest local patch adds buyer-vs-seller commission payer handling, a v2→v3 additive schema migration, percent-input normalization, the missing average-known-unit-cost KPI, and read-only Dashboard chart diagnostics. See the UX patch logs and `docs/UX_PATCH_COMMISSION_PAYER_AND_DASHBOARD.md` for exact scopes.
+The base source package was assembled from the user's uploaded `40.rar`. The working tree is a **patched derivative** of the 2026-11-24 base snapshot. Local UX-01–UX-10 patches add unsaved-form protection, safer navigation, and explicit confirmations for recovery, money/FIFO migration, period reopening and manual warehouse movements. The commission/Dashboard patch adds buyer-vs-seller commission payer handling, a v2→v3 additive schema migration, percent-input normalization, the missing average-known-unit-cost KPI, and read-only Dashboard chart diagnostics. The F-01 patch fixes order returns by resolving active FIFO consumption allocations by the original dispatch `movement_id`, not by the globally latest FIFO run. See the patch logs for exact scopes.
 
 ## Repository contents
 
@@ -35,12 +35,13 @@ From the repository root:
 ```bash
 bash tools/check_syntax.sh
 node tools/run_warehouse_dashboard_tests.js
+node tools/run_order_domain_tests.js
 node tools/run_supply_workspace_ux_tests.js
 node tools/run_catalog_order_ux_tests.js
 node tools/run_system_safety_ux_tests.js
 ```
 
-The syntax command checks all `.gs` files. The dashboard runner executes seven pure chart/average-cost tests. The Order Domain runner executes thirteen pure calculation and percent-input tests. The Supply UX runner executes nine pure/structural tests for dirty-form protection, B2 switching and FIFO menu safety. The Catalog/Order runner executes twelve source-level regression tests for dirty product/order form protection and menu discoverability. The System Safety runner executes eleven source-level tests for confirmed batch recovery, money/FIFO migration and accounting-period reopening. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or stock operation was executed during local validation.
+The syntax command checks all `.gs` files. The dashboard runner executes seven pure chart/average-cost tests. The Order Domain runner executes sixteen pure calculation, percent-input and order-return FIFO regression tests, including a return-payload build with an older dispatch allocation and a newer unrelated FIFO run. The Supply UX runner executes nine pure/structural tests for dirty-form protection, B2 switching and FIFO menu safety. The Catalog/Order runner executes twelve source-level regression tests for dirty product/order form protection and menu discoverability. The System Safety runner executes eleven source-level tests for confirmed batch recovery, money/FIFO migration and accounting-period reopening. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or live stock operation was executed during local validation.
 
 ## Safe operating rules
 
@@ -53,7 +54,7 @@ The syntax command checks all `.gs` files. The dashboard runner executes seven p
 
 ## Source-of-truth rule for future work
 
-Treat this repository's `src/apps_script/` files as the current local working tree: the 2026-11-24 archive snapshot plus the documented UX-01–UX-10 patches from 2026-11-25. Before patching, inspect the exact current module and its callers. Do not mix in older standalone V1–V4 hotfix files from prior chat messages unless a diff proves that a newer source module is missing a change.
+Treat this repository's `src/apps_script/` files as the current local working tree: the 2026-11-24 archive snapshot plus the documented UX-01–UX-10, commission/Dashboard and F-01 patches from 2026-11-25. Before patching, inspect the exact current module and its callers. Do not mix in older standalone V1–V4 hotfix files from prior chat messages unless a diff proves that a newer source module is missing a change.
 
 ## UX-04 through UX-06
 
@@ -72,3 +73,9 @@ The commission reader accepts both native Sheets percentage cells and literal-pe
 Warehouse Dashboard now calculates the missing average-known FIFO unit cost and keeps enough grid rows for the chart height. Read-only functions `di3DiagnoseWarehouseDashboardChart()` / `di3LogWarehouseDashboardChartDiagnostics()` expose N1:O21, chart source ranges and chart count. The actual chart remains **not runtime-accepted** until those diagnostics and a real Sheets screenshot confirm its rendering.
 
 See `docs/UX_PATCH_COMMISSION_PAYER_AND_DASHBOARD.md`. The user has visually accepted UX-01–UX-06 except the duplicate-product-identity test, which remains outstanding.
+
+## F-01 — order return FIFO lookup (25.11.2026)
+
+Order return construction no longer requires the latest global `FifoAllocationRuns.run_id`. `StockAllocations` is a compact active projection and can legitimately contain valid active rows from several runs. The return now selects `CONSUME` rows by the original order-line `dispatch_movement_id`, preserves source FIFO run IDs as provenance, and still rejects a quantity mismatch before creating the return operation. Regression coverage includes a later unrelated run and a partial-allocation rejection. See `docs/UX_PATCH_F01_RETURN_FIFO.md`.
+
+This fix is locally tested but **not runtime-accepted** in Google Sheets. The runtime test must use a restored disposable copy: dispatch order A, perform a separate stock operation that produces a later FIFO run, then accept the return of A and verify the returned lots retain the original lot costs. Do not use a live order or production stock.

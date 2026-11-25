@@ -10,7 +10,7 @@
   },
   "typescript_ast_audit": {
     "files": 49,
-    "functions": 554,
+    "functions": 556,
     "topLevelVars": 87,
     "parseErrors": [],
     "duplicateDeclarations": [],
@@ -56,13 +56,22 @@
     "The warehouse Dashboard chart remains visually blank in the user's Google Sheets copy. The read-only diagnostic function was added, but actual chart rendering has not been validated.",
     "Schema v3 migration adding V3_Orders.commission_payer has not been executed; it requires Dry Run and a verified backup on a restored test copy.",
     "Apps Script manifest timezone could not be checked because appsscript.json was absent from the supplied source archive.",
-    "No live Google Sheets workbook, order creation/dispatch, manual stock movement, batch recovery, Money Core migration, accounting-period close/reopen, FIFO diagnostic or FIFO rebuild was executed for these patches."
+    "No live Google Sheets workbook, order creation/dispatch, manual stock movement, batch recovery, Money Core migration, accounting-period close/reopen, FIFO diagnostic or FIFO rebuild was executed for these patches.",
+    "F-01 order-return FIFO lookup is code-fixed and locally regression-tested; the end-to-end return after a later unrelated FIFO run still requires runtime acceptance on a restored disposable Google Sheets copy."
   ],
   "order_domain_unit_tests": {
     "status": "PASS",
-    "passed": 13,
+    "passed": 16,
     "failed": 0,
     "failures": [],
-    "runner": "tools/run_order_domain_tests.js"
+    "runner": "tools/run_order_domain_tests.js",
+    "f01_return_fifo_regressions": {
+      "status": "PASS",
+      "tests": [
+        "select original dispatch CONSUME allocations from an older run when a newer unrelated run exists",
+        "reject partial or inconsistent dispatch allocation quantity",
+        "build return payload from original dispatch lots without querying the globally latest FIFO run"
+      ]
+    }
   }
 }

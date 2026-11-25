@@ -124,6 +124,95 @@ function di3RunOrderDomainUnitTests() {
     equal(DI3_ORDER_ALLOWED_TRANSITIONS[DI3_ORDER_STATUS.CANCELLED].length, 0);
   });
 
+  test("order return selects dispatch allocations even when a later unrelated FIFO run exists", function () {
+    // StockAllocations is a compact active projection. Incremental runs can
+    // leave the original dispatch allocation tagged with an older run_id.
+    var allocationRows = [
+      ["ALLOC-A", "RUN-OLD-A", "DISPATCH-A", "LOT-A1", "PRODUCT-A", "CONSUME", 2, 10, "KNOWN", 20],
+      ["ALLOC-A-EXTRA", "RUN-OLD-A", "DISPATCH-A", "LOT-A2", "PRODUCT-A", "CONSUME", 1, 12, "KNOWN", 12],
+      ["ALLOC-B", "RUN-LATEST", "UNRELATED-DISPATCH-B", "LOT-B", "PRODUCT-B", "CONSUME", 5, 7, "KNOWN", 35],
+      ["ALLOC-A-RESTORE", "RUN-LATEST", "DISPATCH-A", "LOT-A1", "PRODUCT-A", "RESTORE", 1, 10, "KNOWN", 10]
+    ];
+    var selected = di3SelectOrderDispatchConsumeAllocations_(allocationRows, ["DISPATCH-A"]);
+    equal(selected.length, 2);
+    equal(selected[0][1], "RUN-OLD-A");
+    equal(selected[1][1], "RUN-OLD-A");
+    equal(selected.every(function (row) { return String(row[2]) === "DISPATCH-A" && String(row[5]) === "CONSUME"; }), true);
+    var itemAllocations = di3GetOrderItemReturnAllocations_(selected, {
+      dispatch_movement_id: "DISPATCH-A", quantity: 3, product_label_snapshot: "Product A"
+    });
+    equal(itemAllocations.length, 2);
+  });
+
+  test("order return still rejects partial or inconsistent dispatch allocation quantity", function () {
+    var allocationRows = [
+      ["ALLOC-A", "RUN-OLD", "DISPATCH-A", "LOT-A", "PRODUCT-A", "CONSUME", 2, 10, "KNOWN", 20]
+    ];
+    var selected = di3SelectOrderDispatchConsumeAllocations_(allocationRows, ["DISPATCH-A"]);
+    throws(function () {
+      di3GetOrderItemReturnAllocations_(selected, {
+        dispatch_movement_id: "DISPATCH-A", quantity: 3, product_label_snapshot: "Product A"
+      });
+    }, /FIFO-распределение позиции.*не совпадает/);
+  });
+
+  test("order return payload is built from original dispatch allocations after an unrelated later FIFO run", function () {
+    var originalReadRows = di3ReadRowsByColumnValues_;
+    var originalGetLatestRun = di3GetLatestFifoAllocationRun_;
+    var originalGetSequence = di3GetNextMovementDisplayCodeSequence_;
+    var originalMakeUuid = di3MakeUuid_;
+    var latestRunLookups = 0;
+    var uuidSequence = 0;
+    var allocations = [
+      ["ALLOC-A1", "RUN-OLD-A", "DISPATCH-A", "LOT-A1", "PRODUCT-A", "CONSUME", 2, 10, "KNOWN", 20, new Date("2026-01-01T00:00:00Z"), new Date("2026-01-01T00:00:00Z"), "", 2000],
+      ["ALLOC-A2", "RUN-OLD-A", "DISPATCH-A", "LOT-A2", "PRODUCT-A", "CONSUME", 1, 12, "KNOWN", 12, new Date("2026-01-01T00:00:00Z"), new Date("2026-01-01T00:00:00Z"), "", 1200],
+      ["ALLOC-B", "RUN-LATEST", "UNRELATED-DISPATCH-B", "LOT-B", "PRODUCT-B", "CONSUME", 5, 7, "KNOWN", 35, new Date("2026-01-02T00:00:00Z"), new Date("2026-01-02T00:00:00Z"), "", 3500],
+      ["ALLOC-A-RESTORE", "RUN-LATEST", "DISPATCH-A", "LOT-A1", "PRODUCT-A", "RESTORE", 1, 10, "KNOWN", 10, new Date("2026-01-02T00:00:00Z"), new Date("2026-01-02T00:00:00Z"), "ALLOC-A1", 1000]
+    ];
+    var lotsById = {
+      "LOT-A1": ["LOT-A1", "PRODUCT-A", "RECEIPT-A1", "SUPPLY_RECEIVE", "SUPPLY-A", "PACK-A", new Date("2025-12-01T00:00:00Z"), new Date("2025-12-01T00:00:00Z"), 10, 10, "KNOWN", "RUB", "", 8, 10000],
+      "LOT-A2": ["LOT-A2", "PRODUCT-A", "RECEIPT-A2", "SUPPLY_RECEIVE", "SUPPLY-A", "PACK-A", new Date("2025-12-02T00:00:00Z"), new Date("2025-12-02T00:00:00Z"), 10, 12, "KNOWN", "RUB", "", 9, 12000]
+    };
+    try {
+      di3ReadRowsByColumnValues_ = function (sheetName, columnIndex, values) {
+        if (sheetName === "StockAllocations" && columnIndex === 2) {
+          return allocations.filter(function (row) { return values.indexOf(String(row[2])) >= 0; })
+            .map(function (row, index) { return { values: row, row_number: index + 2 }; });
+        }
+        if (sheetName === "StockLots" && columnIndex === 0) {
+          return values.filter(function (lotId) { return !!lotsById[String(lotId)]; })
+            .map(function (lotId, index) { return { values: lotsById[String(lotId)], row_number: index + 2 }; });
+        }
+        throw new Error("Unexpected test read: " + sheetName + "/" + columnIndex);
+      };
+      di3GetLatestFifoAllocationRun_ = function () {
+        latestRunLookups++;
+        return { run_id: "RUN-LATEST", run_sequence: 99 };
+      };
+      di3GetNextMovementDisplayCodeSequence_ = function () { return 100; };
+      di3MakeUuid_ = function () { uuidSequence++; return "TEST-UUID-" + uuidSequence; };
+
+      var payload = di3BuildOrderReturnPayload_({ order_id: "ORDER-A", order_number: "A-001" }, [{
+        order_item_id: "ITEM-A", product_id: "PRODUCT-A", product_label_snapshot: "Product A",
+        quantity: 3, dispatch_movement_id: "DISPATCH-A"
+      }], new Date("2026-01-03T00:00:00Z"));
+
+      equal(latestRunLookups, 0, "Return payload must not depend on the globally latest FIFO run");
+      equal(payload.lines.length, 2);
+      equal(payload.lines.reduce(function (sum, line) { return sum + line.quantity; }, 0), 3);
+      equal(payload.source_fifo_run_id, "RUN-OLD-A");
+      equal(payload.source_fifo_run_ids.join("|"), "RUN-OLD-A");
+      equal(payload.lines[0].source_lot_id, "LOT-A1");
+      equal(payload.lines[1].source_lot_id, "LOT-A2");
+      equal(payload.lines.every(function (line) { return line.original_dispatch_movement_id === "DISPATCH-A"; }), true);
+    } finally {
+      di3ReadRowsByColumnValues_ = originalReadRows;
+      di3GetLatestFifoAllocationRun_ = originalGetLatestRun;
+      di3GetNextMovementDisplayCodeSequence_ = originalGetSequence;
+      di3MakeUuid_ = originalMakeUuid;
+    }
+  });
+
   test("common platform surcharge rates 5, 9 and 10 percent are calculated on gross goods", function () {
     [5, 9, 10].forEach(function (rate) {
       var plan = di3BuildOrderFinancialPlan_({

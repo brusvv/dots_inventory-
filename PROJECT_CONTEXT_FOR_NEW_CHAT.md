@@ -229,14 +229,19 @@ Don't infer runtime acceptance from these modules existing. Inspect each module/
 
 ## 8. Immediate next work (priority order)
 
-1. **Finish verification of `26JY021` full-edit operation**: prove the same `supply_id`, same `created_at`, one committed `SUPPLY_DOCUMENT_EDIT` with reason/payload, and unchanged stock/FIFO rows.
-2. **Test G6 on a separate sent test supply**: enter a valid historical awaiting date, preview `PREVIEW_ONLY`, save and verify target status becomes `Ожидает получения`, G5 remains unchanged, no stock receipt/ledger/lots are created, audit history is correct.
-3. **Test all full-edit fields on a disposable pre-receipt supply**: supplier, notes, seller discount, partner discount, shipping, price, quantity, add/remove/reorder items, number recalculation with collision protection, preserving IDs where appropriate. No receipt in this test.
-4. **Test normal G7 receipt path** on a separate pending supply. For a supply already in the warehouse, do not use `Внести старую поставку` again.
-5. **Supply UX/menu runtime acceptance**: validate UX-01–UX-03 on a restored copy; then validate UX-01–UX-10 prompts, selector behavior, manual warehouse confirmations and menu actions in a restored Google Sheets copy. The local source/menu audit is complete; live runtime acceptance is still pending.
-6. **Warehouse Dashboard runtime test** after the current `19_DI3_WarehouseViews.gs` is installed. Confirm chart rendering and top-20 correct labels/values using the screenshot fixture. No stock mutations.
-7. **Implement Phase C `SUPPLY_CORRECTION`**: immutable corrective operation for received supplies, compensating movements, FIFO candidate replay, ProductCostHistory and downstream order COGS re-evaluation. Not implemented yet; design and failure/retry coverage required.
-8. After all historical purchases and sales have been entered, run full historical stock/FIFO/financial reconciliation. The user has intentionally postponed final acceptance of historical supply entries until then.
+1. **F-01 return FIFO runtime acceptance:** on a restored disposable copy, dispatch order A, create a later unrelated FIFO run, accept A's return, and verify source-lot quantities/costs. Code and local regression tests are complete; real Sheets execution is still pending.
+2. **Finish verification of `26JY021` full-edit operation**: prove the same `supply_id`, same `created_at`, one committed `SUPPLY_DOCUMENT_EDIT` with reason/payload, and unchanged stock/FIFO rows.
+3. **Test G6 on a separate sent test supply**: enter a valid historical awaiting date, preview `PREVIEW_ONLY`, save and verify target status becomes `Ожидает получения`, G5 remains unchanged, no stock receipt/ledger/lots are created, audit history is correct.
+4. **Test all full-edit fields on a disposable pre-receipt supply**: supplier, notes, seller discount, partner discount, shipping, price, quantity, add/remove/reorder items, number recalculation with collision protection, preserving IDs where appropriate. No receipt in this test.
+5. **Test normal G7 receipt path** on a separate pending supply. For a supply already in the warehouse, do not use `Внести старую поставку` again.
+6. **Supply UX/menu runtime acceptance**: validate UX-01–UX-10 prompts, selector behavior, manual warehouse confirmations and menu actions in a restored Google Sheets copy. Live runtime acceptance is still pending.
+7. **Warehouse Dashboard runtime test** after the current `19_DI3_WarehouseViews.gs` is installed. Confirm chart rendering and top-20 correct labels/values using the screenshot fixture. No stock mutations.
+8. **Implement Phase C `SUPPLY_CORRECTION`**: immutable corrective operation for received supplies, compensating movements, FIFO candidate replay, ProductCostHistory and downstream order COGS re-evaluation. Not implemented yet; design and failure/retry coverage required.
+9. After all historical purchases and sales have been entered, run full historical stock/FIFO/financial reconciliation.
+
+### Prior supply-specific acceptance details
+
+The detailed supply checks are unchanged: verify G5/G6/G7 chronology and backend evidence on separate disposable supplies; do not duplicate an already-received historical supply.
 
 ## 9. Remaining project roadmap
 
@@ -322,7 +327,7 @@ The user visually tested UX-01–UX-06 and reported that all observed behavior w
 - Percent reader handles native percent formats (stored fraction, e.g. 0.1) and literal-percent formats (`0.00"%"`, stored 10). This addresses the user's screenshot: 300 ₽ × displayed 10% had yielded 0.30 ₽.
 - `V3_Orders` now has appended `commission_payer`; schema version is 3, with `RC8_ORDER_COMMISSION_PAYER_V3` v2→v3. Existing orders are backfilled as BUYER to preserve previous policy. Apply only via normal Dry Run + verified backup setup.
 - Example with goods 300 ₽, fee 30 ₽, FIFO cost 105 ₽: buyer pays → buyer total 330 ₽, seller revenue 300 ₽, profit 195 ₽; seller pays → buyer total 300 ₽, seller revenue 270 ₽, profit 165 ₽.
-- Local order-domain tests: 13/13 PASS.
+- Local order-domain tests: 16/16 PASS (includes F-01 return FIFO regression).
 
 ### Warehouse Dashboard follow-up
 
@@ -332,4 +337,12 @@ The user visually tested UX-01–UX-06 and reported that all observed behavior w
 - Added read-only `di3DiagnoseWarehouseDashboardChart()` and `di3LogWarehouseDashboardChartDiagnostics()`. Run the latter from the Apps Script editor on a restored test copy and provide the execution log. It reports N1:O21 helper values, hidden columns, chart count, source ranges, chart type and anchor.
 - The actual blank-chart cause is still not identified. Local Dashboard tests are 7/7 but do not emulate real Sheets chart rendering.
 
-Local validation after the patch: syntax 49/49; Order Domain 13/13; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7. No live workbook migration, order creation, dispatch, stock mutation, FIFO rebuild or actual chart runtime test was performed.
+Local validation after the patch: syntax 49/49; Order Domain 16/16; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7. No live workbook migration, order creation, dispatch, stock mutation, FIFO rebuild or actual chart runtime test was performed.
+
+
+### F-01 — Order return FIFO lookup (25.11.2026)
+
+- Code fix is implemented in `16_DI3_OrderWorkflow.gs`: `StockAllocations` is an active projection whose valid rows can carry different `allocation_run_id` values. The old global latest-run filter has been removed.
+- The return now resolves `CONSUME` rows by each order line's original `dispatch_movement_id`; the exact allocated-quantity check remains mandatory. Source run IDs are retained as provenance; original lot IDs, pack variants and allocated cost are used to build the new return lots.
+- Regression tests cover an old dispatch allocation with a newer unrelated run, a full return-payload build and partial-quantity rejection. Order Domain suite: 16/16 PASS.
+- Runtime acceptance is still pending on a restored disposable spreadsheet. The real sequence to test is: dispatch A → perform a separate stock operation creating a later FIFO run → accept return A → reconcile new lots and costs.

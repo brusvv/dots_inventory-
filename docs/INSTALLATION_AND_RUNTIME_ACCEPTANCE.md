@@ -29,7 +29,7 @@ Do not run Clean Start, imports, schema migration, restore, or any stock mutatio
 - `di3RunSupplyFullEditUnitTests()`
 - `di3RunWarehouseDashboardUnitTests()`
 
-These are Apps Script code functions and some depend on the Sheets runtime / project mocks. The local helper in this repository only executes the five pure warehouse chart tests. Do not infer that all unit-test entry points were executed locally.
+These are Apps Script code functions and some depend on the Sheets runtime / project mocks. The local Node helpers execute only the explicitly listed suites: Warehouse Dashboard (7 tests), Order Domain (16 tests), Supply Workspace UX (9 tests), Catalog/Order UX (12 tests) and System Safety UX (11 tests). Do not infer that all Apps Script unit-test entry points were executed locally.
 
 ## Probe safety
 
@@ -159,3 +159,17 @@ Test both native Sheets percentage formatting (e.g. stored value 0.1 with `0.00%
 `di3LogWarehouseDashboardChartDiagnostics()` is a read-only runtime function. Run it from the Apps Script editor on the restored test copy and provide its Execution log. It reports helper range N1:O21 values, hidden columns, chart count, source ranges, chart type and anchor. It does not mutate business tables. Also verify H11 average-known FIFO cost; 2,940 ₽ / 120 known units should display 24.50 ₽.
 
 The chart itself remains unaccepted until the actual Google Sheets rendering is visible. Local chart-data tests are not a substitute.
+
+## F-01 — order return after a later FIFO run
+
+The local fix in `16_DI3_OrderWorkflow.gs` now selects active `CONSUME` allocations by the original order-line `dispatch_movement_id`. It does not require the allocation row's `allocation_run_id` to equal the globally latest committed FIFO run. The source run IDs are retained in the return operation payload as provenance only. The exact allocated quantity is still validated per order line before the return operation is registered.
+
+Runtime acceptance (restored disposable copy only):
+
+1. Dispatch a disposable order A and record its original `dispatch_movement_id` values and matching `StockAllocations` rows.
+2. Perform a separate stock operation that creates a newer committed FIFO run, preferably for a different product. Confirm A's active allocation rows still carry their older `allocation_run_id`.
+3. Move A through `Возвращается` and accept its return.
+4. Verify the return operation is `COMMITTED`, returned quantities exactly match the source dispatch allocations, and new return lots preserve source-lot pack variant and exact cost. Reconcile stock quantity and FIFO valuation for the affected product.
+5. On a separate disposable test, simulate an allocation quantity mismatch and confirm the return is rejected before any return ledger movement or lot is appended.
+
+Do not use a live order or production stock. The Node test proves that payload construction selects the old-run allocation and preserves the quantity guard, but does not emulate the full Apps Script operation executor or workbook writes. F-01 is therefore code-fixed / locally tested, but not runtime-accepted until this scenario passes in Google Sheets.

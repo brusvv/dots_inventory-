@@ -239,27 +239,68 @@ function di3GetLotById_(lotId) {
   return match ? match.values : null;
 }
 
+/**
+ * StockAllocations is the active projection, not a single-run snapshot.
+ * Product replays replace the rows for one product, while incremental runs
+ * append rows for the products they touched. As a result, valid active rows
+ * can legitimately carry different allocation_run_id values.
+ *
+ * For an order return, the stable relationship is the original dispatch
+ * movement_id plus allocation_type=CONSUME. Never scope this lookup to the
+ * globally latest FIFO run: an unrelated stock operation may have created it.
+ */
+function di3SelectOrderDispatchConsumeAllocations_(allocationRows, dispatchMovementIds) {
+  var movementIds = Object.create(null);
+  (dispatchMovementIds || []).forEach(function (movementId) {
+    if (movementId != null && String(movementId) !== "") movementIds[String(movementId)] = true;
+  });
+  if (!Object.keys(movementIds).length) return [];
+  return (allocationRows || []).filter(function (row) {
+    return Object.prototype.hasOwnProperty.call(movementIds, String(row[2])) &&
+      String(row[5]) === "CONSUME";
+  });
+}
+
+/** Return the original dispatch allocations for one order line, fail-closed on quantity mismatch. */
+function di3GetOrderItemReturnAllocations_(allocations, item) {
+  if (!item || !item.dispatch_movement_id) {
+    throw new Error("У позиции заказа отсутствует движение первоначального списания.");
+  }
+  var itemAllocations = (allocations || []).filter(function (row) {
+    return String(row[2]) === String(item.dispatch_movement_id);
+  });
+  var allocatedQty = itemAllocations.reduce(function (sum, row) {
+    return sum + Number(row[6] || 0);
+  }, 0);
+  if (allocatedQty !== Number(item.quantity)) {
+    throw new Error("FIFO-распределение позиции «" + item.product_label_snapshot + "» не совпадает с количеством заказа.");
+  }
+  return itemAllocations;
+}
+
 function di3BuildOrderReturnPayload_(order, items, effectiveAt) {
-  var activeRun = di3GetLatestFifoAllocationRun_();
-  if (!activeRun) throw new Error("Нет активного FIFO-расчёта. Сначала восстанови складские операции.");
   var dispatchMovementIds = items.map(function (item) { return String(item.dispatch_movement_id || ""); }).filter(Boolean);
-  var allocations = di3ReadRowsByColumnValues_("StockAllocations", 2, dispatchMovementIds)
-    .map(function (match) { return match.values; })
-    .filter(function (row) { return String(row[1]) === activeRun.run_id && String(row[5]) === "CONSUME"; });
+  var allocationRows = di3ReadRowsByColumnValues_("StockAllocations", 2, dispatchMovementIds)
+    .map(function (match) { return match.values; });
+  var allocations = di3SelectOrderDispatchConsumeAllocations_(allocationRows, dispatchMovementIds);
   var sourceLotIds = allocations.map(function (row) { return String(row[3]); });
   var lotRows = sourceLotIds.length ? di3ReadRowsByColumnValues_("StockLots", 0, sourceLotIds).map(function (match) { return match.values; }) : [];
   var lotsById = {};
   lotRows.forEach(function (row) { lotsById[String(row[0])] = row; });
+  var sourceFifoRunIds = [];
+  var seenSourceFifoRunIds = Object.create(null);
+  allocations.forEach(function (row) {
+    var runId = String(row[1] || "");
+    if (runId && !seenSourceFifoRunIds[runId]) {
+      seenSourceFifoRunIds[runId] = true;
+      sourceFifoRunIds.push(runId);
+    }
+  });
   var recordedAt = new Date();
   var sequence = di3GetNextMovementDisplayCodeSequence_();
   var lines = [];
   items.forEach(function (item) {
-    if (!item.dispatch_movement_id) throw new Error("У позиции заказа отсутствует движение первоначального списания.");
-    var itemAllocations = allocations.filter(function (row) { return String(row[2]) === String(item.dispatch_movement_id); });
-    var allocatedQty = itemAllocations.reduce(function (sum, row) { return sum + Number(row[6] || 0); }, 0);
-    if (allocatedQty !== Number(item.quantity)) {
-      throw new Error("FIFO-распределение позиции «" + item.product_label_snapshot + "» не совпадает с количеством заказа.");
-    }
+    var itemAllocations = di3GetOrderItemReturnAllocations_(allocations, item);
     itemAllocations.forEach(function (allocation, index) {
       var sourceLot = lotsById[String(allocation[3])] || null;
       if (!sourceLot) throw new Error("Не найдена исходная FIFO-партия для возврата.");
@@ -288,7 +329,11 @@ function di3BuildOrderReturnPayload_(order, items, effectiveAt) {
   return {
     order_id: String(order.order_id), order_number: String(order.order_number),
     returned_at: effectiveAt.toISOString(), recorded_at: recordedAt.toISOString(),
-    source_fifo_run_id: activeRun.run_id, lines: lines
+    // Keep run IDs as provenance only. A single order may reference active
+    // allocations produced by more than one incremental FIFO run.
+    source_fifo_run_id: sourceFifoRunIds.length === 1 ? sourceFifoRunIds[0] : "",
+    source_fifo_run_ids: sourceFifoRunIds,
+    lines: lines
   };
 }
 
