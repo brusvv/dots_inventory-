@@ -20,7 +20,7 @@ var DI3_TABLE_SCHEMAS = Object.freeze({
   StockLedger: [
     "movement_id", "operation_id", "event_key", "product_id",
     "document_type", "document_id", "quantity_delta", "effective_at",
-    "recorded_at", "unit_cost_before", "unit_cost_after", "comment"
+    "recorded_at", "unit_cost_before", "unit_cost_after", "comment", "ledger_sequence"
   ],
   Operations: [
     "operation_id", "idempotency_key", "operation_type", "document_type",
@@ -60,7 +60,7 @@ var DI3_TABLE_SCHEMAS = Object.freeze({
   ],
   FifoProductState: [
     "product_id", "last_effective_at", "last_recorded_at", "last_movement_id",
-    "last_ledger_row_number", "movement_count", "remaining_quantity", "updated_at"
+    "last_processed_ledger_sequence", "movement_count", "remaining_quantity", "updated_at"
   ],
   OperationPayloads: [
     "operation_id", "payload_json", "created_at"
