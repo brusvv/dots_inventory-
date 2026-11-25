@@ -577,7 +577,7 @@ function di3RecoverPendingFifoReplaysForRun_(run, reason) {
   var lotRows = di3ReadTableValues_("StockLots");
   var recoveredProducts = Object.create(null);
   var fullReplayRecovered = false;
-  var replayedMovements = 0;
+  var replayedMovements = 0, recoveredAllocations = 0, recoveredRemoved = 0, recoveredLots = 0;
 
   pending.forEach(function (match) {
     var event = match.values;
@@ -607,8 +607,11 @@ function di3RecoverPendingFifoReplaysForRun_(run, reason) {
         });
         context.target_rows = targetRows;
         context.target_remaining = remaining;
-        di3ReplaceFifoProjectionSafely_(function (row) { return String(row[4]) === productId; },
+        var productReplace = di3ReplaceFifoProjectionSafely_(function (row) { return String(row[4]) === productId; },
           targetRows, lotRows, remaining, productId, context);
+        recoveredAllocations += Number(productReplace.allocations_written || productReplace.allocations_already_present || 0);
+        recoveredRemoved += Number(productReplace.allocations_removed || 0);
+        recoveredLots += Object.keys(remaining).length;
         var productLedgerRows = ledgerRows.filter(function (row) { return String(row[3]) === productId; });
         di3UpsertFifoProductStateRows_(di3BuildFifoProductStateRows_([productId], productLedgerRows, lotRows));
         recoveredProducts[productId] = true;
@@ -626,7 +629,10 @@ function di3RecoverPendingFifoReplaysForRun_(run, reason) {
         });
         context.target_rows = fullTargetRows;
         context.target_remaining = fullRemaining;
-        di3ReplaceFifoProjectionSafely_(function () { return true; }, fullTargetRows, lotRows, fullRemaining, null, context);
+        var fullReplace = di3ReplaceFifoProjectionSafely_(function () { return true; }, fullTargetRows, lotRows, fullRemaining, null, context);
+        recoveredAllocations += Number(fullReplace.allocations_written || fullReplace.allocations_already_present || 0);
+        recoveredRemoved += Number(fullReplace.allocations_removed || 0);
+        recoveredLots += Object.keys(fullRemaining).length;
         var allProductIds = Array.from(new Set(ledgerRows.map(function (row) { return String(row[3] || ""); }).filter(Boolean)));
         di3UpsertFifoProductStateRows_(di3BuildFifoProductStateRows_(allProductIds, ledgerRows, lotRows));
         fullReplayRecovered = true;
@@ -648,7 +654,10 @@ function di3RecoverPendingFifoReplaysForRun_(run, reason) {
     recovered: pending.length,
     products: Object.keys(recoveredProducts),
     full_replay: fullReplayRecovered,
-    movements_replayed: replayedMovements
+    movements_replayed: replayedMovements,
+    allocations_written: recoveredAllocations,
+    allocations_removed: recoveredRemoved,
+    lots_updated: recoveredLots
   };
 }
 
@@ -1251,7 +1260,11 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
   var created = 0, replaced = 0, replayedMovements = 0, updatedLots = 0;
   var fullReplayStateRows = null;
   try {
-    di3RecoverPendingFifoReplaysForRun_(run, reason);
+    var recoveredReplay = di3RecoverPendingFifoReplaysForRun_(run, reason);
+    created += Number(recoveredReplay.allocations_written || 0);
+    replaced += Number(recoveredReplay.allocations_removed || 0);
+    updatedLots += Number(recoveredReplay.lots_updated || 0);
+    replayedMovements += Number(recoveredReplay.movements_replayed || 0);
     if (isFullReplay) {
       var fullRows = di3BuildFifoAllocationRows_(run.run_id, candidateReplay.allocations, run.replay_id);
       var remaining = {};
