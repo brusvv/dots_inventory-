@@ -183,7 +183,7 @@ function di3EnsureSupplyStatusHistory_(supplyId, oldStatus, newStatus, effective
   });
   if (exists) return false;
   var actor = "";
-  try { actor = Session.getActiveUser().getEmail() || ""; } catch (ignore) {}
+  actor = di3GetActorEmail_();
   di3AppendTableRows_("DocumentStatusHistory", [[
     di3MakeUuid_(), "SUPPLY", supplyId, oldStatus || "", newStatus,
     effectiveAt, actor, operationId || "", comment || ""
