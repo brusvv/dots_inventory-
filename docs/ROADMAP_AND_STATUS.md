@@ -160,7 +160,7 @@ The following issues have source changes and local regression coverage. They are
 - **F-10:** PeriodLocks now appends `LOCKED` / `REOPENED` events; current state is derived from the latest event per period. Structural tests were added, but local execution and close → reopen → re-close runtime acceptance remain pending. Previously overwritten legacy history cannot be recovered.
 - **F-14:** true multi-session ScriptLock contention/recovery is not proven by local tests.
 - **F-17:** delivery-method catalogue needs the user's actual options; none are invented.
-- **F-20:** source audit completed; initiator/executor attribution is partially implemented but inconsistent across domain writes and recovery. The identity contract and acceptance plan are documented in `docs/F20_OPERATION_IDENTITY_AUDIT.md`; implementation is not started.
+- **F-20:** source audit completed. First low-risk implementation step exposes the stored executor actor in attempt diagnostics and adds a regression test for recovery/manual-review attribution. The centralized actor-context helper and initiator propagation are still not implemented; see `docs/F20_OPERATION_IDENTITY_AUDIT.md`. New test is added but not executed here.
 - The Warehouse Dashboard chart remains blank in the user's Sheets copy. The next step is to run the existing read-only chart diagnostics on the restored test copy and inspect N1:O21 plus the chart's actual source range.
 
 
@@ -219,3 +219,13 @@ The following issues have source changes and local regression coverage. They are
 - Proposed a normalized actor context with separate initiator, executor and domain-event semantics, plus pure tests and restored-workbook acceptance scenarios.
 - **Design only:** no Apps Script behavior, schema, manifest, triggers, workbook data, operation payloads or business records changed. No tests were run for this audit.
 - Design: `docs/F20_OPERATION_IDENTITY_AUDIT.md`.
+
+
+## F-20 — diagnostic actor visibility — 25.11.2026
+
+- `di3GetOperationAttemptStats_` now exposes the persisted `OperationAttempts.actor` on every attempt diagnostic object, including `last_attempt` and `manual_reviews`.
+- The active retry-epoch projection now carries the actor through its internal row adapter instead of replacing the actor column with an empty string.
+- Added a regression test with three distinct identities: original executor, manual reviewer and recovery executor. It checks that the active retry epoch reports the recovery executor while the manual review retains its own actor.
+- No schema, spreadsheet, operation payload, business record, stock event, or runtime behavior was changed.
+- **Test execution pending:** the existing `tools/run_system_safety_ux_tests.js` runner loads both the executor and the updated test module, but it was not executed in this environment. Run the runner and full syntax check before deployment.
+- Remaining F-20 work: centralize actor-context capture, distinguish initiator from executor, and propagate the persisted initiator into domain audit writes without substituting the trigger/recovery executor.
