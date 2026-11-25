@@ -78,6 +78,21 @@ function di3RunCatalogOrderUxUnitTests() {
     includes(source, "Принять возврат (из «Возвращается»)…");
     includes(source, "Отменить заказ (только «Новый»)…");
   });
+  test("order transitions require YES before domain transition executes", function () {
+    var source = di3TransitionSelectedOrder_.toString();
+    var prompt = source.indexOf("SpreadsheetApp.getUi().alert");
+    var advance = source.indexOf("di3AdvanceOrderStatus(");
+    equal(prompt >= 0 && advance > prompt, true);
+    includes(source, "CANCELLED_BY_USER");
+  });
+  test("order transition confirmation describes stock effects separately", function () {
+    var source = di3GetOrderTransitionConfirmationText_.toString();
+    includes(source, "DI3_ORDER_STATUS.IN_TRANSIT");
+    includes(source, "DI3_ORDER_STATUS.RETURNED");
+    includes(source, "складские движения расхода");
+    includes(source, "складские движения прихода");
+    includes(source, "Фактическое поступление товара на склад");
+  });
 
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Catalog/Order UX tests failed: " + JSON.stringify(failed));

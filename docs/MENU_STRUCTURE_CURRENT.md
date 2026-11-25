@@ -31,7 +31,7 @@ This file reflects `di3BuildMenus_()` in `src/apps_script/22_DI3_MenuAndFilterUt
 - Mark returning (from In transit)… / accept return (from Returning)…
 - Cancel order (New only)…
 
-The label documents the expected status path; the domain layer remains authoritative and rejects invalid transitions.
+The label documents the expected status path. Every transition opens a YES/NO dialog before calling the domain layer; the dialog distinguishes status-only transitions from dispatch/return transitions that create stock movements. The domain layer remains authoritative and rejects invalid transitions.
 
 ## Finance
 

@@ -35,7 +35,7 @@
 - **UX-04:** `Новый заказ` fingerprints B3:B8 and A12:C31 (excluding derived G4:G11) and prompts before clearing unsaved parameters/lines. After successful order creation, the form is reset without asking again.
 - **UX-05:** `Новый товар` prompts before clearing B6:B15. When a different product is selected while dirty, the attempted option is staged in DocumentProperties and the previous selector restored. The explicit menu action asks before loading the new record. The duplicate-identity path also uses this confirmation and must not silently replace entered fields.
 - **UX-06:** System navigation is grouped by task; order transition labels name expected source/target states. Menu labels are descriptive only—the domain functions remain the actual status guards.
-- Local validation: syntax **48 `.gs` PASS**, Supply UX **9/9**, Catalog/Order UX **10/10**, Warehouse Dashboard **5/5**, TypeScript AST **545 functions / 87 top-level vars / no duplicates or parse errors**, menu reference audit **68 actions / 0 missing handlers**.
+- Local validation: syntax **48 `.gs` PASS**, Supply UX **9/9**, Catalog/Order UX **12/12**, Warehouse Dashboard **5/5**, TypeScript AST **546 functions / 87 top-level vars / no duplicates or parse errors**, menu reference audit **68 actions / 0 missing handlers**.
 - These checks are source/Node-only. Real onEdit trigger behavior, toasts, confirmation dialogs and menus must be accepted in a restored Google Sheets copy before deployment.
 
 ## Warehouse Dashboard

@@ -182,8 +182,8 @@
     },
     {
       "path": "src/apps_script/17_DI3_OrderWorkspace.gs",
-      "bytes": 27099,
-      "sha256": "dc70d1c068d876ea27658b3329265cf3be4b766511e8854779aa432f39050738",
+      "bytes": 29773,
+      "sha256": "3df0b70f42f7afa474b81111be42db8c8e657c712a3f6402403e0bb64d63de7e",
       "kind": "apps_script_module"
     },
     {
@@ -320,8 +320,8 @@
     },
     {
       "path": "src/apps_script/40_DI3_CatalogOrderUxTests.gs",
-      "bytes": 4729,
-      "sha256": "b4d9758360232c3434fcee961eba69af4d939067657f25a11dd7953d36875632",
+      "bytes": 5617,
+      "sha256": "81e036c1a13cdae77ae2bfd5fe56320b62e222fc1b0054746ec5f4d4d81e4d6e",
       "kind": "apps_script_module"
     }
   ],

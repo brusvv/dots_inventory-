@@ -428,8 +428,39 @@ function di3GetSelectedOrderRegisterRow_() {
   return { order_number: number, row_number: row, effective_at: sheet.getRange(row, 16).getValue() };
 }
 
+function di3GetOrderTransitionConfirmationText_(order, nextStatus, effectiveAt) {
+  order = order || {};
+  var action = "Статус заказа изменится с «" + String(order.status || "неизвестен") + "» на «" + String(nextStatus || "") + "».";
+  var effect = "";
+  if (nextStatus === DI3_ORDER_STATUS.IN_TRANSIT) {
+    effect = "Будут созданы складские движения расхода: позиции заказа спишутся со склада, FIFO-распределения и себестоимость будут пересчитаны.";
+  } else if (nextStatus === DI3_ORDER_STATUS.RETURNED) {
+    effect = "Будет принят фактический возврат: создадутся складские движения прихода и FIFO-партии, после чего пересчитаются FIFO и себестоимость.";
+  } else if (nextStatus === DI3_ORDER_STATUS.COMPLETED) {
+    effect = "Изменится только статус заказа. Складское списание уже произошло при переходе в «В пути» и повторяться не будет.";
+  } else if (nextStatus === DI3_ORDER_STATUS.RETURNING) {
+    effect = "Изменится только статус заказа. Фактическое поступление товара на склад выполняется отдельной командой «Принять возврат».";
+  } else if (nextStatus === DI3_ORDER_STATUS.CANCELLED) {
+    effect = "Заказ будет отменён. Отмена разрешена только до отправки и не создаёт складских движений.";
+  }
+  var when = effectiveAt instanceof Date && !isNaN(effectiveAt.getTime())
+    ? Utilities.formatDate(effectiveAt, di3GetConfiguredTimeZone_(), "dd.MM.yyyy HH:mm")
+    : (effectiveAt ? String(effectiveAt) : "текущими датой и временем");
+  return action + "\n\n" + effect + "\n\nДата перехода: " + when + ".\n\nПродолжить?";
+}
+
 function di3TransitionSelectedOrder_(status) {
   var selected = di3GetSelectedOrderRegisterRow_();
+  var order = di3FindOrderByNumber_(selected.order_number);
+  if (!order) throw new Error("Заказ больше не найден: " + selected.order_number);
+  var answer = SpreadsheetApp.getUi().alert(
+    "Подтверждение перехода заказа " + selected.order_number,
+    di3GetOrderTransitionConfirmationText_(order, status, selected.effective_at),
+    SpreadsheetApp.getUi().ButtonSet.YES_NO
+  );
+  if (answer !== SpreadsheetApp.getUi().Button.YES) {
+    return { status: "CANCELLED_BY_USER", order_number: selected.order_number };
+  }
   var result = di3AdvanceOrderStatus(selected.order_number, status, selected.effective_at);
   // The date in column P is a one-shot effective-date input for the next transition.
   // Clear it only when the status actually changed or a PREPARED movement was recovered.

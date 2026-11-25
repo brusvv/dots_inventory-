@@ -10,7 +10,7 @@
   },
   "typescript_ast_audit": {
     "files": 48,
-    "functions": 545,
+    "functions": 546,
     "topLevelVars": 87,
     "parseErrors": [],
     "duplicateDeclarations": [],
@@ -37,7 +37,7 @@
   },
   "catalog_order_ux_unit_tests": {
     "status": "PASS",
-    "passed": 10,
+    "passed": 12,
     "failed": 0,
     "failures": [],
     "runner": "tools/run_catalog_order_ux_tests.js"

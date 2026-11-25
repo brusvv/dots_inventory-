@@ -24,8 +24,8 @@ The duplicate-identity path in `di3SaveNewProductForm()` originally loaded the e
 
 - Source syntax: **48 `.gs` files PASS**.
 - Supply Workspace UX regression: **9 passed / 0 failed**.
-- Catalog/Order UX regression: **10 passed / 0 failed**.
+- Catalog/Order UX regression: **12 passed / 0 failed**.
 - Warehouse Dashboard regression: **5 passed / 0 failed**.
-- TypeScript AST audit: **545 top-level functions**, **87 top-level variable declarations**, no parse errors and no duplicate top-level names.
+- TypeScript AST audit: **546 top-level functions**, **87 top-level variable declarations**, no parse errors and no duplicate top-level names.
 - Menu handler audit: **68 menu actions**, **0 missing function references**.
 - Real Google Sheets trigger prompts, dialogs, and menu behavior remain unverified; this patch must be tested on a restored copy before deployment.

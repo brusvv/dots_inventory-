@@ -81,3 +81,8 @@ Runtime acceptance (restored test copy only):
 5. Check System submenu grouping and order transition labels. Invalid order states must still be rejected by their domain handlers; static menu text is not a state guard.
 
 Local checks: `bash tools/check_syntax.sh`, `node tools/run_catalog_order_ux_tests.js`, `node tools/run_supply_workspace_ux_tests.js`, and `node tools/run_warehouse_dashboard_tests.js`. They do not emulate Apps Script dialogs, Spreadsheet services or live menu behavior.
+
+
+### Order-transition confirmation UX
+
+The current order workspace asks for confirmation before **each** selected-order status transition. The dialog names the order and target status, states whether the transition writes stock movements (dispatch / accepted return) or only changes the order status (complete / returning / cancel), and shows the effective date from column P or the current timestamp fallback. On **No**, the domain transition is not called. Validate the dialog's No path on a restored copy. Do not choose Yes for dispatch or accepted return unless you have a disposable order and explicitly authorized stock effects.

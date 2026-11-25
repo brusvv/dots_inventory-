@@ -39,7 +39,7 @@ node tools/run_supply_workspace_ux_tests.js
 node tools/run_catalog_order_ux_tests.js
 ```
 
-The syntax command checks all `.gs` files. The dashboard runner executes five pure chart tests. The Supply UX runner executes nine pure/structural tests for dirty-form protection, B2 switching and FIFO menu safety. The Catalog/Order runner executes ten source-level regression tests for dirty product/order form protection and menu discoverability. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet.
+The syntax command checks all `.gs` files. The dashboard runner executes five pure chart tests. The Supply UX runner executes nine pure/structural tests for dirty-form protection, B2 switching and FIFO menu safety. The Catalog/Order runner executes twelve source-level regression tests for dirty product/order form protection and menu discoverability. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet.
 
 ## Safe operating rules
 
