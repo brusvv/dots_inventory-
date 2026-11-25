@@ -355,6 +355,23 @@ function di3RunStockCoreUnitTests() {
     }), null);
   });
 
+  test("manual product-set FIFO run resumes only for the same scope and input", function () {
+    var row = ["run-manual", 3, "FAILED", "MANUAL_INCREMENTAL", new Date(), "", 8, 2, 1, "",
+      "", "RUN:run-manual", "PRODUCT_SET", '["p1","p2"]', "manual-fingerprint"];
+    var reusable = di3SelectReusableFifoRun_([{ row_number: 11, values: row }], {
+      scope_type: "PRODUCT_SET", scope_json: '["p1","p2"]', input_fingerprint: "manual-fingerprint"
+    });
+    equal(reusable.run_id, "run-manual");
+    equal(reusable.replay_id, "RUN:run-manual");
+    var mismatchThrew = false;
+    try {
+      di3SelectReusableFifoRun_([{ row_number: 11, values: row }], {
+        scope_type: "PRODUCT_SET", scope_json: '["p1"]', input_fingerprint: "manual-fingerprint"
+      });
+    } catch (error) { mismatchThrew = /другой scope или input fingerprint/.test(error.message); }
+    equal(mismatchThrew, true);
+  });
+
   test("pending operation run can resume after global cursor already advanced", function () {
     var row = ["run-1", 7, "PREPARED", "ORDER_DISPATCH", new Date(), "", 12, 4, 1, "",
       "op-1", "OP:op-1", "PRODUCT_SET", '["p1"]', "fingerprint-a"];
