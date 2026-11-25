@@ -380,6 +380,54 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("clean install Dry Run proposes one final baseline, not the RC8 migration chain", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      di3GetSpreadsheet_ = function () { return { getSheetByName: function () { return null; } }; };
+      di3GetSchemaVersion_ = function () { return 0; };
+      di3GetSchemaMigrationRows_ = function () { return []; };
+      var report = di3GetSchemaVersioningReport_();
+      equal(report.status, "READY");
+      equal(report.installation_path, "CLEAN_FINAL_BASELINE");
+      equal(report.planned_changes.length, 1);
+      equal(report.planned_changes[0].migration_key, DI3_CLEAN_BASELINE_MIGRATION_KEY);
+      equal(report.planned_changes.some(function (item) { return String(item.migration_key).indexOf("RC8_") === 0; }), false);
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
+  test("unversioned populated workbook is blocked instead of being adopted as clean or legacy", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      var headers = DI3_TABLE_SCHEMAS.Products.slice();
+      var productSheet = {
+        getLastRow: function () { return 2; },
+        getMaxColumns: function () { return headers.length; },
+        getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
+      };
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) { return name === "Products" ? productSheet : null; } };
+      };
+      di3GetSchemaVersion_ = function () { return 0; };
+      di3GetSchemaMigrationRows_ = function () { return []; };
+      var report = di3GetSchemaVersioningReport_();
+      equal(report.status, "BLOCKED");
+      equal(report.installation_path, "UNRECOGNIZED_OR_DAMAGED");
+      equal(report.planned_changes.length, 0);
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
     ["StockLedger", "StockAllocations", "FifoAllocationRuns", "FifoAllocationArchive",
       "FifoLotCacheArchive", "FifoReplayEvents"].forEach(function (sheetName) {
