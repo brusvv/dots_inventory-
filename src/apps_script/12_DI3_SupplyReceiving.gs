@@ -182,8 +182,6 @@ function di3EnsureSupplyStatusHistory_(supplyId, oldStatus, newStatus, effective
     return String(row[1]) === "SUPPLY" && String(row[4]) === String(newStatus);
   });
   if (exists) return false;
-  var actor = "";
-  actor = di3GetActorEmail_();
   di3AppendTableRows_("DocumentStatusHistory", [[
     di3MakeUuid_(), "SUPPLY", supplyId, oldStatus || "", newStatus,
     effectiveAt, operationId ? di3GetOperationInitiatorActor_(operationId) : di3GetActorEmail_(), operationId || "", comment || ""
