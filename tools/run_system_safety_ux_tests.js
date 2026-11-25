@@ -17,6 +17,7 @@ const files = [
   "src/apps_script/22_DI3_MenuAndFilterUtils.gs",
   "src/apps_script/23_DI3_PeriodGuard.gs",
   "src/apps_script/27_DI3_OperationExecutor.gs",
+  "src/apps_script/28_DI3_InstallationPreflight.gs",
   "src/apps_script/33_DI3_SchemaVersioning.gs",
   "src/apps_script/36_DI3_SupplyFullEdit.gs",
   "src/apps_script/29_DI3_SettingsRepository.gs",
