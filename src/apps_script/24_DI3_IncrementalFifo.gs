@@ -1191,6 +1191,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
   var created = 0, replaced = 0, replayedMovements = 0, updatedLots = 0;
   var fullReplayStateRows = null;
   try {
+    di3RecoverPendingFifoReplaysForRun_(run, reason);
     if (isFullReplay) {
       var fullRows = di3BuildFifoAllocationRows_(run.run_id, candidateReplay.allocations, run.replay_id);
       var remaining = {};
