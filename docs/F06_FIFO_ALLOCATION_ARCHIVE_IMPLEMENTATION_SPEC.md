@@ -27,9 +27,9 @@ F-06 должен сохранять каждую вытесненную вер�
 
 F-06 реализуется после F-07: sequence watermark даёт устойчивую идентичность входного ledger-среза и снимает зависимость recovery от физического номера строки.
 
-## 2. Проверенные текущие реализации
+## 2. Начальное состояние исходников до реализации F-06
 
-Проверены актуальные файлы `main`:
+На момент исходного аудита (до F-06 source patch) были проверены файлы `main`:
 - `src/apps_script/24_DI3_IncrementalFifo.gs`
 - `src/apps_script/27_DI3_OperationExecutor.gs`
 - `src/apps_script/00_DI3_SchemaRegistry.gs`
@@ -42,14 +42,14 @@ F-06 реализуется после F-07: sequence watermark даёт уст�
 `StockAllocations` содержит 14 полей:
 `allocation_id, allocation_run_id, movement_id, lot_id, product_id, allocation_type, quantity, unit_cost, cost_status, allocated_cost, effective_at, recorded_at, reverses_allocation_id, allocated_cost_minor`.
 
-`FifoAllocationRuns` содержит 10 полей:
+`Исходная `FifoAllocationRuns` содержала 10 полей:
 `run_id, run_sequence, status, reason, created_at, committed_at, ledger_rows_count, allocation_rows_count, products_count, error`.
 
 `FifoProductState` содержит физический `last_ledger_row_number`; его замена sequence watermark относится к F-07.
 
 Отдельной таблицы истории allocation snapshots сейчас нет.
 
-### 2.2 Текущая замена проекции
+### 2.2 Исходная замена проекции до F-06
 
 `di3ReplaceFifoProjectionSafely_`:
 1. читает текущие активные строки в память;
@@ -60,13 +60,13 @@ F-06 реализуется после F-07: sequence watermark даёт уст�
 
 Это rollback на уровне обработанной ошибки, но не транзакция. Принудительное завершение выполнения между операциями не запускает catch и может оставить частичную проекцию.
 
-### 2.3 Текущий lifecycle run
+### 2.3 Исходный lifecycle run до F-06
 
 `di3RebuildFifoAllocations_` создаёт новый `FifoAllocationRuns` со статусом `PREPARED`, затем меняет проекции, обновляет product state, cursor и order FIFO snapshots, после чего ставит `COMMITTED`. При пойманной ошибке run помечается `FAILED`.
 
-При жёстком завершении запись может остаться `PREPARED`. Повторный вызов сейчас создаёт новый run ID. Поэтому один только текущий run ID не обеспечивает стабильную идентичность recovery.
+При жёстком завершении запись могла остаться `PREPARED`. До F-06 patch повторный вызов создавал новый run ID; это устраняется текущим pending-run reuse.
 
-### 2.4 Вызовы из операций
+### 2.4 Исходные вызовы из операций до передачи operation_id
 
 FIFO rebuild вызывается из четырёх operation handlers:
 - `MANUAL_STOCK_MOVEMENT` — `07_DI3_StockCore.gs`;
@@ -76,9 +76,9 @@ FIFO rebuild вызывается из четырёх operation handlers:
 
 Все эти handlers получают `operationRecord` и могут передать неизменяемый `operation_id` в FIFO replay. Operation executor повторно вызывает handler с тем же immutable payload. Это позволяет связать FIFO run/replay с исходной операцией. Отдельный ручной full rebuild не имеет operation_id и должен восстанавливаться через незавершённый run ID.
 
-### 2.5 Текущая генерация allocation IDs
+### 2.5 Генерация allocation IDs до F-06
 
-`di3BuildFifoAllocationRows_` генерирует новый UUID для каждой строки при каждом вызове. Для безопасного восстановления после частичной записи целевые строки должны иметь детерминированные allocation IDs в пределах replay ID; иначе повторная сборка того же результата создаёт другие идентификаторы и мешает надёжной сверке.
+До F-06 patch `di3BuildFifoAllocationRows_` генерировал UUID для каждой строки. Сейчас replay-путь передаёт replay_id и создаёт детерминированные allocation IDs; обычный incremental append по-прежнему использует UUID.
 
 ## 3. Целевая схема baseline
 
