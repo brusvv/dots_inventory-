@@ -68,7 +68,7 @@ function di3BuildOrderDispatchRows_(operationId, payload) {
     ]);
     details.push([
       line.movement_id, line.display_code, "OUT", "ORDER_DISPATCH",
-      line.sale_unit_price, line.line_revenue, "", "", di3GetActorEmail_(),
+      line.sale_unit_price, line.line_revenue, "", "", di3GetOperationInitiatorActor_(operationId),
       "Заказ " + payload.order_number, "ORDER"
     ]);
   });
@@ -155,7 +155,7 @@ function di3EnsureOrderStatusHistory_(orderId, oldStatus, newStatus, effectiveAt
   if (exists) return false;
   di3AppendTableRows_("DocumentStatusHistory", [[
     di3MakeUuid_(), "ORDER", orderId, oldStatus || "", newStatus,
-    effectiveAt, di3GetActorEmail_(), operationId || "", comment || ""
+    effectiveAt, operationId ? di3GetOperationInitiatorActor_(operationId) : di3GetActorEmail_(), operationId || "", comment || ""
   ]]);
   return true;
 }
