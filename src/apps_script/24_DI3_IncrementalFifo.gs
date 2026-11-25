@@ -46,7 +46,7 @@ function di3ReadLedgerSequenceIndex_() {
       throw new Error("StockLedger: повторяется ledger_sequence " + sequence + " у движений " + seen[String(sequence)] + " и " + movementId + ".");
     }
     seen[String(sequence)] = movementId;
-    rows.push({ row_number: i + 2, sequence: sequence });
+    rows.push({ row_number: i + 2, movement_id: movementId, product_id: productId, sequence: sequence });
     maxSequence = Math.max(maxSequence, sequence);
     movementCount++;
   }
@@ -91,10 +91,21 @@ function di3ReadFifoLedgerTail_(cursor, sequenceIndex) {
     .sort(function (a, b) { return a.row_number - b.row_number; });
   if (!selected.length) return [];
   var sheet = di3GetSheetOrThrow_("StockLedger"), width = DI3_TABLE_SCHEMAS.StockLedger.length;
+  var selectedByRow = Object.create(null);
+  selected.forEach(function (item) { selectedByRow[String(item.row_number)] = item; });
   var rows = [], groupStart = selected[0].row_number, groupEnd = groupStart;
   function flushGroup_() {
     var block = sheet.getRange(groupStart, 1, groupEnd - groupStart + 1, width).getValues();
-    block.forEach(function (row, offset) { row._di3RowNumber = groupStart + offset; rows.push(row); });
+    block.forEach(function (row, offset) {
+      var rowNumber = groupStart + offset;
+      var expected = selectedByRow[String(rowNumber)];
+      if (!expected || String(row[0]) !== expected.movement_id ||
+          String(row[3]) !== expected.product_id || Number(row[12]) !== expected.sequence) {
+        throw new Error("StockLedger изменился во время чтения FIFO tail (строка " + rowNumber + "). Повтори операцию после завершения сортировки или редактирования журнала.");
+      }
+      row._di3RowNumber = rowNumber;
+      rows.push(row);
+    });
   }
   for (var i = 1; i < selected.length; i++) {
     var rowNumber = selected[i].row_number;
