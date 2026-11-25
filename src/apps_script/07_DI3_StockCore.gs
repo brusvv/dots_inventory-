@@ -1125,7 +1125,7 @@ function di3ApplyManualStockOperation_(operationRecord, storedPayload) {
     movementId, displayCode, storedPayload.direction, storedPayload.reason_code,
     storedPayload.unit_sale_price, revenue,
     storedPayload.direction === "IN" ? storedPayload.cost_status : "",
-    "", "", storedPayload.note, "WAREHOUSE_MANAGER"
+    "", di3GetOperationInitiatorActor_(operationId), storedPayload.note, "WAREHOUSE_MANAGER"
   ];
   var lotRow = null;
   if (storedPayload.direction === "IN") {
