@@ -293,13 +293,20 @@ function di3GetPendingFifoRunForOperation_(operationId) {
 }
 
 function di3AssertNoConflictingPendingFifoRuns_(reusableRunId) {
-  var rows = di3ReadTableValues_("FifoAllocationRuns");
-  var conflicts = rows.filter(function (row) {
-    var status = String(row[2] || "");
-    return (status === "PREPARED" || status === "FAILED") && String(row[0]) !== String(reusableRunId || "");
-  });
+  var sheet = di3GetSheetOrThrow_("FifoAllocationRuns");
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return true;
+  var count = lastRow - 1;
+  var runIds = sheet.getRange(2, 1, count, 1).getValues();
+  var statuses = sheet.getRange(2, 3, count, 1).getValues();
+  var conflicts = [];
+  for (var i = 0; i < count; i++) {
+    var status = String(statuses[i][0] || "");
+    var runId = String(runIds[i][0] || "");
+    if ((status === "PREPARED" || status === "FAILED") && runId !== String(reusableRunId || "")) conflicts.push(runId);
+  }
   if (conflicts.length) {
-    throw new Error("Обнаружен другой незавершённый FIFO run (" + conflicts.map(function (row) { return row[0]; }).join(", ") +
+    throw new Error("Обнаружен другой незавершённый FIFO run (" + conflicts.join(", ") +
       "). Сначала восстанови именно его; параллельный full/product replay запрещён.");
   }
   return true;
