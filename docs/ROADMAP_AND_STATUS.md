@@ -69,7 +69,7 @@ The actual empty-chart cause is still unknown. Run the read-only diagnostics on 
 ### FIFO / stock / sales
 - C-01: benchmark in real GAS at 500/1,000/2,000 movements; measure runtime, Sheets reads/writes, TextFinder, quotas.
 - C-02: runtime acceptance for PeriodGuard, historical profit and `OrderCostSnapshots`.
-- **F-01:** return FIFO lookup is fixed in source and locally regression-tested; runtime scenario (dispatch A → later unrelated FIFO run → return A) remains pending on a restored copy.
+- **F-01:** return FIFO lookup is fixed in source and locally regression-tested; runtime scenario (dispatch A → later unrelated FIFO run → return A) remains pending on a restored copy.\n- **F-10:** source now appends `LOCKED` / `REOPENED` events instead of overwriting `PeriodLocks`; current state is folded from the latest event per period. Three structural regression checks were added but not yet executed. Runtime close → reopen → re-close acceptance remains pending.
 - C-03: implement partial returns; agree policy first. This is separate from the full-return F-01 defect.
 - C-04/C-05: real Apps Script fault/recovery acceptance for OperationExecutor flows.
 - C-06: test LockService with two independent execution sessions, including receipt/cancel/dispatch races.
@@ -163,3 +163,14 @@ The following issues have source changes and local regression coverage. They are
 - **F-20:** reliable actor attribution still needs an approved identity model.
 - The Warehouse Dashboard chart remains blank in the user's Sheets copy. The next step is to run the existing read-only chart diagnostics on the restored test copy and inspect N1:O21 plus the chart's actual source range.
 
+
+
+## F-10 source patch — append-only period audit (25.11.2026)
+
+- `di3CloseAccountingPeriod()` and `di3ReopenAccountingPeriod()` now append events to `PeriodLocks`; neither updates an existing event row.
+- `di3GetLatestPeriodEvents_()` folds the event log by physical row order. `di3GetLatestLockedPeriod_()` considers only the latest event for each period, so a later `REOPENED` event actually removes that period from the active lock set.
+- Re-closing a reopened period appends a new `LOCKED` event. Period status returns one current snapshot per period, including the actor and reason fields.
+- The existing 10-column schema is reused; no schema migration or workbook write was performed.
+- Added three structural regression checks to `41_DI3_SystemSafetyUxTests.gs`.
+- **Not yet verified:** the tests were added through GitHub source editing and have not been executed here. Run syntax + all six local Node suites before relying on the patch. Then use a restored test workbook to verify close → reopen → re-close, one appended row per transition, immutable prior rows and correct PeriodGuard blocking.
+- **Legacy limitation:** historical rows that were overwritten by earlier versions cannot be recovered; the append-only guarantee applies from this patch onward.
