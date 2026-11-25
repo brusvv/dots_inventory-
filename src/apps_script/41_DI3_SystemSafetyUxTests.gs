@@ -173,7 +173,7 @@ function di3RunSystemSafetyUxUnitTests() {
     includes(di3ReopenAccountingPeriod.toString(), "di3GetActorEmail_()");
     includes(di3CreateSchemaMigrationRecord_.toString(), "di3GetActorEmail_()");
     includes(di3BuildSupplyFullEditOperationPayload_.toString(), "edited_by: di3GetActorEmail_()");
-    includes(di3ApplySupplyFullEditOperation_.toString(), "payload.edited_by");
+    includes(di3ApplySupplyDocumentEditOperation_.toString(), "payload.edited_by");
   });
 
   test("operation attempt diagnostics preserve the executor actor across recovery and manual review", function () {
