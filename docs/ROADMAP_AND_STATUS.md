@@ -248,3 +248,5 @@ The following issues have source changes and local regression coverage. They are
 - `OperationAttempts.actor` remains the actual executor for each attempt.
 - Added regression coverage for initiator A vs recovery executor B, blank/missing actor cases, and the relevant order/supply audit writers.
 - **Not verified:** source tests and syntax checks have not been run; restored-workbook recovery acceptance is pending. No workbook or deployment changes.
+
+- Supply receipt `StockMovementDetails.actor` is now populated from the same immutable initiator record; its regression assertion was added.
