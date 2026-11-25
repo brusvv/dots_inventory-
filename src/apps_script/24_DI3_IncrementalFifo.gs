@@ -258,15 +258,20 @@ function di3SelectReusableFifoRun_(candidateRows, options) {
   if (!pending.length) return null;
   if (pending.length !== 1) throw new Error("Найдено несколько незавершённых FIFO run для одной операции/области. Автоматическое продолжение запрещено.");
   var match = pending[0], row = match.values || match;
+  var emptyTailResume = !!options.allow_resume_empty_tail && !!operationId &&
+    scopeType === "PRODUCT_SET" && scopeJson === "[]";
   if (String(row[12] || "") !== scopeType || String(row[13] || "") !== scopeJson ||
       String(row[14] || "") !== inputFingerprint) {
-    throw new Error("Незавершённый FIFO run имеет другой scope или input fingerprint. Новое исполнение заблокировано до сверки.");
+    if (!emptyTailResume || String(row[12] || "") !== "PRODUCT_SET") {
+      throw new Error("Незавершённый FIFO run имеет другой scope или input fingerprint. Новое исполнение заблокировано до сверки.");
+    }
   }
   return {
     run_id: String(row[0]), run_sequence: Number(row[1]), row_number: Number(match.row_number || 0),
     operation_id: String(row[10] || ""), replay_id: String(row[11] || ""),
     scope_type: String(row[12] || ""), scope_json: String(row[13] || ""),
-    input_fingerprint: String(row[14] || ""), status: String(row[2] || "")
+    input_fingerprint: String(row[14] || ""), status: String(row[2] || ""),
+    resumed_after_cursor_advance: emptyTailResume
   };
 }
 
@@ -293,7 +298,8 @@ function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount, o
       }) : []);
   var reusable = di3SelectReusableFifoRun_(candidates, {
     operation_id: operationId, scope_type: scopeType, scope_json: scopeJson,
-    input_fingerprint: inputFingerprint, full_replay: !!options.full_replay
+    input_fingerprint: inputFingerprint, full_replay: !!options.full_replay,
+    allow_resume_empty_tail: !!options.allow_resume_empty_tail
   });
   if (reusable) {
     if (reusable.status === "FAILED") di3UpdateFifoRunStatus_(reusable.row_number, "PREPARED", "", "", null);
@@ -792,7 +798,8 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
       scope_type: isFullReplay ? "FULL" : "PRODUCT_SET",
       scope_json: isFullReplay ? "FULL" : JSON.stringify(productIds.slice().sort()),
       input_fingerprint: runInputFingerprint,
-      full_replay: isFullReplay
+      full_replay: isFullReplay,
+      allow_resume_empty_tail: !isFullReplay && !newLedgerRows.length
     });
   var created = 0, replaced = 0, replayedMovements = 0, updatedLots = 0;
   var fullReplayStateRows = null;
