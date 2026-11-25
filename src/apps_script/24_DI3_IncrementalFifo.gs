@@ -747,7 +747,7 @@ function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount, o
   }
   var sequence = lastSequence + 1;
   var runId = di3MakeUuid_();
-  var replayId = String(options.replay_id || (operationId ? "OP:" + operationId : "FULL:" + runId));
+  var replayId = String(options.replay_id || (operationId ? "OP:" + operationId : (scopeType === "FULL" ? "FULL:" + runId : "RUN:" + runId)));
   var row = [runId, sequence, "PREPARED", reason || "INCREMENTAL_FIFO", new Date(), "",
     ledgerCount, allocationCount, productCount, "", operationId, replayId, scopeType, scopeJson, inputFingerprint];
   di3AppendTableRows_("FifoAllocationRuns", [row]);
