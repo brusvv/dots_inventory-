@@ -43,3 +43,5 @@ The `.gs` modules below were copied byte-for-byte from the supplied `40.rar`. Nu
 | `36_DI3_SupplyFullEdit.gs` | Full supply edit Phase A/B |
 | `37_DI3_SupplyFullEditTests.gs` | Full supply edit tests |
 | `38_DI3_WarehouseDashboardTests.gs` | Warehouse dashboard chart tests |
+
+| `39_DI3_SupplyWorkspaceUxTests.gs` | UX-01–UX-03 regression tests for Supply Workspace and FIFO menu safety |

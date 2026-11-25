@@ -4,3 +4,11 @@ Extraction: libarchive 3.7.4 RAR5 reader
 Extracted files: 46 .gs files
 No file contents were edited while copying the source modules.
 Additional files in this repository are documentation, reports and local tooling created during packaging.
+
+
+Local patch applied 2026-11-25:
+- UX-01–UX-03 changes were made after extracting the base archive.
+- Modified source modules: 11, 12, 22, 24, 34, 36.
+- Added source test module: 39_DI3_SupplyWorkspaceUxTests.gs.
+- Added local Node test runner: tools/run_supply_workspace_ux_tests.js.
+- Original archive SHA-256 remains the provenance of the unmodified base snapshot, not of the patched working tree.

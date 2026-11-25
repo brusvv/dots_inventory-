@@ -34,3 +34,28 @@ These are Apps Script code functions and some depend on the Sheets runtime / pro
 ## Probe safety
 
 See `docs/RUNTIME_PROBES.md`. Two probes are explicitly mutating and one holds ScriptLock for a controlled contention test. Never run them against the business workbook.
+
+
+## Local UX patch UX-01–UX-03 (25.11.2026)
+
+Replace these Apps Script modules on a restored/test copy after taking a fresh spreadsheet backup:
+
+- `11_DI3_SupplyDomain.gs`
+- `12_DI3_SupplyReceiving.gs`
+- `22_DI3_MenuAndFilterUtils.gs`
+- `24_DI3_IncrementalFifo.gs`
+- `34_DI3_HistoricalSupply.gs`
+- `36_DI3_SupplyFullEdit.gs`
+- add `39_DI3_SupplyWorkspaceUxTests.gs`
+
+No schema migration is required. The Supply form already has hidden column N; N8:N10 are used for a form-state hash and pending B2 selector context. Do not manually edit these cells. After replacing modules, reload the spreadsheet so menus refresh. The unified edit trigger should already route `di3SupplyFormOnEdit`; verify that its installed handler is `di3UnifiedOnEdit` before testing B2 behavior.
+
+Runtime acceptance (on restored copy only):
+
+1. Enter a supplier, note, discount or item in a new supply form, run `Новая поставка`, and choose **No**. Confirm every input remains unchanged. Choose **Yes** in a separate clean test and confirm reset occurs.
+2. Load a draft, alter a business field or item, select another supply in B2. Confirm B2 reverts to the previous number, entered data remains, and a toast directs the user to `Загрузить выбранную поставку…`. Run that command, choose **No**, and verify no values are replaced. Repeat and choose **Yes**; verify the target number and its item rows load.
+3. Repeat B2 switching while FULL_EDIT is active. Confirm it is blocked and the selector remains aligned with the loaded `supply_id`.
+4. Run `Проверить целостность FIFO (без изменений)` and compare StockLedger, StockLots, StockAllocations, FifoProductState, app metadata and operation tables before/after. All must remain unchanged.
+5. Run `Перестроить FIFO полностью…` and choose **No**. Confirm no backup/rebuild run is started. Do not choose **Yes** during UX acceptance; the mutating rebuild is outside the current test scope.
+
+Local validation commands: `bash tools/check_syntax.sh`, `node tools/run_warehouse_dashboard_tests.js`, and `node tools/run_supply_workspace_ux_tests.js`. They do not prove Google Apps Script runtime behavior or Dashboard rendering. The warehouse Dashboard's blank chart remains open and must still be accepted separately.

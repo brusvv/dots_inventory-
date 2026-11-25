@@ -13,7 +13,15 @@
 | Изменение G6 на отправленной поставке | Поддерживается кодом как изменение даты ожидания; целевой статус должен стать «Ожидает получения» | Runtime-тест на отдельной тестовой поставке, без G7 |
 | G7 у ещё не полученной поставки | Не проводится через `SUPPLY_DOCUMENT_EDIT`; требуется обычный next-stage/receipt workflow | Отдельный runtime тест фактической приёмки |
 | Полная корректировка полученной поставки | Не реализована; `SUPPLY_CORRECTION` отсутствует в operation registry | Phase C: immutable correction + candidate FIFO replay + COGS/history rebuild |
-| Меню Supply Workspace | В `22_DI3_MenuAndFilterUtils.gs` четыре подменю: Создание, Выбор и просмотр, Редактирование, Проведение и отмена | Runtime UX audit, confirm mode switching, correct commands by status |
+| Меню Supply Workspace | UX-01–UX-03 implemented in local patch: dirty-form fingerprint/confirm, safe B2 switch, separate read-only FIFO check and confirmed rebuild | Runtime UX acceptance in restored test copy; do not treat local tests as Sheets evidence |
+
+## UX patch status — 25.11.2026
+
+- **UX-01:** `Новая поставка` checks a SHA-256 fingerprint of editable form inputs and prompts before clearing a dirty form.
+- **UX-02:** B2 switching is guarded. Dirty form state is retained; the attempted selector is staged in hidden N9 and restored to the previous value in B2. The user confirms via `Поставки → Выбор и просмотр → Загрузить выбранную поставку…`. FULL_EDIT blocks B2 switching.
+- **UX-03:** `Проверить целостность FIFO (без изменений)` is a read-only menu path. `Перестроить FIFO полностью…` is a separate mutating command with an explicit confirmation before lock/backup/rebuild.
+- Local checks: all 47 `.gs` syntax checks PASS; Supply Workspace UX tests 9/9 PASS; warehouse dashboard tests 5/5 PASS; TypeScript AST audit 532 top-level functions, 86 top-level variable declarations, no parse errors or duplicate names.
+- Not runtime-accepted: dialogs, installable onEdit behavior, Apps Script hashing/Spreadsheet APIs and actual FIFO read-only behavior must be verified on a restored test spreadsheet. The blank Warehouse Dashboard chart remains an open issue.
 
 ## Warehouse Dashboard
 

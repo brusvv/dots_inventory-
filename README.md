@@ -1,14 +1,15 @@
 # Dots Inventory v3 — RC8 source repository snapshot
 
-**Snapshot date:** 2026-11-24  
+**Base source snapshot:** 2026-11-24  
+**Local UX patch:** 2026-11-25 (UX-01–UX-03)  
 **Source archive supplied in this chat:** `40.rar`  
 **SHA-256 of source archive:** `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`
 
-This repository was assembled from the user's uploaded `40.rar`. The original Apps Script source files are preserved under `src/apps_script/`; the seven temporary diagnostic/runtime probes are preserved under `runtime/probes/`. Project context, status, installation notes, inventory and static validation reports were added around those source files.
+The base source package was assembled from the user's uploaded `40.rar`. On 2026-11-25, the local UX-01–UX-03 patch modified six existing Apps Script modules and added one regression-test module. All other Apps Script modules and all seven runtime probes remain byte-for-byte from the base archive. The current working tree is therefore a **patched derivative** of the 2026-11-24 base snapshot, not a byte-identical copy of the RAR. See `docs/UX_PATCH_UX01_UX03.md` for the exact patch scope and installation procedure.
 
 ## Repository contents
 
-- `src/apps_script/` — 39 production and Apps Script unit-test modules (`.gs`). Filenames and contents are preserved from `40.rar`.
+- `src/apps_script/` — 40 production and Apps Script unit-test modules (`.gs`), including `39_DI3_SupplyWorkspaceUxTests.gs`. The six patched source modules are listed in the patch log; unmodified modules retain the base archive contents.
 - `runtime/probes/` — 7 temporary runtime probes. Some are mutating and must only be used on a disposable test copy.
 - `docs/PROJECT_CONTEXT_FOR_NEW_CHAT.md` — detailed handoff context for a new ChatGPT conversation.
 - `docs/ROADMAP_AND_STATUS.md` — current feature status and remaining work.
@@ -34,9 +35,10 @@ From the repository root:
 ```bash
 bash tools/check_syntax.sh
 node tools/run_warehouse_dashboard_tests.js
+node tools/run_supply_workspace_ux_tests.js
 ```
 
-The first command runs Node's syntax parser over all `.gs` files. The second runs the five pure warehouse-chart tests by loading the exact production chart helper and its test module. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness.
+The syntax command checks all `.gs` files. The dashboard runner executes five pure chart tests. The UX runner executes nine pure/structural tests for unsaved-form protection, B2 switching, and FIFO menu safety. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet.
 
 ## Safe operating rules
 
@@ -49,4 +51,4 @@ The first command runs Node's syntax parser over all `.gs` files. The second run
 
 ## Source-of-truth rule for future work
 
-Treat this repository's `src/apps_script/` files as the latest code snapshot supplied on 2026-11-24. Before patching, inspect the exact current module and its callers. Do not mix in older standalone V1–V4 hotfix files from prior chat messages unless a diff proves that a newer source module is missing a change.
+Treat this repository's `src/apps_script/` files as the current local working tree: the 2026-11-24 archive snapshot plus the documented UX-01–UX-03 patch from 2026-11-25. Before patching, inspect the exact current module and its callers. Do not mix in older standalone V1–V4 hotfix files from prior chat messages unless a diff proves that a newer source module is missing a change.

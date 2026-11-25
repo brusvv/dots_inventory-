@@ -1,18 +1,20 @@
 {
-  "snapshot_date": "2026-11-24",
+  "snapshot_date": "2026-11-25",
   "runtime": "Local container only; not Google Apps Script runtime",
   "node_version": "v22.16.0",
   "syntax_check": {
-    "files_checked": 46,
+    "files_checked": 47,
     "failures": [],
-    "status": "PASS"
+    "status": "PASS",
+    "tool": "tools/check_syntax.sh"
   },
   "typescript_ast_audit": {
-    "files": 46,
-    "functions": 521,
+    "files": 47,
+    "functions": 532,
     "topLevelVars": 86,
     "parseErrors": [],
-    "duplicateDeclarations": []
+    "duplicateDeclarations": [],
+    "status": "PASS"
   },
   "warehouse_dashboard_unit_tests": {
     "status": "PASS",
@@ -21,8 +23,17 @@
     "failures": []
   },
   "limitations": [
-    "No full Node regression harness was present in the uploaded RAR.",
-    "Google Sheets chart rendering and Apps Script service behavior were not tested here.",
-    "Apps Script manifest timezone could not be checked because appsscript.json was absent from the upload."
-  ]
+    "Local Node syntax and unit tests do not emulate Google Sheets rendering, Apps Script services, installed triggers, Drive, LockService or the full application regression harness.",
+    "The installable onEdit flow, real YES/NO prompts and read-only FIFO diagnostic require runtime acceptance on a restored Google Sheets test copy.",
+    "The blank warehouse Dashboard chart remains unresolved; this UX patch does not modify the chart implementation.",
+    "The Apps Script manifest timezone could not be checked because appsscript.json was absent from the supplied source archive.",
+    "No live Google Sheets workbook, trigger deployment, stock operation, FIFO diagnostic or FIFO rebuild was executed for this patch."
+  ],
+  "supply_workspace_ux_unit_tests": {
+    "status": "PASS",
+    "passed": 9,
+    "failed": 0,
+    "failures": [],
+    "runner": "tools/run_supply_workspace_ux_tests.js"
+  }
 }

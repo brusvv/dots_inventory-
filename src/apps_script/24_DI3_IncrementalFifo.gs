@@ -1,0 +1,915 @@
+/** Dots Inventory v3 — incremental FIFO state, product-scoped replay and allocation compaction. */
+var DI3_FIFO_STATE_VERSION = "3";
+
+
+/** Return matching repository rows tagged with their physical sheet row number. */
+function di3ReadTaggedRowsByColumnValue_(sheetName, columnIndexZeroBased, value) {
+  return di3ReadRowsByColumnValue_(sheetName, columnIndexZeroBased, value).map(function (match) {
+    var row = match.values;
+    row._di3RowNumber = Number(match.row_number);
+    return row;
+  });
+}
+
+/** Return matching rows for several keys, retaining physical sheet row numbers. */
+function di3ReadTaggedRowsByColumnValues_(sheetName, columnIndexZeroBased, values) {
+  return di3ReadRowsByColumnValues_(sheetName, columnIndexZeroBased, values).map(function (match) {
+    var row = match.values;
+    row._di3RowNumber = Number(match.row_number);
+    return row;
+  });
+}
+
+/** Read only the append-only ledger tail after a persisted row-count cursor. */
+function di3ReadFifoLedgerTail_(cursor, ledgerCount) {
+  var count = Number(ledgerCount) - Number(cursor);
+  if (!Number.isInteger(count) || count < 0) throw new Error("Некорректный FIFO ledger tail.");
+  if (!count) return [];
+  var startRow = Number(cursor) + 2;
+  var sheet = di3GetSheetOrThrow_("StockLedger");
+  var rows = sheet.getRange(startRow, 1, count, DI3_TABLE_SCHEMAS.StockLedger.length).getValues();
+  rows.forEach(function (row, index) { row._di3RowNumber = startRow + index; });
+  return rows;
+}
+
+function di3FifoEventCompare_(a, b) {
+  var byEffective = di3ToMillis_(a.effective_at) - di3ToMillis_(b.effective_at);
+  if (byEffective) return byEffective;
+  var byRecorded = di3ToMillis_(a.recorded_at) - di3ToMillis_(b.recorded_at);
+  if (byRecorded) return byRecorded;
+  return String(a.movement_id).localeCompare(String(b.movement_id));
+}
+
+function di3GetFifoEventsForProduct_(productId, ledgerRows, detailRows, lotRows) {
+  var detailByMovement = {};
+  (detailRows || []).forEach(function (row) {
+    detailByMovement[String(row[0])] = row;
+  });
+  var lotByMovement = {};
+  (lotRows || []).forEach(function (row) {
+    if (String(row[1]) === String(productId)) lotByMovement[String(row[2])] = row;
+  });
+  var events = [];
+  (ledgerRows || []).forEach(function (row, index) {
+    if (String(row[3]) !== String(productId)) return;
+    var detail = detailByMovement[String(row[0])];
+    if (!detail) throw new Error("Для движения " + row[0] + " отсутствует StockMovementDetails.");
+    var delta = Number(row[6]);
+    if (!Number.isFinite(delta) || delta === 0) throw new Error("Некорректное количество у движения " + row[0] + ".");
+    var type = String(detail[2]);
+    if ((type === "IN" && delta <= 0) || (type === "OUT" && delta >= 0) || ["IN", "OUT"].indexOf(type) === -1) {
+      throw new Error("Неверный тип или знак движения " + row[0] + ".");
+    }
+    var event = {
+      movement_id: String(row[0]), product_id: String(productId), movement_type: type,
+      quantity: Math.abs(delta), effective_at: di3ToDate_(row[7], "StockLedger.effective_at"),
+      recorded_at: di3ToDate_(row[8], "StockLedger.recorded_at"), row_number: Number(row._di3RowNumber || index + 2)
+    };
+    if (type === "IN") {
+      var lot = lotByMovement[event.movement_id];
+      if (!lot) throw new Error("Для прихода " + event.movement_id + " отсутствует FIFO-партия.");
+      if (Number(lot[8]) !== event.quantity) throw new Error("Количество партии не совпадает с приходом " + event.movement_id + ".");
+      event.lot = lot;
+    }
+    events.push(event);
+  });
+  events.sort(di3FifoEventCompare_);
+  return events;
+}
+
+function di3BuildProductFifoReplayPlan_(productId, ledgerRows, detailRows, lotRows) {
+  var filteredLedger = (ledgerRows || []).filter(function (row) { return String(row[3]) === String(productId); });
+  var movementIds = {};
+  filteredLedger.forEach(function (row) { movementIds[String(row[0])] = true; });
+  var filteredDetails = (detailRows || []).filter(function (row) { return movementIds[String(row[0])]; });
+  var filteredLots = (lotRows || []).filter(function (row) { return String(row[1]) === String(productId); });
+  return di3BuildFifoReplayPlan_(filteredLedger, filteredDetails, filteredLots, null);
+}
+
+function di3BuildFifoAllocationRows_(runId, allocations) {
+  return (allocations || []).map(function (allocation) {
+    return [
+      di3MakeUuid_(), runId, allocation.movement_id, allocation.lot_id,
+      allocation.product_id, allocation.allocation_type, allocation.quantity,
+      allocation.unit_cost == null ? "" : allocation.unit_cost,
+      allocation.cost_status,
+      allocation.allocated_cost == null ? "" : allocation.allocated_cost,
+      allocation.effective_at, allocation.recorded_at, "",
+      allocation.allocated_cost_minor == null ? "" : allocation.allocated_cost_minor
+    ];
+  });
+}
+
+function di3UpdateLotRemainingRows_(lotRows, remainingByLotId) {
+  var updates = [];
+  (lotRows || []).forEach(function (row, index) {
+    var lotId = String(row[0]);
+    if (!Object.prototype.hasOwnProperty.call(remainingByLotId, lotId)) return;
+    var remaining = Number(remainingByLotId[lotId]);
+    if (!Number.isFinite(remaining) || remaining < 0) throw new Error("Некорректный остаток партии " + lotId + ".");
+    var values = row.slice();
+    values[13] = remaining;
+    if (row[13] === "" || row[13] == null || Number(row[13]) !== remaining) {
+      updates.push({ row_number: Number(row._di3RowNumber || index + 2), values: values });
+    }
+  });
+  if (updates.length) di3ApplyContiguousRowUpdates_("StockLots", updates);
+  (lotRows || []).forEach(function (row) {
+    var lotId = String(row[0]);
+    if (Object.prototype.hasOwnProperty.call(remainingByLotId, lotId)) row[13] = Number(remainingByLotId[lotId]);
+  });
+  return updates.length;
+}
+
+function di3DeleteStockAllocationRows_(predicate, productId) {
+  var sheet = di3GetSheetOrThrow_("StockAllocations");
+  var rows = productId
+    ? di3ReadTaggedRowsByColumnValue_("StockAllocations", 4, productId)
+    : di3ReadTableValues_("StockAllocations");
+  var rowNumbers = [];
+  rows.forEach(function (row, index) {
+    if (predicate(row)) rowNumbers.push(Number(row._di3RowNumber || index + 2));
+  });
+  if (!rowNumbers.length) return 0;
+  // Delete contiguous blocks from bottom to top so row numbers remain stable.
+  var blocks = [];
+  rowNumbers.sort(function (a, b) { return a - b; }).forEach(function (rowNumber) {
+    var last = blocks.length ? blocks[blocks.length - 1] : null;
+    if (last && rowNumber === last.start + last.count) last.count++;
+    else blocks.push({ start: rowNumber, count: 1 });
+  });
+  for (var i = blocks.length - 1; i >= 0; i--) sheet.deleteRows(blocks[i].start, blocks[i].count);
+  return rowNumbers.length;
+}
+
+function di3SetAllLotRemainingFromReplay_(lotRows, replayPlan) {
+  var remaining = {};
+  (replayPlan.remaining_lots || []).forEach(function (lot) { remaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
+  (lotRows || []).forEach(function (row) {
+    if (!Object.prototype.hasOwnProperty.call(remaining, String(row[0]))) remaining[String(row[0])] = Number(row[8]);
+  });
+  return di3UpdateLotRemainingRows_(lotRows, remaining);
+}
+
+
+function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount) {
+  var sheet = di3GetSheetOrThrow_("FifoAllocationRuns");
+  var lastRow = sheet.getLastRow();
+  // Run records are append-only. Read the last sequence, not the entire history.
+  var lastSequence = lastRow >= 2 ? Number(sheet.getRange(lastRow, 2, 1, 1).getValue()) : 0;
+  if (!Number.isFinite(lastSequence) || lastSequence < 0) {
+    // Defensive compatibility fallback for a malformed final row; read only sequence column.
+    var sequenceRows = lastRow >= 2 ? sheet.getRange(2, 2, lastRow - 1, 1).getValues() : [];
+    lastSequence = sequenceRows.reduce(function (max, row) { return Math.max(max, Number(row[0]) || 0); }, 0);
+  }
+  var sequence = lastSequence + 1;
+  var runId = di3MakeUuid_();
+  var row = [runId, sequence, "PREPARED", reason || "INCREMENTAL_FIFO", new Date(), "", ledgerCount, allocationCount, productCount, ""];
+  di3AppendTableRows_("FifoAllocationRuns", [row]);
+  return { run_id: runId, run_sequence: sequence, row_number: sheet.getLastRow() };
+}
+
+function di3GetFifoProductState_(stateRows, productId) {
+  for (var i = 0; i < (stateRows || []).length; i++) {
+    if (String(stateRows[i][0]) === String(productId)) return stateRows[i];
+  }
+  return null;
+}
+
+function di3CompareEventToState_(event, stateRow) {
+  if (!stateRow) return 1;
+  var byEffective = di3ToMillis_(event.effective_at) - di3ToMillis_(stateRow[1]);
+  if (byEffective) return byEffective;
+  var byRecorded = di3ToMillis_(event.recorded_at) - di3ToMillis_(stateRow[2]);
+  if (byRecorded) return byRecorded;
+  return String(event.movement_id).localeCompare(String(stateRow[3]));
+}
+
+function di3BuildFifoTailPlanForProduct_(productId, tailLedgerRows, detailRows, lotRows, activeAllocationRows, stateRows) {
+  var events = di3GetFifoEventsForProduct_(productId, tailLedgerRows, detailRows, lotRows);
+  if (!events.length) return { mode: "NO_NEW_EVENTS", allocations: [], remaining_by_lot: {}, events: [] };
+  var state = di3GetFifoProductState_(stateRows, productId);
+  var productLots = (lotRows || []).filter(function (row) { return String(row[1]) === String(productId); });
+  var newInboundIds = {};
+  events.forEach(function (event) { if (event.movement_type === "IN") newInboundIds[event.movement_id] = true; });
+
+  if (productLots.some(function (row) { return !newInboundIds[String(row[2])] && (row[13] === "" || row[13] == null || !Number.isFinite(Number(row[13]))); })) {
+    return { mode: "PRODUCT_REPLAY_REQUIRED", reason: "MISSING_REMAINING_CACHE", events: events };
+  }
+  if (!state && productLots.some(function (row) { return !newInboundIds[String(row[2])]; })) {
+    return { mode: "PRODUCT_REPLAY_REQUIRED", reason: "MISSING_PRODUCT_STATE", events: events };
+  }
+  if (state && events.some(function (event) { return di3CompareEventToState_(event, state) < 0; })) {
+    return { mode: "PRODUCT_REPLAY_REQUIRED", reason: "BACKDATED_EVENT", events: events };
+  }
+
+  var allocationByMovement = {};
+  (activeAllocationRows || []).forEach(function (row) {
+    if (String(row[4]) !== String(productId)) return;
+    var movementId = String(row[2]);
+    if (!allocationByMovement[movementId]) allocationByMovement[movementId] = [];
+    allocationByMovement[movementId].push(row);
+  });
+  // A movement with prior allocations is a retry after a partial commit. Replaying only this product
+  // reconstructs both allocation rows and lot balances from the immutable ledger.
+  if (events.some(function (event) { return event.movement_type === "OUT" && allocationByMovement[event.movement_id] && allocationByMovement[event.movement_id].length; })) {
+    return { mode: "PRODUCT_REPLAY_REQUIRED", reason: "PARTIALLY_APPLIED_MOVEMENT", events: events };
+  }
+
+  var availableLots = [];
+  var remainingByLot = {};
+  productLots.forEach(function (row) {
+    if (newInboundIds[String(row[2])]) return;
+    var remaining = Number(row[13]);
+    remainingByLot[String(row[0])] = remaining;
+    if (remaining > 0) availableLots.push({
+      lot_id: String(row[0]), product_id: String(productId),
+      effective_at: row[6], recorded_at: row[7], remaining_quantity: remaining,
+      initial_quantity: Number(row[8]), consumed_quantity: Number(row[8]) - remaining,
+      unit_cost: row[9] === "" || row[9] == null ? null : Number(row[9]),
+      total_cost_minor: di3MoneyGetLotTotalCostMinor_(row),
+      cost_status: String(row[10] || "UNKNOWN")
+    });
+  });
+
+  function sortLots() {
+    availableLots.sort(function (a, b) {
+      var byEffective = di3ToMillis_(a.effective_at) - di3ToMillis_(b.effective_at);
+      if (byEffective) return byEffective;
+      var byRecorded = di3ToMillis_(a.recorded_at) - di3ToMillis_(b.recorded_at);
+      if (byRecorded) return byRecorded;
+      return String(a.lot_id).localeCompare(String(b.lot_id));
+    });
+  }
+  sortLots();
+  var allocations = [];
+  var movementCosts = {};
+  events.forEach(function (event) {
+    if (event.movement_type === "IN") {
+      var lotRow = event.lot;
+      var lotId = String(lotRow[0]);
+      // If remaining_quantity is already populated, a previous attempt already applied this receipt.
+      var alreadyApplied = lotRow[13] !== "" && lotRow[13] != null && Number.isFinite(Number(lotRow[13]));
+      var lot = {
+        lot_id: lotId, product_id: String(productId), effective_at: lotRow[6], recorded_at: lotRow[7],
+        remaining_quantity: alreadyApplied ? Number(lotRow[13]) : Number(lotRow[8]),
+        initial_quantity: Number(lotRow[8]),
+        consumed_quantity: alreadyApplied ? Number(lotRow[8]) - Number(lotRow[13]) : 0,
+        unit_cost: lotRow[9] === "" || lotRow[9] == null ? null : Number(lotRow[9]),
+        total_cost_minor: di3MoneyGetLotTotalCostMinor_(lotRow),
+        cost_status: String(lotRow[10] || "UNKNOWN")
+      };
+      remainingByLot[lotId] = lot.remaining_quantity;
+      if (lot.remaining_quantity > 0) availableLots.push(lot);
+      sortLots();
+      return;
+    }
+    var needed = event.quantity;
+    var knownQuantity = 0, unknownQuantity = 0, knownCostMinor = 0;
+    var movementAllocations = [];
+    for (var i = 0; i < availableLots.length && needed > 0; i++) {
+      var currentLot = availableLots[i];
+      if (currentLot.remaining_quantity <= 0) continue;
+      var take = Math.min(needed, currentLot.remaining_quantity);
+      var status = currentLot.cost_status;
+      var unitCost = status === "UNKNOWN" ? null : (status === "FREE" ? 0 : Number(currentLot.unit_cost));
+      if (status === "KNOWN" && (!Number.isFinite(unitCost) || unitCost < 0)) throw new Error("Некорректная себестоимость партии " + currentLot.lot_id + ".");
+      var allocatedCostMinor = status === "UNKNOWN" ? null : di3MoneyAllocateLotCostMinor_(
+        Number(currentLot.total_cost_minor), Number(currentLot.initial_quantity),
+        Number(currentLot.consumed_quantity), take);
+      var allocatedCost = allocatedCostMinor == null ? null : di3MoneyFromMinorUnits_(allocatedCostMinor);
+      var allocation = {
+        movement_id: event.movement_id, lot_id: currentLot.lot_id, product_id: String(productId),
+        allocation_type: "CONSUME", quantity: take, unit_cost: unitCost,
+        cost_status: status, allocated_cost: allocatedCost, allocated_cost_minor: allocatedCostMinor,
+        effective_at: event.effective_at, recorded_at: event.recorded_at
+      };
+      allocations.push(allocation);
+      movementAllocations.push(allocation);
+      if (status === "UNKNOWN") unknownQuantity += take;
+      else { knownQuantity += take; knownCostMinor += allocatedCostMinor; }
+      currentLot.consumed_quantity += take;
+      currentLot.remaining_quantity -= take;
+      remainingByLot[currentLot.lot_id] = currentLot.remaining_quantity;
+      needed -= take;
+    }
+    if (needed > 0) throw new Error("Недостаточно остатка для расхода " + event.movement_id + ": не хватает " + needed + " шт. на дату операции.");
+    movementCosts[event.movement_id] = {
+      movement_id: event.movement_id, quantity: event.quantity,
+      known_quantity: knownQuantity, unknown_quantity: unknownQuantity,
+      known_cost_minor: knownCostMinor,
+      known_cost: di3MoneyFromMinorUnits_(knownCostMinor),
+      total_cost_minor: unknownQuantity === 0 ? knownCostMinor : null,
+      total_cost: unknownQuantity === 0 ? di3MoneyFromMinorUnits_(knownCostMinor) : null,
+      cost_status: unknownQuantity === 0 ? "COMPLETE" : (knownQuantity ? "PARTIAL" : "UNKNOWN"),
+      allocation_count: movementAllocations.length
+    };
+  });
+  availableLots.forEach(function (lot) { remainingByLot[lot.lot_id] = lot.remaining_quantity; });
+  return { mode: "INCREMENTAL_TAIL", events: events, allocations: allocations, remaining_by_lot: remainingByLot, movement_costs: movementCosts };
+}
+
+function di3RestoreLotRemainingSnapshot_(lotRows) {
+  if (!lotRows || !lotRows.length) return;
+  var sheet = di3GetSheetOrThrow_("StockLots");
+  // The supplied product-scoped snapshot is immutable during the write phase.
+  // Restore by physical row instead of downloading the entire StockLots table.
+  lotRows.forEach(function (row, index) {
+    var rowNumber = Number(row._di3RowNumber || index + 2);
+    sheet.getRange(rowNumber, 14).setValue(row[13]);
+  });
+}
+
+/** Replaces one FIFO projection with rollback protection if allocation or lot-cache writes fail. */
+function di3ReplaceFifoProjectionSafely_(predicate, newAllocationRows, lotRows, remainingByLotId, productId) {
+  var previousRows = (productId
+    ? di3ReadTaggedRowsByColumnValue_("StockAllocations", 4, productId)
+    : di3ReadTableValues_("StockAllocations")).filter(predicate);
+  var removed = 0;
+  try {
+    removed = di3DeleteStockAllocationRows_(predicate, productId);
+    if (newAllocationRows && newAllocationRows.length) di3AppendTableRows_("StockAllocations", newAllocationRows);
+    di3UpdateLotRemainingRows_(lotRows, remainingByLotId || {});
+    return { allocations_removed: removed, allocations_written: (newAllocationRows || []).length };
+  } catch (writeError) {
+    var rollbackError = null;
+    try {
+      di3DeleteStockAllocationRows_(predicate, productId);
+      if (previousRows.length) di3AppendTableRows_("StockAllocations", previousRows.map(function (row) { return row.slice(); }));
+      di3RestoreLotRemainingSnapshot_(lotRows);
+    } catch (restoreError) {
+      rollbackError = restoreError;
+    }
+    if (rollbackError) {
+      throw new Error("FIFO-проекция не записана; автоматический откат также завершился ошибкой. Исходная ошибка: " +
+        (writeError && writeError.message ? writeError.message : String(writeError)) + ". Ошибка отката: " +
+        (rollbackError && rollbackError.message ? rollbackError.message : String(rollbackError)));
+    }
+    throw writeError;
+  }
+}
+
+function di3ApplyIncrementalFifoForProduct_(productId, runId, tailLedgerRows, detailRows, lotRows, activeAllocationRows, stateRows, allLedgerRows) {
+  var plan = di3BuildFifoTailPlanForProduct_(productId, tailLedgerRows, detailRows, lotRows, activeAllocationRows, stateRows);
+  if (plan.mode === "NO_NEW_EVENTS") return { mode: plan.mode, movements_replayed: 0, allocations_created: 0, allocations_replaced: 0, lots_updated: 0, movement_costs: {} };
+  if (plan.mode === "PRODUCT_REPLAY_REQUIRED") {
+    var ledgerRows = Array.isArray(allLedgerRows) ? allLedgerRows : di3ReadTableValues_("StockLedger");
+    var replay = di3BuildProductFifoReplayPlan_(productId, ledgerRows, detailRows, lotRows);
+    var allocationRows = di3BuildFifoAllocationRows_(runId, replay.allocations);
+    var remainingFromReplay = {};
+    replay.remaining_lots.forEach(function (lot) { remainingFromReplay[String(lot.lot_id)] = Number(lot.remaining_quantity); });
+    (lotRows || []).filter(function (row) { return String(row[1]) === String(productId); }).forEach(function (row) {
+      if (!Object.prototype.hasOwnProperty.call(remainingFromReplay, String(row[0]))) remainingFromReplay[String(row[0])] = Number(row[8]);
+    });
+    // Pass the full sheet row set: di3UpdateLotRemainingRows_ maps array indexes to physical row numbers.
+    // The remaining map itself contains only this product's lot IDs, so other products stay untouched.
+    var replaceResult = di3ReplaceFifoProjectionSafely_(function (row) { return String(row[4]) === String(productId); },
+      allocationRows, lotRows || [], remainingFromReplay, productId);
+    return {
+      mode: "PRODUCT_REPLAY", replay_reason: plan.reason, movements_replayed: replay.movement_count,
+      allocations_created: allocationRows.length, allocations_replaced: replaceResult.allocations_removed,
+      lots_updated: (lotRows || []).filter(function (row) { return String(row[1]) === String(productId); }).length,
+      movement_costs: replay.movement_costs
+    };
+  }
+  var rowsToWrite = di3BuildFifoAllocationRows_(runId, plan.allocations);
+  if (rowsToWrite.length) di3AppendTableRows_("StockAllocations", rowsToWrite);
+  var updated = di3UpdateLotRemainingRows_(lotRows, plan.remaining_by_lot);
+  return {
+    mode: "INCREMENTAL", movements_replayed: plan.events.length,
+    allocations_created: rowsToWrite.length, allocations_replaced: 0,
+    lots_updated: updated, movement_costs: plan.movement_costs
+  };
+}
+
+function di3PreflightFifoForProducts_(candidateLedgerRows, candidateDetailRows, candidateLotRows, productIds, existingLedgerRows) {
+  // Callers that already loaded the current ledger can pass that exact pre-write
+  // snapshot; avoid an otherwise redundant full-table read during preflight.
+  var currentLedgerRows = Array.isArray(existingLedgerRows) ? existingLedgerRows : di3ReadTableValues_("StockLedger");
+  var currentIds = {};
+  currentLedgerRows.forEach(function (row) { currentIds[String(row[0])] = true; });
+  var newRows = (candidateLedgerRows || []).filter(function (row) { return !currentIds[String(row[0])]; });
+  var newProductIds = {};
+  newRows.forEach(function (row) { if (row[3]) newProductIds[String(row[3])] = true; });
+  (productIds || []).forEach(function (id) { if (id && newProductIds[String(id)]) newProductIds[String(id)] = true; });
+  var stateRows = di3ReadTableValues_("FifoProductState");
+  var activeAllocations = di3ReadTableValues_("StockAllocations");
+  Object.keys(newProductIds).forEach(function (productId) {
+    var tailRows = newRows.filter(function (row) { return String(row[3]) === productId; });
+    var plan = di3BuildFifoTailPlanForProduct_(productId, tailRows, candidateDetailRows, candidateLotRows, activeAllocations, stateRows);
+    if (plan.mode === "PRODUCT_REPLAY_REQUIRED") {
+      di3BuildProductFifoReplayPlan_(productId, candidateLedgerRows, candidateDetailRows, candidateLotRows);
+    }
+  });
+  return { products_checked: Object.keys(newProductIds).length, tail_movements_checked: newRows.length };
+}
+
+
+/** Preflight candidate events while loading only histories/projections for affected products. */
+function di3PreflightFifoForProductsScoped_(candidateLedgerRows, candidateDetailRows, candidateLotRows, productIds) {
+  var productSet = Object.create(null);
+  (productIds || []).forEach(function (id) { if (id != null && String(id)) productSet[String(id)] = true; });
+  (candidateLedgerRows || []).forEach(function (row) { if (row[3]) productSet[String(row[3])] = true; });
+  var productKeys = Object.keys(productSet);
+  if (!productKeys.length) return { products_checked: 0, tail_movements_checked: 0 };
+
+  // Load the complete history only for the affected products. Preserve physical row numbers
+  // because a backdated event can require deterministic product replay.
+  var currentLedger = di3ReadTaggedRowsByColumnValues_("StockLedger", 3, productKeys);
+  var currentMovementIds = Object.create(null);
+  currentLedger.forEach(function (row) { currentMovementIds[String(row[0])] = true; });
+  var currentLedgerLastRow = di3GetSheetOrThrow_("StockLedger").getLastRow();
+  var newRows = [];
+  (candidateLedgerRows || []).forEach(function (row, index) {
+    var productId = String(row[3] || "");
+    if (!productSet[productId] || currentMovementIds[String(row[0])]) return;
+    var copy = row.slice();
+    copy._di3RowNumber = currentLedgerLastRow + newRows.length + 1;
+    newRows.push(copy);
+    currentMovementIds[String(copy[0])] = true;
+  });
+  if (!newRows.length) return { products_checked: 0, tail_movements_checked: 0 };
+
+  var ledgerRows = currentLedger.concat(newRows);
+  var movementIds = [];
+  var movementSet = Object.create(null);
+  ledgerRows.forEach(function (row) {
+    var id = String(row[0] || "");
+    if (id && !movementSet[id]) { movementSet[id] = true; movementIds.push(id); }
+  });
+  var detailRows = di3ReadTaggedRowsByColumnValues_("StockMovementDetails", 0, movementIds);
+  var detailIds = Object.create(null);
+  detailRows.forEach(function (row) { detailIds[String(row[0])] = true; });
+  var detailLastRow = di3GetSheetOrThrow_("StockMovementDetails").getLastRow();
+  (candidateDetailRows || []).forEach(function (row, index) {
+    var id = String(row[0] || "");
+    if (!id || detailIds[id] || !movementSet[id]) return;
+    var copy = row.slice();
+    copy._di3RowNumber = detailLastRow + 1;
+    detailRows.push(copy);
+    detailIds[id] = true;
+  });
+
+  var lotRows = di3ReadTaggedRowsByColumnValues_("StockLots", 1, productKeys);
+  var lotMovementIds = Object.create(null);
+  lotRows.forEach(function (row) { lotMovementIds[String(row[2])] = true; });
+  var lotLastRow = di3GetSheetOrThrow_("StockLots").getLastRow();
+  (candidateLotRows || []).forEach(function (row, index) {
+    var movementId = String(row[2] || "");
+    if (!movementId || lotMovementIds[movementId] || !movementSet[movementId]) return;
+    var copy = row.slice();
+    copy._di3RowNumber = lotLastRow + 1;
+    lotRows.push(copy);
+    lotMovementIds[movementId] = true;
+  });
+
+  var stateRows = di3ReadTaggedRowsByColumnValues_("FifoProductState", 0, productKeys);
+  var activeAllocations = di3ReadTaggedRowsByColumnValues_("StockAllocations", 4, productKeys);
+  var productsChecked = 0;
+  var tailCount = 0;
+  var newProductIds = Object.create(null);
+  newRows.forEach(function (row) { newProductIds[String(row[3])] = true; });
+  Object.keys(newProductIds).forEach(function (productId) {
+    var tailRows = newRows.filter(function (row) { return String(row[3]) === productId; });
+    tailCount += tailRows.length;
+    var plan = di3BuildFifoTailPlanForProduct_(productId, tailRows, detailRows, lotRows, activeAllocations, stateRows);
+    if (plan.mode === "PRODUCT_REPLAY_REQUIRED") {
+      di3BuildProductFifoReplayPlan_(productId, ledgerRows, detailRows, lotRows);
+    }
+    productsChecked++;
+  });
+  return { products_checked: productsChecked, tail_movements_checked: tailCount };
+}
+
+
+/** Preflight one candidate stock movement using only that product's history and current FIFO projection. */
+function di3PreflightFifoForProductScoped_(productId, candidateLedgerRow, candidateDetailRow, candidateLotRow, existingLedgerMatch) {
+  // The caller already performs an exact event_key lookup. Reuse that record and
+  // avoid a product-wide Ledger scan unless a backdated/repair replay is required.
+  var candidate = existingLedgerMatch ? existingLedgerMatch.values.slice() : candidateLedgerRow.slice();
+  if (existingLedgerMatch) candidate._di3RowNumber = Number(existingLedgerMatch.row_number);
+  else if (candidateLedgerRow._di3RowNumber) candidate._di3RowNumber = Number(candidateLedgerRow._di3RowNumber);
+  else candidate._di3RowNumber = di3GetSheetOrThrow_("StockLedger").getLastRow() + 1;
+
+  var productLots = di3ReadTaggedRowsByColumnValue_("StockLots", 1, productId);
+  if (candidateLotRow) {
+    var candidateLotExists = productLots.some(function (row) { return String(row[0]) === String(candidateLotRow[0]); });
+    if (!candidateLotExists) {
+      var newLot = candidateLotRow.slice();
+      newLot._di3RowNumber = di3GetSheetOrThrow_("StockLots").getLastRow() + 1;
+      productLots.push(newLot);
+    }
+  }
+  var detailRows = di3ReadTaggedRowsByColumnValue_("StockMovementDetails", 0, candidate[0]);
+  if (candidateDetailRow && !detailRows.some(function (row) { return String(row[0]) === String(candidateDetailRow[0]); })) {
+    detailRows.push(candidateDetailRow.slice());
+  }
+  // Only allocations belonging to this movement can indicate a partial retry.
+  var allocations = di3ReadTaggedRowsByColumnValue_("StockAllocations", 2, candidate[0]);
+  var stateRows = di3ReadTaggedRowsByColumnValue_("FifoProductState", 0, productId);
+  var tailPlan = di3BuildFifoTailPlanForProduct_(productId, [candidate], detailRows, productLots, allocations, stateRows);
+  if (tailPlan.mode === "PRODUCT_REPLAY_REQUIRED") {
+    var productLedgerRows = di3ReadTaggedRowsByColumnValue_("StockLedger", 3, productId);
+    if (!productLedgerRows.some(function (row) { return String(row[0]) === String(candidate[0]); })) {
+      productLedgerRows.push(candidate);
+    }
+    var movementIds = productLedgerRows.map(function (row) { return String(row[0]); });
+    var allDetails = di3ReadTaggedRowsByColumnValues_("StockMovementDetails", 0, movementIds);
+    if (candidateDetailRow && !allDetails.some(function (row) { return String(row[0]) === String(candidateDetailRow[0]); })) {
+      allDetails.push(candidateDetailRow.slice());
+    }
+    di3BuildProductFifoReplayPlan_(productId, productLedgerRows, allDetails, productLots);
+  }
+  return { status: "READY", mode: tailPlan.mode, product_id: String(productId) };
+}
+
+function di3SetFifoLedgerCursor_(count) {
+  di3SetAppMetaValue_("fifo_ledger_cursor", Number(count) || 0);
+}
+
+function di3BuildFifoProductStateRows_(productIds, ledgerRows, lotRows) {
+  var ids = {};
+  (productIds || []).forEach(function (id) { if (id) ids[String(id)] = true; });
+  var aggregates = {};
+  Object.keys(ids).forEach(function (id) { aggregates[id] = { product_id: id, last: null, movement_count: 0, last_row: 1, remaining: 0, unknown_remaining: false }; });
+  (ledgerRows || []).forEach(function (row, index) {
+    var id = String(row[3] || "");
+    if (!ids[id]) return;
+    var event = { movement_id: String(row[0]), effective_at: row[7], recorded_at: row[8] };
+    var agg = aggregates[id];
+    agg.movement_count++;
+    agg.last_row = Number(row._di3RowNumber || index + 2);
+    if (!agg.last || di3FifoEventCompare_(event, agg.last) > 0) agg.last = event;
+  });
+  (lotRows || []).forEach(function (row) {
+    var id = String(row[1] || "");
+    if (!ids[id]) return;
+    if (row[13] === "" || row[13] == null || !Number.isFinite(Number(row[13]))) aggregates[id].unknown_remaining = true;
+    else aggregates[id].remaining += Number(row[13]);
+  });
+  return Object.keys(aggregates).map(function (id) {
+    var agg = aggregates[id];
+    return [id, agg.last ? agg.last.effective_at : "", agg.last ? agg.last.recorded_at : "",
+      agg.last ? agg.last.movement_id : "", agg.last_row, agg.movement_count,
+      agg.unknown_remaining ? "" : agg.remaining, new Date()];
+  });
+}
+
+function di3BuildIncrementalFifoProductStateRow_(productId, tailLedgerRows, lotRows, previousStateRow) {
+  var lastEvent = previousStateRow ? {
+    movement_id: String(previousStateRow[3]), effective_at: previousStateRow[1], recorded_at: previousStateRow[2]
+  } : null;
+  var movementCount = previousStateRow ? Number(previousStateRow[5]) || 0 : 0;
+  var lastRowNumber = previousStateRow ? Number(previousStateRow[4]) || 1 : 1;
+  (tailLedgerRows || []).forEach(function (row) {
+    var event = { movement_id: String(row[0]), effective_at: row[7], recorded_at: row[8] };
+    movementCount++;
+    lastRowNumber = Math.max(lastRowNumber, Number(row._di3RowNumber || 1));
+    if (!lastEvent || di3FifoEventCompare_(event, lastEvent) > 0) lastEvent = event;
+  });
+  var remaining = 0;
+  var unknownRemaining = false;
+  (lotRows || []).forEach(function (row) {
+    if (row[13] === "" || row[13] == null || !Number.isFinite(Number(row[13]))) unknownRemaining = true;
+    else remaining += Number(row[13]);
+  });
+  return [String(productId), lastEvent ? lastEvent.effective_at : "", lastEvent ? lastEvent.recorded_at : "",
+    lastEvent ? lastEvent.movement_id : "", lastRowNumber, movementCount,
+    unknownRemaining ? "" : remaining, new Date()];
+}
+
+function di3UpsertFifoProductStateRows_(stateRowsToWrite) {
+  if (!stateRowsToWrite || !stateRowsToWrite.length) return 0;
+  var productIds = stateRowsToWrite.map(function (row) { return String(row[0]); });
+  var existing = di3ReadRowsByColumnValues_("FifoProductState", 0, productIds);
+  var rowById = {};
+  existing.forEach(function (match) { rowById[String(match.values[0])] = Number(match.row_number); });
+  var sheet = di3GetSheetOrThrow_("FifoProductState");
+  var append = [];
+  stateRowsToWrite.forEach(function (row) {
+    var rowNumber = rowById[String(row[0])];
+    if (rowNumber) sheet.getRange(rowNumber, 1, 1, DI3_TABLE_SCHEMAS.FifoProductState.length).setValues([row]);
+    else append.push(row);
+  });
+  if (append.length) di3AppendTableRows_("FifoProductState", append);
+  return stateRowsToWrite.length;
+}
+
+function di3RebuildFifoAllocations_(reason, affectedProductIds) {
+  var ledgerSheet = di3GetSheetOrThrow_("StockLedger");
+  var ledgerLastRow = ledgerSheet.getLastRow();
+  var ledgerCount = Math.max(0, ledgerLastRow - 1);
+  var isFullReplay = !Array.isArray(affectedProductIds) || !affectedProductIds.length;
+  var cursorRaw = di3GetAppMetaValue_("fifo_ledger_cursor");
+  var cursor = cursorRaw == null || cursorRaw === "" ? null : Number(cursorRaw);
+  if (!isFullReplay && (!Number.isInteger(cursor) || cursor < 0 || cursor > ledgerCount)) isFullReplay = true;
+
+  var ledgerRows = null, detailRows = null, lotRows = null, newLedgerRows = [];
+  var productIds = [];
+  var candidateReplay = null;
+  if (isFullReplay) {
+    ledgerRows = di3ReadTableValues_("StockLedger");
+    detailRows = di3ReadTableValues_("StockMovementDetails");
+    lotRows = di3ReadTableValues_("StockLots");
+    productIds = Array.from(new Set(ledgerRows.map(function (row) { return String(row[3] || ""); }).filter(Boolean)));
+    candidateReplay = di3BuildFifoReplayPlan_(ledgerRows, detailRows, lotRows, null);
+  } else {
+    // Normal operations read only rows appended after the FIFO cursor.
+    newLedgerRows = di3ReadFifoLedgerTail_(cursor, ledgerCount);
+    productIds = Array.from(new Set(newLedgerRows.map(function (row) { return String(row[3] || ""); }).filter(Boolean)));
+  }
+
+  var run = di3CreateFifoRun_(isFullReplay ? "FULL_REPLAY:" + (reason || "MANUAL") : (reason || "INCREMENTAL"),
+    ledgerCount, 0, productIds.length);
+  var created = 0, replaced = 0, replayedMovements = 0, updatedLots = 0;
+  var fullReplayStateRows = null;
+  try {
+    if (isFullReplay) {
+      var fullRows = di3BuildFifoAllocationRows_(run.run_id, candidateReplay.allocations);
+      var remaining = {};
+      candidateReplay.remaining_lots.forEach(function (lot) { remaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
+      lotRows.forEach(function (row) { if (!Object.prototype.hasOwnProperty.call(remaining, String(row[0]))) remaining[String(row[0])] = Number(row[8]); });
+      var fullReplace = di3ReplaceFifoProjectionSafely_(function () { return true; }, fullRows, lotRows, remaining, null);
+      updatedLots = lotRows.filter(function (row) { return Object.prototype.hasOwnProperty.call(remaining, String(row[0])); }).length;
+      created = fullRows.length;
+      replaced = fullReplace.allocations_removed;
+      replayedMovements = candidateReplay.movement_count;
+      fullReplayStateRows = di3BuildFifoProductStateRows_(productIds, ledgerRows, lotRows.map(function (row) {
+        var copy = row.slice(); copy[13] = Object.prototype.hasOwnProperty.call(remaining, String(row[0])) ? remaining[String(row[0])] : row[8];
+        if (row._di3RowNumber) copy._di3RowNumber = row._di3RowNumber;
+        return copy;
+      }));
+    } else {
+      var stateRowsToWrite = [];
+      productIds.forEach(function (productId) {
+        var ledgerTailForProduct = newLedgerRows.filter(function (row) { return String(row[3]) === productId; });
+        var productLots = di3ReadTaggedRowsByColumnValue_("StockLots", 1, productId);
+        var productStateRows = di3ReadTaggedRowsByColumnValue_("FifoProductState", 0, productId);
+        var productState = productStateRows.length ? productStateRows[0] : null;
+        // Recovery may resume after the product state was written but before the
+        // global ledger cursor. Ignore tail rows already represented by that state.
+        var lastProcessedLedgerRow = productState ? Number(productState[4]) || 1 : 1;
+        var tailRows = ledgerTailForProduct.filter(function (row) {
+          return Number(row._di3RowNumber || 0) > lastProcessedLedgerRow;
+        });
+        if (!tailRows.length) return;
+        var tailMovementIds = tailRows.map(function (row) { return String(row[0]); });
+        var tailDetails = di3ReadTaggedRowsByColumnValues_("StockMovementDetails", 0, tailMovementIds);
+        var productAllocations = di3ReadTaggedRowsByColumnValues_("StockAllocations", 2, tailMovementIds);
+        var tailPlan = di3BuildFifoTailPlanForProduct_(productId, tailRows, tailDetails, productLots, productAllocations, productStateRows);
+        var productLedgerRows = null;
+        var productDetails = tailDetails;
+        if (tailPlan.mode === "PRODUCT_REPLAY_REQUIRED") {
+          productLedgerRows = di3ReadTaggedRowsByColumnValue_("StockLedger", 3, productId);
+          productDetails = di3ReadTaggedRowsByColumnValues_("StockMovementDetails", 0,
+            productLedgerRows.map(function (row) { return String(row[0]); }));
+        }
+        var result = di3ApplyIncrementalFifoForProduct_(productId, run.run_id, tailRows, productDetails,
+          productLots, productAllocations, productStateRows, productLedgerRows);
+        created += result.allocations_created;
+        replaced += result.allocations_replaced;
+        replayedMovements += result.movements_replayed;
+        updatedLots += result.lots_updated;
+        if (productLedgerRows) {
+          stateRowsToWrite.push.apply(stateRowsToWrite,
+            di3BuildFifoProductStateRows_([productId], productLedgerRows, productLots));
+        } else {
+          stateRowsToWrite.push(di3BuildIncrementalFifoProductStateRow_(productId, tailRows, productLots, productState));
+        }
+      });
+      if (stateRowsToWrite.length) di3UpsertFifoProductStateRows_(stateRowsToWrite);
+      if (productIds.length && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
+        di3RefreshAllOrderFifoSnapshots_(reason || "FIFO_RECALCULATION", run.run_id, productIds);
+      }
+      di3SetFifoLedgerCursor_(ledgerCount);
+      di3SetAppMetaValue_("fifo_state_version", DI3_FIFO_STATE_VERSION);
+    }
+    if (isFullReplay && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
+      di3RefreshAllOrderFifoSnapshots_(reason || "FIFO_FULL_REBUILD", run.run_id, productIds);
+    }
+    if (fullReplayStateRows) di3UpsertFifoProductStateRows_(fullReplayStateRows);
+    di3SetFifoLedgerCursor_(ledgerCount);
+    di3SetAppMetaValue_("fifo_state_version", DI3_FIFO_STATE_VERSION);
+    di3UpdateFifoRunStatus_(run.row_number, "COMMITTED", new Date(), "", created);
+    return {
+      run_id: run.run_id, run_sequence: run.run_sequence,
+      allocations_created: created, allocations_replaced: replaced,
+      movements_replayed: replayedMovements, products_replayed: productIds.length,
+      lots_updated: updatedLots, mode: isFullReplay ? "FULL_REPLAY" : "INCREMENTAL_TAIL"
+    };
+  } catch (error) {
+    try { di3UpdateFifoRunStatus_(run.row_number, "FAILED", "", error && error.stack ? error.stack : String(error), created); } catch (ignore) {}
+    throw error;
+  }
+}
+
+/** Ensures the incremental FIFO projection is bootstrapped. Full replay remains the verification baseline. */
+function di3EnsureIncrementalFifoReady_() {
+  if (!di3GetSpreadsheet_().getSheetByName("_AppMeta")) return { status: "SCHEMAS_NOT_READY" };
+  var version = di3GetAppMetaValue_("fifo_state_version");
+  var cursor = di3GetAppMetaValue_("fifo_ledger_cursor");
+  // Row count is metadata; do not download the ledger merely to verify a valid cursor.
+  var ledgerSheet = di3GetSheetOrThrow_("StockLedger");
+  var currentLedgerLength = Math.max(0, ledgerSheet.getLastRow() - 1);
+  if (String(version) === DI3_FIFO_STATE_VERSION && cursor !== null && cursor !== "" &&
+      Number.isInteger(Number(cursor)) && Number(cursor) >= 0 && Number(cursor) <= currentLedgerLength) {
+    return { status: Number(cursor) === currentLedgerLength ? "ALREADY_READY" : "PENDING_LEDGER_TAIL",
+      cursor: Number(cursor), ledger_rows: currentLedgerLength };
+  }
+  if (currentLedgerLength && typeof di3GetPendingStockOperations_ === "function") {
+    var pending = di3GetPendingStockOperations_();
+    if (pending.length) return { status: "PENDING_OPERATIONS", pending_operations: pending.length,
+      message: "FIFO bootstrap отложен: сначала восстанови незавершённые складские операции." };
+  }
+  var result = currentLedgerLength
+    ? di3RebuildFifoAllocations_("FIFO_INCREMENTAL_BOOTSTRAP", null)
+    : { mode: "EMPTY", allocations_created: 0, movements_replayed: 0 };
+  di3SetAppMetaValue_("fifo_state_version", DI3_FIFO_STATE_VERSION);
+  di3SetFifoLedgerCursor_(currentLedgerLength);
+  if (!currentLedgerLength) di3UpsertFifoProductStateRows_([]);
+  return { status: "READY", bootstrap: result };
+}
+
+/** Full FIFO reconstruction is mutating and therefore always requires a menu confirmation. */
+function di3RunFullFifoRebuild() {
+  var ui = SpreadsheetApp.getUi();
+  var answer = ui.alert("Полная перестройка FIFO",
+    "Это не проверка. Будет создана резервная копия, затем полностью перестроены FIFO-распределения и связанные складские проекции на основании StockLedger. Операция изменяет системные данные и может занять время. Продолжить?",
+    ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return { status: "CANCELLED_BY_USER", rebuilt: false };
+  return di3WithLock_(function () {
+    di3EnsureCoreFoundationSchemas_();
+    di3AssertNoPendingStockOperations_();
+    var backup = di3CreateSpreadsheetBackupInternal_("MANUAL_FULL_FIFO_REBUILD");
+    var rebuild = di3RebuildFifoAllocations_("MANUAL_FULL_FIFO_REBUILD", null);
+    return { status: "REBUILT", backup: backup, rebuild: rebuild };
+  });
+}
+
+/** Read-only integrity check for FIFO ledger, active allocations, lot caches and per-product cursors. */
+function di3GetFifoIntegrityDiagnostics_() {
+  var ledgerRows = di3ReadTableValues_("StockLedger");
+  var detailRows = di3ReadTableValues_("StockMovementDetails");
+  var lotRows = di3ReadTableValues_("StockLots");
+  var allocationRows = di3ReadTableValues_("StockAllocations");
+  var stateRows = di3ReadTableValues_("FifoProductState");
+  var errors = [];
+  var warnings = [];
+  var movementById = {};
+  var detailById = {};
+  var lotById = {};
+  var consumedByLot = {};
+  var allocatedCostMinorByLot = {};
+  var movementsByProduct = {};
+  var productIds = {};
+  var lotRemainingByProduct = {};
+  var movementCountByProduct = {};
+  var latestMovementByProduct = {};
+
+  ledgerRows.forEach(function (row, index) {
+    var movementId = String(row[0] || "");
+    var productId = String(row[3] || "");
+    if (!movementId || !productId) { errors.push("StockLedger: пустой movement_id или product_id в строке " + (index + 2)); return; }
+    if (movementById[movementId]) errors.push("StockLedger: повторный movement_id " + movementId + ".");
+    movementById[movementId] = row;
+    productIds[productId] = true;
+    movementCountByProduct[productId] = (movementCountByProduct[productId] || 0) + 1;
+    var event = { movement_id: movementId, effective_at: row[7], recorded_at: row[8] };
+    if (!latestMovementByProduct[productId]) {
+      latestMovementByProduct[productId] = { event: event, fifo_row_number: index + 2, last_ledger_row_number: index + 2 };
+    } else {
+      latestMovementByProduct[productId].last_ledger_row_number = index + 2;
+      if (di3FifoEventCompare_(event, latestMovementByProduct[productId].event) > 0) {
+        latestMovementByProduct[productId].event = event;
+        latestMovementByProduct[productId].fifo_row_number = index + 2;
+      }
+    }
+  });
+  detailRows.forEach(function (row) { detailById[String(row[0])] = row; });
+  lotRows.forEach(function (row, index) {
+    var lotId = String(row[0] || "");
+    var productId = String(row[1] || "");
+    if (!lotId || !productId) { errors.push("StockLots: пустой lot_id или product_id в строке " + (index + 2)); return; }
+    if (lotById[lotId]) errors.push("StockLots: повторный lot_id " + lotId + ".");
+    lotById[lotId] = row;
+    if (!lotRemainingByProduct[productId]) lotRemainingByProduct[productId] = 0;
+    if (row[13] === "" || row[13] == null || !Number.isFinite(Number(row[13]))) {
+      errors.push("StockLots: не заполнен remaining_quantity у партии " + lotId + ".");
+    } else {
+      lotRemainingByProduct[productId] += Number(row[13]);
+    }
+    var sourceMovement = movementById[String(row[2])];
+    if (!sourceMovement || String(sourceMovement[3]) !== productId || Number(sourceMovement[6]) <= 0) {
+      errors.push("StockLots: партия " + lotId + " не связана с корректным приходом StockLedger.");
+    }
+  });
+  allocationRows.forEach(function (row) {
+    var movementId = String(row[2] || "");
+    var lotId = String(row[3] || "");
+    var productId = String(row[4] || "");
+    var movement = movementById[movementId];
+    var lot = lotById[lotId];
+    if (!movement) errors.push("StockAllocations: неизвестное движение " + movementId + ".");
+    if (!lot) errors.push("StockAllocations: неизвестная партия " + lotId + ".");
+    if (lot && String(lot[1]) !== productId) errors.push("StockAllocations: product_id не совпадает с партией " + lotId + ".");
+    if (String(row[5]) !== "CONSUME") errors.push("StockAllocations: неизвестный тип распределения " + row[5] + ".");
+    var quantity = Number(row[6]);
+    if (!Number.isFinite(quantity) || quantity <= 0) errors.push("StockAllocations: некорректное количество для " + movementId + ".");
+    consumedByLot[lotId] = (consumedByLot[lotId] || 0) + (Number.isFinite(quantity) ? quantity : 0);
+    try {
+      var allocationMinor = di3MoneyGetAllocationCostMinor_(row);
+      if (allocationMinor != null) allocatedCostMinorByLot[lotId] = (allocatedCostMinorByLot[lotId] || 0) + allocationMinor;
+    } catch (moneyAllocationError) { errors.push("StockAllocations: " + moneyAllocationError.message); }
+  });
+  Object.keys(lotById).forEach(function (lotId) {
+    var lot = lotById[lotId];
+    var expected = Number(lot[8]) - (consumedByLot[lotId] || 0);
+    if (expected < -1e-8) errors.push("FIFO: расход превысил начальное количество партии " + lotId + ".");
+    if (Number.isFinite(Number(lot[13])) && Math.abs(Number(lot[13]) - Math.max(0, expected)) > 1e-8) {
+      errors.push("FIFO: remaining_quantity не совпадает с allocations для партии " + lotId + ".");
+    }
+    try {
+      var totalMinor = di3MoneyGetLotTotalCostMinor_(lot);
+      if (totalMinor !== null) {
+        var allocatedMinor = Number(allocatedCostMinorByLot[lotId] || 0);
+        var expectedAllocated = di3MoneyRoundRatioToInteger_(totalMinor, Number(lot[8]) - Math.max(0, expected), Number(lot[8]));
+        if (allocatedMinor !== expectedAllocated) errors.push("Money FIFO: сумма allocated_cost_minor не совпадает с количеством потребления партии " + lotId + ".");
+        if (lot.length <= 14 || lot[14] === "" || lot[14] == null) errors.push("Money FIFO: отсутствует total_cost_minor у партии " + lotId + ".");
+      }
+    } catch (moneyLotError) { errors.push("StockLots: " + moneyLotError.message); }
+  });
+
+  var stateByProduct = {};
+  stateRows.forEach(function (row) { stateByProduct[String(row[0])] = row; });
+  Object.keys(productIds).forEach(function (productId) {
+    var state = stateByProduct[productId];
+    if (!state) { errors.push("FifoProductState: отсутствует состояние для товара " + productId + "."); return; }
+    if (Number(state[5]) !== Number(movementCountByProduct[productId] || 0)) {
+      errors.push("FifoProductState: movement_count не совпадает для товара " + productId + ".");
+    }
+    var latest = latestMovementByProduct[productId];
+    if (latest && (String(state[3]) !== String(latest.event.movement_id) || Number(state[4]) !== latest.last_ledger_row_number)) {
+      errors.push("FifoProductState: курсор последнего движения не совпадает для товара " + productId + ".");
+    }
+    var stateRemaining = state[6] === "" || state[6] == null ? null : Number(state[6]);
+    var calculatedRemaining = Number(lotRemainingByProduct[productId] || 0);
+    if (stateRemaining == null || !Number.isFinite(stateRemaining) || Math.abs(stateRemaining - calculatedRemaining) > 1e-8) {
+      errors.push("FifoProductState: remaining_quantity не совпадает для товара " + productId + ".");
+    }
+  });
+
+  var version = di3GetAppMetaValue_("fifo_state_version");
+  var cursorRaw = di3GetAppMetaValue_("fifo_ledger_cursor");
+  var cursor = cursorRaw === "" || cursorRaw == null ? null : Number(cursorRaw);
+  if (String(version) !== DI3_FIFO_STATE_VERSION) warnings.push("FIFO state version требует bootstrap: " + String(version || "отсутствует") + ".");
+  if (cursor == null || !Number.isInteger(cursor) || cursor !== ledgerRows.length) {
+    warnings.push("FIFO ledger cursor не совпадает с количеством движений: " + String(cursorRaw) + " / " + ledgerRows.length + ". Следующая операция должна обработать хвост или выполнить bootstrap.");
+  }
+  return {
+    ok: errors.length === 0,
+    errors: errors,
+    warnings: warnings,
+    summary: {
+      ledger_movements: ledgerRows.length,
+      products_with_movements: Object.keys(productIds).length,
+      lots: lotRows.length,
+      active_allocations: allocationRows.length,
+      fifo_product_states: stateRows.length,
+      fifo_state_version: String(version || ""),
+      fifo_ledger_cursor: cursor,
+      money_fifo_schema_version: String(di3GetAppMetaValue_("money_fifo_schema_version") || ""),
+      money_fifo_migration_status: String(di3GetAppMetaValue_("money_fifo_migration_status") || ""),
+      money_fifo_ready: String(di3GetAppMetaValue_("money_fifo_schema_version") || "") === DI3_MONEY_FIFO_SCHEMA_VERSION &&
+        String(di3GetAppMetaValue_("money_fifo_migration_status") || "") === "READY"
+    }
+  };
+}
+
+
+/** Menu action: read-only FIFO integrity check. Never rebuilds or writes stock projections. */
+function di3RunFifoIntegrityCheck() {
+  var report = di3GetFifoIntegrityDiagnostics_();
+  var summary = report.summary || {};
+  var lines = [
+    report.ok ? "Результат: ошибок не обнаружено." : "Результат: обнаружены ошибки целостности.",
+    "Движений: " + Number(summary.ledger_movements || 0),
+    "FIFO-партий: " + Number(summary.lots || 0),
+    "Активных распределений: " + Number(summary.active_allocations || 0),
+    "Состояний товаров: " + Number(summary.fifo_product_states || 0),
+    "Ошибок: " + (report.errors || []).length,
+    "Предупреждений: " + (report.warnings || []).length,
+    "\nДанные не изменялись. Полный отчёт записан в журнал выполнения."
+  ];
+  if (report.errors && report.errors.length) {
+    lines.push("\nПервые ошибки:");
+    report.errors.slice(0, 5).forEach(function (item) { lines.push("• " + item); });
+  }
+  if (report.warnings && report.warnings.length) {
+    lines.push("\nПредупреждения:");
+    report.warnings.slice(0, 5).forEach(function (item) { lines.push("• " + item); });
+  }
+  Logger.log("DI3 FIFO READ-ONLY INTEGRITY REPORT\n" + JSON.stringify(report, null, 2));
+  SpreadsheetApp.getUi().alert("Проверка целостности FIFO (без изменений)", lines.join("\n"), SpreadsheetApp.getUi().ButtonSet.OK);
+  return { status: report.ok ? "PASS" : "ISSUES_FOUND", mode: "READ_ONLY", errors: (report.errors || []).length,
+    warnings: (report.warnings || []).length, summary: summary };
+}
