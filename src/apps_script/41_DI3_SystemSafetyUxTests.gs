@@ -89,6 +89,27 @@ function di3RunSystemSafetyUxUnitTests() {
     });
   });
 
+  test("period close and reopen append immutable PeriodLocks events", function () {
+    var closeSource = di3CloseAccountingPeriod.toString();
+    var reopenSource = di3ReopenAccountingPeriod.toString();
+    includes(closeSource, 'di3AppendTableRows_("PeriodLocks", [row])');
+    includes(reopenSource, 'di3AppendTableRows_("PeriodLocks", [row])');
+    equal(closeSource.indexOf(".setValues("), -1, "Period close must not overwrite an event");
+    equal(reopenSource.indexOf(".setValues("), -1, "Period reopen must not overwrite an event");
+  });
+  test("PeriodGuard derives current state from the last event for each period", function () {
+    var latestSource = di3GetLatestLockedPeriod_.toString();
+    var eventSource = di3GetLatestPeriodEvents_.toString();
+    includes(latestSource, "di3GetLatestPeriodEvents_()");
+    includes(latestSource, 'item.status === "LOCKED"');
+    includes(eventSource, "item.row_number > previous.row_number");
+  });
+  test("period status exposes one latest event per period with actor and reason", function () {
+    var source = di3GetPeriodGuardStatus.toString();
+    includes(source, "di3GetLatestPeriodEvents_()");
+    ["locked_by", "reopened_by", "reopen_reason"].forEach(function (field) { includes(source, field); });
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("System Safety UX tests failed: " + JSON.stringify(failed));
   return report;
