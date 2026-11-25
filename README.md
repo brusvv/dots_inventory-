@@ -1,11 +1,11 @@
 # Dots Inventory v3 — RC8 source repository snapshot
 
 **Base source snapshot:** 2026-11-24  
-**Local UX patches:** 2026-11-25 (UX-01–UX-10)  
+**Local patches:** 2026-11-25 (UX-01–UX-10, commission payer and Dashboard diagnostics)  
 **Source archive supplied in this chat:** `40.rar`  
 **SHA-256 of source archive:** `2f7219712a2a20377c3459d4103b10f7148640782f3f9c684e0808bd59830a09`
 
-The base source package was assembled from the user's uploaded `40.rar`. The working tree is a **patched derivative** of the 2026-11-24 base snapshot. Local UX-01–UX-10 patches add unsaved-form protection, safer navigation, and explicit confirmations for recovery, money/FIFO migration, period reopening and manual warehouse movements. See `docs/UX_PATCH_UX01_UX03.md`, `docs/UX_PATCH_UX04_UX06.md` and `docs/UX_PATCH_UX07_UX09.md` and `docs/UX_PATCH_UX10.md` for exact scopes.
+The base source package was assembled from the user's uploaded `40.rar`. The working tree is a **patched derivative** of the 2026-11-24 base snapshot. Local UX-01–UX-10 patches add unsaved-form protection, safer navigation, and explicit confirmations for recovery, money/FIFO migration, period reopening and manual warehouse movements. The latest local patch adds buyer-vs-seller commission payer handling, a v2→v3 additive schema migration, percent-input normalization, the missing average-known-unit-cost KPI, and read-only Dashboard chart diagnostics. See the UX patch logs and `docs/UX_PATCH_COMMISSION_PAYER_AND_DASHBOARD.md` for exact scopes.
 
 ## Repository contents
 
@@ -15,7 +15,7 @@ The base source package was assembled from the user's uploaded `40.rar`. The wor
 - `docs/ROADMAP_AND_STATUS.md` — current feature status and remaining work.
 - `docs/INSTALLATION_AND_RUNTIME_ACCEPTANCE.md` — deployment cautions and runtime test expectations.
 - `reports/` — source inventory, checksums and validation evidence.
-- `tools/` — syntax and local regression-test runners for dashboard, Supply Workspace, Catalog/Order UX and System Safety UX, including the manual warehouse movement confirmation.
+- `tools/` — syntax and local regression-test runners for Dashboard, Supply Workspace, Catalog/Order UX, System Safety and Order Domain calculations, including the manual warehouse movement confirmation and commission payer logic.
 
 ## Important omissions from the supplied archive
 
@@ -40,7 +40,7 @@ node tools/run_catalog_order_ux_tests.js
 node tools/run_system_safety_ux_tests.js
 ```
 
-The syntax command checks all `.gs` files. The dashboard runner executes five pure chart tests. The Supply UX runner executes nine pure/structural tests for dirty-form protection, B2 switching and FIFO menu safety. The Catalog/Order runner executes twelve source-level regression tests for dirty product/order form protection and menu discoverability. The System Safety runner executes eight source-level tests for confirmed batch recovery, money/FIFO migration and accounting-period reopening. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or stock operation was executed during local validation.
+The syntax command checks all `.gs` files. The dashboard runner executes seven pure chart/average-cost tests. The Order Domain runner executes thirteen pure calculation and percent-input tests. The Supply UX runner executes nine pure/structural tests for dirty-form protection, B2 switching and FIFO menu safety. The Catalog/Order runner executes twelve source-level regression tests for dirty product/order form protection and menu discoverability. The System Safety runner executes eleven source-level tests for confirmed batch recovery, money/FIFO migration and accounting-period reopening. These checks do not emulate Google Sheets rendering, Apps Script services, triggers, Drive, LockService, or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or stock operation was executed during local validation.
 
 ## Safe operating rules
 
@@ -62,3 +62,13 @@ Protect the order calculator and product editor from accidental data loss, stage
 ## UX-07 through UX-10
 
 Add explicit YES/NO confirmation and impact summaries before batch recovery of pending operations, the integer-minor-unit money/FIFO migration, reopening the latest accounting period, and manually posting warehouse IN/OUT movements. A No response exits before the corresponding mutation path. See `docs/UX_PATCH_UX07_UX09.md` and `docs/UX_PATCH_UX10.md`.
+
+## Commission payer and Dashboard patch — 25.11.2026
+
+The order form checkbox B3 now means **“Комиссию оплачивает покупатель”**. If checked, the commission is added to the buyer total; if unchecked, it is deducted from seller proceeds and profit. The fee is calculated whenever the commission rate is greater than zero. The existing commission base (gross goods before discount) is retained. Existing V3_Orders records are migrated with `commission_payer=BUYER` to preserve the previous accounting rule. Schema Versioning target is now v3; setup Dry Run and verified backup are required before applying the additive column.
+
+The commission reader accepts both native Sheets percentage cells and literal-percent cells, preventing the 100× under-calculation shown in the user's screenshot.
+
+Warehouse Dashboard now calculates the missing average-known FIFO unit cost and keeps enough grid rows for the chart height. Read-only functions `di3DiagnoseWarehouseDashboardChart()` / `di3LogWarehouseDashboardChartDiagnostics()` expose N1:O21, chart source ranges and chart count. The actual chart remains **not runtime-accepted** until those diagnostics and a real Sheets screenshot confirm its rendering.
+
+See `docs/UX_PATCH_COMMISSION_PAYER_AND_DASHBOARD.md`. The user has visually accepted UX-01–UX-06 except the duplicate-product-identity test, which remains outstanding.

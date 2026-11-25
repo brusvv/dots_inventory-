@@ -8,7 +8,7 @@
     "gs_files_total": 49
   },
   "configured_time_zone_in_source": "Europe/Helsinki",
-  "schema_version_constant": 2,
+  "schema_version_constant": 3,
   "system_tables": [
     "Products",
     "PackVariants",
@@ -86,8 +86,8 @@
     },
     {
       "path": "src/apps_script/00_DI3_SchemaRegistry.gs",
-      "bytes": 37685,
-      "sha256": "76e58c8ac8638cd35a1de785bfb95c019eeb44760414ff93d5bdf54528d2e463",
+      "bytes": 38151,
+      "sha256": "46217059179cc65618d1ac7c24608863e6bd9a6c36b8c861d68cb13a488b1a7a",
       "kind": "apps_script_module"
     },
     {
@@ -122,8 +122,8 @@
     },
     {
       "path": "src/apps_script/07_DI3_StockCore.gs",
-      "bytes": 59730,
-      "sha256": "04e150257998f689c34ca0da6724dacdd1a1ed1f72c62226b15d504038925acb",
+      "bytes": 60164,
+      "sha256": "180c939b7e2b88597612220fa1cea928050b1e98d9ca015871161f6922f06673",
       "kind": "apps_script_module"
     },
     {
@@ -170,32 +170,32 @@
     },
     {
       "path": "src/apps_script/15_DI3_OrderDomain.gs",
-      "bytes": 22909,
-      "sha256": "63ffe039e47bb5a96c15dd67a143b8c65425b9f78b552eee18500863e36e93e0",
+      "bytes": 26827,
+      "sha256": "1e110d0b8eb277e82cc930a1e1a45e8e3f63777ae081e25382c989924d3457a0",
       "kind": "apps_script_module"
     },
     {
       "path": "src/apps_script/16_DI3_OrderWorkflow.gs",
-      "bytes": 35361,
-      "sha256": "e99c9a52cfd7b58612eb48ec37c09ceaedbb1bfaed87d509be0587180d0e91ab",
+      "bytes": 35904,
+      "sha256": "3174ec5e69785c6ed8ad7acec48ff143553857aa7499c697ab7508ab1c9e2867",
       "kind": "apps_script_module"
     },
     {
       "path": "src/apps_script/17_DI3_OrderWorkspace.gs",
-      "bytes": 29773,
-      "sha256": "3df0b70f42f7afa474b81111be42db8c8e657c712a3f6402403e0bb64d63de7e",
+      "bytes": 30458,
+      "sha256": "1081171ad9f44f6bd15e72bc8a12eac8329955af64e862b1b89c6e52437495d6",
       "kind": "apps_script_module"
     },
     {
       "path": "src/apps_script/18_DI3_OrderTests.gs",
-      "bytes": 5540,
-      "sha256": "1a9b5e78b79cf7a00ac5570a6e7ed0e3ad4549834e3ed727796afb5739f3c051",
+      "bytes": 7547,
+      "sha256": "f5abc0e2378fe780f208f48bdd4c13c1565b80a7fc0d700989e2f5602f97da79",
       "kind": "apps_script_module"
     },
     {
       "path": "src/apps_script/19_DI3_WarehouseViews.gs",
-      "bytes": 30987,
-      "sha256": "0f69e49e18551912c81dbd2f2cfc08a43ed459863783e1c18cbb1753558c8928",
+      "bytes": 32922,
+      "sha256": "1c45ff844ac3b5f8c8fb374e863d13368e56600bceea5b761ec3f6c9aa534a5e",
       "kind": "apps_script_module"
     },
     {
@@ -248,8 +248,8 @@
     },
     {
       "path": "src/apps_script/28_DI3_InstallationPreflight.gs",
-      "bytes": 23097,
-      "sha256": "5465fea5fea2781cef4d852bf40feddf700decbee208e460261029d14e42aa22",
+      "bytes": 24477,
+      "sha256": "e743809418ca4c62ec61ea737c552d300368ca7da1cccc9f95155fa6c5c58786",
       "kind": "apps_script_module"
     },
     {
@@ -266,8 +266,8 @@
     },
     {
       "path": "src/apps_script/31_DI3_FinanceDashboard.gs",
-      "bytes": 35554,
-      "sha256": "b34128295b75921829ec1d7198e161d5d737691d733dcb8b95709e98443eda78",
+      "bytes": 36224,
+      "sha256": "2b6b445c2c83effc109d225114d67fd2e1491f407f2b7f67fb92e84698f76150",
       "kind": "apps_script_module"
     },
     {
@@ -278,8 +278,8 @@
     },
     {
       "path": "src/apps_script/33_DI3_SchemaVersioning.gs",
-      "bytes": 12917,
-      "sha256": "8e2c5f30d775c832a4a16d12babc573c64d47255cf0f96d999f50c9ee6adeb9c",
+      "bytes": 13728,
+      "sha256": "c907208daed41bf514ff31ca64ba6c696be54f6a5d732119dd0812873964848a",
       "kind": "apps_script_module"
     },
     {
@@ -308,8 +308,8 @@
     },
     {
       "path": "src/apps_script/38_DI3_WarehouseDashboardTests.gs",
-      "bytes": 2715,
-      "sha256": "79898670bd1de0dfba64fa1a2a90686a2f78e7f57d38601441186b00da111f11",
+      "bytes": 3096,
+      "sha256": "d4001403d7b835cccc071abcc71fae7f1421f0dcf96b6d090c928b67aa260794",
       "kind": "apps_script_module"
     },
     {
@@ -337,7 +337,7 @@
     "Node regression harness / package.json",
     "original repository history and full documentation"
   ],
-  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Local UX-01–UX-10 patches are documented in docs/UX_PATCH_UX01_UX03.md, docs/UX_PATCH_UX04_UX06.md, docs/UX_PATCH_UX07_UX09.md and docs/UX_PATCH_UX10.md.",
+  "working_tree_status": "Patched derivative of the 2026-11-24 source archive. Includes UX-01–UX-10 plus commission-payer/schema-v3 and Warehouse Dashboard diagnostics patch; actual chart rendering and schema migration remain pending runtime acceptance.",
   "patch_scope": {
     "UX-01_UX-03": {
       "modified_modules": [
@@ -401,6 +401,52 @@
       "added_docs": [
         "docs/UX_PATCH_UX10.md"
       ]
+    },
+    "COMMISSION_PAYER_DASHBOARD": {
+      "modified_modules": [
+        "00_DI3_SchemaRegistry.gs",
+        "07_DI3_StockCore.gs",
+        "15_DI3_OrderDomain.gs",
+        "16_DI3_OrderWorkflow.gs",
+        "17_DI3_OrderWorkspace.gs",
+        "18_DI3_OrderTests.gs",
+        "19_DI3_WarehouseViews.gs",
+        "28_DI3_InstallationPreflight.gs",
+        "31_DI3_FinanceDashboard.gs",
+        "33_DI3_SchemaVersioning.gs"
+      ],
+      "added_tools": [
+        "run_order_domain_tests.js"
+      ],
+      "added_docs": [
+        "docs/UX_PATCH_COMMISSION_PAYER_AND_DASHBOARD.md"
+      ],
+      "schema_version": 3,
+      "migration_key": "RC8_ORDER_COMMISSION_PAYER_V3"
+    }
+  },
+  "local_patch_2026_11_25": {
+    "commission_payer_and_dashboard_diagnostics": {
+      "modified_modules": [
+        "00_DI3_SchemaRegistry.gs",
+        "07_DI3_StockCore.gs",
+        "15_DI3_OrderDomain.gs",
+        "16_DI3_OrderWorkflow.gs",
+        "17_DI3_OrderWorkspace.gs",
+        "18_DI3_OrderTests.gs",
+        "19_DI3_WarehouseViews.gs",
+        "28_DI3_InstallationPreflight.gs",
+        "31_DI3_FinanceDashboard.gs",
+        "33_DI3_SchemaVersioning.gs"
+      ],
+      "added_tools": [
+        "tools/run_order_domain_tests.js"
+      ],
+      "added_docs": [
+        "docs/UX_PATCH_COMMISSION_PAYER_AND_DASHBOARD.md"
+      ],
+      "schema_version": 3,
+      "migration_key": "RC8_ORDER_COMMISSION_PAYER_V3"
     }
   }
 }

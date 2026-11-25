@@ -6,7 +6,7 @@ var DI3_ORDER_STATUS = Object.freeze({
 var DI3_ORDER_FORM_SHEET = "Калькулятор заказа v3";
 var DI3_ORDER_REGISTER_SHEET = "Реестр заказов v3";
 var DI3_ORDER_FORM = Object.freeze({
-  commissionEnabled: "B3", commissionPercent: "B4", discountEnabled: "B5",
+  commissionPaidByBuyer: "B3", commissionPercent: "B4", discountEnabled: "B5",
   discountPercent: "B6", deliveryMethod: "B7", notes: "B8",
   firstLine: 12, lineCount: 20
 });
@@ -17,6 +17,35 @@ function di3OrderRoundMoney_(value) {
 
 function di3OrderToCents_(value, fieldName) {
   return di3MoneyToMinorUnits_(value, fieldName || "Сумма", false);
+}
+
+/** Normalize a percentage input from either native-percent or literal-percent cells. */
+function di3NormalizeOrderPercentInput_(value, numberFormat, fieldName) {
+  var raw = value == null || value === "" ? 0 : Number(value);
+  if (!Number.isFinite(raw) || raw < 0) throw new Error((fieldName || "Процент") + " должен быть неотрицательным числом.");
+  // Native Sheets percent formats store 10% as 0.1; the existing literal format
+  // 0.00"%" stores 10 as 10. Strip quoted literals before checking the format.
+  var activeFormat = String(numberFormat || "").replace(/"[^"]*"/g, "");
+  var rate = activeFormat.indexOf("%") >= 0 ? raw : raw / 100;
+  if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+    throw new Error((fieldName || "Процент") + " должен быть от 0% до 100%.");
+  }
+  return rate;
+}
+
+/** Shared integer-kopeck split for buyer-paid vs seller-paid platform commission. */
+function di3CalculateOrderCommissionSplit_(goodsCents, discountCents, commissionCents, payer) {
+  var goods = Number(goodsCents) || 0;
+  var discount = Number(discountCents) || 0;
+  var commission = Number(commissionCents) || 0;
+  var commissionPayer = String(payer || "BUYER").toUpperCase() === "SELLER" ? "SELLER" : "BUYER";
+  var sellerRevenue = goods - discount - (commissionPayer === "SELLER" ? commission : 0);
+  var buyerPaid = goods - discount + (commissionPayer === "BUYER" ? commission : 0);
+  return {
+    commission_payer: commissionPayer,
+    buyer_paid_cents: buyerPaid,
+    seller_revenue_cents: sellerRevenue
+  };
 }
 
 /** Pure calculation. Rates are fractions: 0.05 = 5%. */
@@ -59,13 +88,22 @@ function di3BuildOrderFinancialPlan_(input) {
   var discountRate = input.discount_rate == null || input.discount_rate === "" ? 0 : Number(input.discount_rate);
   if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 1) throw new Error("Комиссия должна быть от 0% до 100%.");
   if (!Number.isFinite(discountRate) || discountRate < 0 || discountRate > 1) throw new Error("Скидка должна быть от 0% до 100%.");
-  var commissionCents = input.commission_enabled ? Math.round(goodsCents * commissionRate) : 0;
+
+  // Backward compatibility: old callers using commission_enabled retain the old
+  // on/off behaviour. New order forms always calculate the fee from the rate;
+  // the checkbox selects who bears it, not whether the fee exists.
+  var hasPayerChoice = Object.prototype.hasOwnProperty.call(input, "commission_paid_by_buyer");
+  var commissionEnabled = hasPayerChoice ? commissionRate > 0 : input.commission_enabled === true;
+  var commissionPaidByBuyer = hasPayerChoice ? input.commission_paid_by_buyer === true : true;
+  var commissionPayer = commissionPaidByBuyer ? "BUYER" : "SELLER";
+  var commissionCents = commissionEnabled ? Math.round(goodsCents * commissionRate) : 0;
+  // Existing policy retained: platform commission is calculated on gross goods
+  // before seller discount. The discount then reduces seller proceeds.
   var discountCents = input.discount_enabled ? Math.round(goodsCents * discountRate) : 0;
-  // Commission is a buyer-paid platform surcharge. It is not seller revenue.
-  // Current policy: calculate the surcharge on gross goods amount, then apply seller discount.
-  var payableCents = goodsCents + commissionCents - discountCents;
+  var split = di3CalculateOrderCommissionSplit_(goodsCents, discountCents, commissionCents, commissionPayer);
+  var payableCents = split.buyer_paid_cents;
   if (payableCents < 0) throw new Error("Итог к оплате не может быть отрицательным.");
-  var sellerRevenueCents = goodsCents - discountCents;
+  if (split.seller_revenue_cents < 0) throw new Error("Выручка продавца после комиссии не может быть отрицательной.");
 
   var completeEstimate = normalizedLines.every(function (line) { return line.estimated_line_cost != null; });
   var estimatedCostStatus = completeEstimate ? "COMPLETE" : (normalizedLines.some(function (line) { return line.estimated_cost_status === "PARTIAL"; }) ? "PARTIAL" : "UNKNOWN");
@@ -75,30 +113,33 @@ function di3BuildOrderFinancialPlan_(input) {
   return {
     lines: normalizedLines,
     goods_amount: goodsCents / 100,
-    commission_rate: input.commission_enabled ? commissionRate : 0,
+    commission_rate: commissionEnabled ? commissionRate : 0,
     commission_amount: commissionCents / 100,
+    commission_payer: commissionPayer,
+    commission_paid_by_buyer: commissionPaidByBuyer,
     discount_rate: input.discount_enabled ? discountRate : 0,
     discount_amount: discountCents / 100,
     payable_total: payableCents / 100,
-    seller_revenue_estimate: sellerRevenueCents / 100,
+    seller_revenue_estimate: split.seller_revenue_cents / 100,
     platform_commission_quote: commissionCents / 100,
     estimated_fifo_cost_total: estimatedCostCents == null ? "" : estimatedCostCents / 100,
     estimated_fifo_cost_status: estimatedCostStatus,
-    estimated_profit: estimatedCostCents == null ? "" : (sellerRevenueCents - estimatedCostCents) / 100
+    estimated_profit: estimatedCostCents == null ? "" : (split.seller_revenue_cents - estimatedCostCents) / 100
   };
 }
 
 /**
- * Upgrade the previous 23-column V3_Orders schema by appending settlement fields.
- * This is an in-app schema update, not an import of legacy business documents.
- * Existing quotes are preserved; historical settlements are backfilled deterministically by status.
+ * Upgrade V3_Orders from the 23-column legacy or 28-column settlement schema.
+ * Appends settlement fields and commission_payer without moving existing columns.
+ * Existing orders default to BUYER to preserve the previous fee policy.
  */
 function di3UpgradeOrderSettlementSchema_() {
   var ss = di3GetSpreadsheet_();
   var sheet = ss.getSheetByName("V3_Orders");
   if (!sheet) return { upgraded: false, reason: "SHEET_NOT_CREATED" };
   if (sheet.getLastRow() === 0) return { upgraded: false, reason: "EMPTY_SHEET" };
-  var oldHeaders = [
+
+  var legacyHeaders = [
     "order_id", "order_number", "created_at", "status", "goods_amount",
     "commission_rate", "commission_amount", "discount_rate", "discount_amount",
     "payable_total", "estimated_fifo_cost_total", "estimated_fifo_cost_status",
@@ -107,61 +148,93 @@ function di3UpgradeOrderSettlementSchema_() {
     "returned_at", "cancelled_at", "updated_at"
   ];
   var newHeaders = DI3_TABLE_SCHEMAS.V3_Orders;
-  if (newHeaders.length === oldHeaders.length) return { upgraded: false, reason: "ALREADY_CURRENT" };
-  if (newHeaders.length !== oldHeaders.length + 5) throw new Error("Неожиданная версия схемы V3_Orders.");
-  var actual = sheet.getRange(1, 1, 1, oldHeaders.length).getDisplayValues()[0].map(di3NormalizeHeader_);
-  for (var i = 0; i < oldHeaders.length; i++) {
-    if (actual[i] !== oldHeaders[i]) throw new Error("Нельзя обновить V3_Orders: несовместимый заголовок в колонке " + (i + 1) + ".");
-  }
+  var settlementWidth = legacyHeaders.length + 5;
   var targetWidth = newHeaders.length;
-  if (sheet.getMaxColumns() < targetWidth) sheet.insertColumnsAfter(sheet.getMaxColumns(), targetWidth - sheet.getMaxColumns());
-  var tailActual = sheet.getRange(1, oldHeaders.length + 1, 1, 5).getDisplayValues()[0].map(di3NormalizeHeader_);
-  var expectedTail = newHeaders.slice(oldHeaders.length);
-  var tailBlank = tailActual.every(function (v) { return !v; });
+  if (targetWidth !== legacyHeaders.length + 6 || newHeaders[targetWidth - 1] !== "commission_payer") {
+    throw new Error("Неожиданная версия схемы V3_Orders.");
+  }
+  if (sheet.getMaxColumns() < targetWidth) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), targetWidth - sheet.getMaxColumns());
+  }
+  var actual = sheet.getRange(1, 1, 1, targetWidth).getDisplayValues()[0].map(di3NormalizeHeader_);
+  var hasLegacyPrefix = legacyHeaders.every(function (header, index) { return actual[index] === header; });
+  var isSettlementVersion = newHeaders.slice(0, settlementWidth).every(function (header, index) {
+    return actual[index] === header;
+  });
+  var isLegacy = hasLegacyPrefix && !isSettlementVersion;
+  var isCurrent = newHeaders.every(function (header, index) { return actual[index] === header; });
+  if (isCurrent) return { upgraded: false, reason: "ALREADY_CURRENT" };
+  if (!isLegacy && !isSettlementVersion) {
+    throw new Error("Нельзя обновить V3_Orders: заголовки не соответствуют ни старой, ни промежуточной схеме.");
+  }
+
+  var appendStart = isLegacy ? legacyHeaders.length : settlementWidth;
+  var expectedTail = newHeaders.slice(appendStart);
+  var tailActual = actual.slice(appendStart, targetWidth);
+  var tailBlank = tailActual.every(function (value) { return !value; });
   var tailCurrent = tailActual.join("|") === expectedTail.join("|");
   if (!tailBlank && !tailCurrent) {
-    throw new Error("Нельзя обновить V3_Orders: новые поля расчёта уже заняты другими заголовками.");
+    throw new Error("Нельзя обновить V3_Orders: новые поля расчётов заняты неизвестными заголовками.");
   }
-  if (tailBlank && di3PreflightHasBodyValues_(sheet, oldHeaders.length + 1, 5)) {
-    throw new Error("Нельзя обновить V3_Orders: в новых колонках расчёта уже есть данные при пустых заголовках. Обновление остановлено без перезаписи.");
+  if (tailBlank && di3PreflightHasBodyValues_(sheet, appendStart + 1, targetWidth - appendStart)) {
+    throw new Error("Нельзя обновить V3_Orders: новые колонки содержат данные при пустых заголовках. Миграция остановлена без перезаписи.");
   }
-  if (tailBlank) sheet.getRange(1, oldHeaders.length + 1, 1, 5).setValues([expectedTail]);
+  if (tailBlank) sheet.getRange(1, appendStart + 1, 1, expectedTail.length).setValues([expectedTail]);
   di3SetFrozenRowsSafely_(sheet, 1);
+
   var lastRow = sheet.getLastRow();
-  var backfilled = 0;
+  var rowsUpdated = 0;
+  var legacyRowsBackfilled = 0;
   if (lastRow >= 2) {
     var rows = sheet.getRange(2, 1, lastRow - 1, targetWidth).getValues();
-    var settlementUpdates = [];
     rows.forEach(function (row, index) {
-      if (String(row[oldHeaders.length + 3] || "")) return;
-      var status = String(row[3] || "");
-      var goods = Number(row[4]) || 0;
-      var discount = Number(row[8]) || 0;
-      var quoteFee = Number(row[6]) || 0;
-      var buyerQuote = Number(row[9]) || 0;
-      var settlement;
-      if (status === DI3_ORDER_STATUS.COMPLETED) {
-        settlement = [di3OrderRoundMoney_(goods - discount), quoteFee, buyerQuote, "SETTLED", row[18] || row[22] || ""];
-      } else if (status === DI3_ORDER_STATUS.RETURNED || status === DI3_ORDER_STATUS.CANCELLED) {
-        settlement = [0, 0, 0, "NOT_COMPLETED", row[20] || row[21] || row[22] || ""];
-      } else {
-        settlement = ["", 0, "", "QUOTED", ""];
+      var updates = [];
+      if (isLegacy && !String(row[legacyHeaders.length + 3] || "")) {
+        var status = String(row[3] || "");
+        var goods = Number(row[4]) || 0;
+        var discount = Number(row[8]) || 0;
+        var quoteFee = Number(row[6]) || 0;
+        var buyerQuote = Number(row[9]) || 0;
+        var settlement;
+        if (status === DI3_ORDER_STATUS.COMPLETED) {
+          settlement = [di3OrderRoundMoney_(goods - discount), quoteFee, buyerQuote, "SETTLED", row[18] || row[22] || ""];
+        } else if (status === DI3_ORDER_STATUS.RETURNED || status === DI3_ORDER_STATUS.CANCELLED) {
+          settlement = [0, 0, 0, "NOT_COMPLETED", row[20] || row[21] || row[22] || ""];
+        } else {
+          settlement = ["", 0, "", "QUOTED", ""];
+        }
+        updates = updates.concat(settlement);
+        legacyRowsBackfilled++;
+        if (status === DI3_ORDER_STATUS.COMPLETED && String(row[13]) === "COMPLETE" && row[12] !== "" && row[12] != null) {
+          var historicalRevenueMinor = di3MoneyToMinorUnits_(settlement[0], "Историческая выручка", false);
+          var historicalCostMinor = di3MoneyToMinorUnits_(Number(row[12]), "Историческая себестоимость", false);
+          sheet.getRange(index + 2, 15).setValue(di3MoneyFromMinorUnits_(historicalRevenueMinor - historicalCostMinor));
+        }
       }
-      // Recompute historical seller profit without the buyer-paid platform surcharge.
-      if (status === DI3_ORDER_STATUS.COMPLETED && String(row[13]) === "COMPLETE" && row[12] !== "" && row[12] != null) {
-        var historicalRevenueMinor = di3MoneyToMinorUnits_(settlement[0], "Историческая выручка", false);
-        var historicalCostMinor = di3MoneyToMinorUnits_(Number(row[12]), "Историческая себестоимость", false);
-        sheet.getRange(index + 2, 15).setValue(di3MoneyFromMinorUnits_(historicalRevenueMinor - historicalCostMinor));
+      var payerValue = String(row[targetWidth - 1] || "").toUpperCase();
+      var payerNeedsDefault = !payerValue;
+      if (payerValue && payerValue !== "BUYER" && payerValue !== "SELLER") {
+        throw new Error("V3_Orders: неизвестное значение commission_payer в строке " + (index + 2) + ".");
       }
-      settlementUpdates.push({ row_number: index + 2, values: settlement });
+      if (updates.length || payerNeedsDefault) {
+        // For the legacy layout the first five appended values are settlement fields;
+        // commission_payer is always the final schema column. Preserve an existing payer.
+        if (isLegacy && updates.length >= 5) {
+          sheet.getRange(index + 2, legacyHeaders.length + 1, 1, 5).setValues([updates.slice(0, 5)]);
+        }
+        if (payerNeedsDefault) sheet.getRange(index + 2, targetWidth, 1, 1).setValue("BUYER");
+        rowsUpdated++;
+      }
     });
-    settlementUpdates.forEach(function (item) {
-      sheet.getRange(item.row_number, oldHeaders.length + 1, 1, 5).setValues([item.values]);
-    });
-    backfilled = settlementUpdates.length;
   }
   di3CompactSheet_(sheet, Math.max(1, lastRow), targetWidth);
-  return { upgraded: tailBlank || backfilled > 0, orders: Math.max(0, lastRow - 1), columns_added: tailBlank ? 5 : 0, rows_backfilled: backfilled };
+  return {
+    upgraded: tailBlank || rowsUpdated > 0,
+    orders: Math.max(0, lastRow - 1),
+    columns_added: tailBlank ? expectedTail.length : 0,
+    rows_backfilled: legacyRowsBackfilled,
+    payer_defaults: rowsUpdated
+  };
 }
 
 function di3GetOrderById_(orderId) {
@@ -234,7 +307,7 @@ function di3BuildOrderRequestHash_(command) {
         sale_unit_price: line.sale_unit_price === "" || line.sale_unit_price == null ? "" : Number(line.sale_unit_price)
       };
     }),
-    commission_enabled: command.commission_enabled === true,
+    commission_paid_by_buyer: command.commission_paid_by_buyer !== false,
     commission_rate: Number(command.commission_rate || 0),
     discount_enabled: command.discount_enabled === true,
     discount_rate: Number(command.discount_rate || 0),
@@ -296,7 +369,7 @@ function di3BuildOrderDraftPayload_(command) {
   });
   var plan = di3BuildOrderFinancialPlan_({
     lines: normalizedLines,
-    commission_enabled: command.commission_enabled === true,
+    commission_paid_by_buyer: command.commission_paid_by_buyer !== false,
     commission_rate: command.commission_rate,
     discount_enabled: command.discount_enabled === true,
     discount_rate: command.discount_rate
@@ -310,7 +383,7 @@ function di3BuildOrderDraftPayload_(command) {
     plan.payable_total, plan.estimated_fifo_cost_total, plan.estimated_fifo_cost_status,
     "", "NOT_DISPATCHED", "", di3NormalizeText_(command.notes), deliveryMethod,
     "", "", "", "", "", now,
-    "", 0, "", "QUOTED", ""
+    "", 0, "", "QUOTED", "", plan.commission_payer
   ];
   var itemRows = plan.lines.map(function (line, index) {
     return [
@@ -365,7 +438,11 @@ function di3ApplyOrderCreateOperation_(operationRecord, payload) {
     status: "CREATED", order_id: payload.order_id, order_number: payload.order_number,
     items: savedItems.length, payable_total: savedOrder.payable_total,
     commission_quote_amount: savedOrder.commission_amount,
-    seller_revenue_estimate: di3OrderRoundMoney_(Number(savedOrder.goods_amount) - Number(savedOrder.discount_amount))
+    seller_revenue_estimate: di3OrderRoundMoney_(
+      Number(savedOrder.goods_amount) - Number(savedOrder.discount_amount) -
+      (String(savedOrder.commission_payer || "BUYER") === "SELLER" ? Number(savedOrder.commission_amount || 0) : 0)
+    ),
+    commission_payer: String(savedOrder.commission_payer || "BUYER")
   };
 }
 

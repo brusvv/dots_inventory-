@@ -90,10 +90,10 @@ function di3SetupOrderForm() {
     sheet.getRange("A2:G2").merge();
     sheet.getRange("A2").setValue("Создание заказа не меняет склад. Списание выполняется только при переходе в статус «В пути».");
     sheet.getRange("A3:A8").setValues([
-      ["Добавить комиссию для покупателя (площадка)"], ["Комиссия покупателю, %"], ["Учитывать скидку продавца"],
+      ["Комиссию оплачивает покупатель"], ["Комиссия площадки, %"], ["Учитывать скидку продавца"],
       ["Скидка покупателю, %"], ["Метод доставки"], ["Комментарий"]
     ]);
-    sheet.getRange("B3").insertCheckboxes().setValue(false);
+    sheet.getRange("B3").insertCheckboxes().setValue(true);
     sheet.getRange("B4").setValue(0);
     sheet.getRange("B5").insertCheckboxes().setValue(false);
     sheet.getRange("B6").setValue(0);
@@ -136,15 +136,15 @@ function di3SetupOrderForm() {
       if (actual[index] !== header) throw new Error("Лист «Калькулятор заказа v3» имеет несовместимые заголовки.");
     });
   }
-  sheet.getRange("A2").setValue("Комиссия — доплата покупателя площадке, не доход продавца. Она рассчитывается от стоимости товаров до скидки. Прибыль не включает комиссию; фактическая комиссия фиксируется только при «Завершен». Списание склада — при «В пути».");
+  sheet.getRange("A2").setValue("Комиссия рассчитывается от стоимости товаров до скидки. Если галочка установлена, комиссию оплачивает покупатель; если снята — комиссия удерживается из выручки продавца. Списание склада — при «В пути».");
   sheet.getRange("A3:A8").setValues([
-    ["Добавить комиссию для покупателя (площадка)"], ["Комиссия покупателю, %"], ["Учитывать скидку продавца"],
+    ["Комиссию оплачивает покупатель"], ["Комиссия площадки, %"], ["Учитывать скидку продавца"],
     ["Скидка покупателю, %"], ["Метод доставки"], ["Комментарий"]
   ]);
   sheet.getRange("F4:F11").setValues([
-    ["Стоимость товаров"], ["Доплата площадке (расчёт)"], ["Скидка продавца"], ["Сумма покупателю (расчёт)"],
-    ["Выручка продавца (до себестоимости)"], ["Оценка себестоимости FIFO"],
-    ["Оценка прибыли продавца"], ["Статус оценки FIFO"]
+    ["Стоимость товаров"], ["Комиссия площадке (расчёт)"], ["Скидка продавца"], ["Сумма покупателю (расчёт)"],
+    ["Выручка продавца после комиссии"], ["Оценка себестоимости FIFO"],
+    ["Прибыль продавца после комиссии"], ["Статус оценки FIFO"]
   ]);
   sheet.getRange("B4").setNumberFormat('0.00"%"');
   sheet.getRange("B6").setNumberFormat('0.00"%"');
@@ -182,10 +182,18 @@ function di3ReadOrderFormCommand_() {
   }).filter(Boolean);
   return {
     lines: lines,
-    commission_enabled: sheet.getRange(DI3_ORDER_FORM.commissionEnabled).getValue() === true,
-    commission_rate: Number(sheet.getRange(DI3_ORDER_FORM.commissionPercent).getValue() || 0) / 100,
+    commission_paid_by_buyer: sheet.getRange(DI3_ORDER_FORM.commissionPaidByBuyer).getValue() === true,
+    commission_rate: di3NormalizeOrderPercentInput_(
+      sheet.getRange(DI3_ORDER_FORM.commissionPercent).getValue(),
+      sheet.getRange(DI3_ORDER_FORM.commissionPercent).getNumberFormat(),
+      "Комиссия"
+    ),
     discount_enabled: sheet.getRange(DI3_ORDER_FORM.discountEnabled).getValue() === true,
-    discount_rate: Number(sheet.getRange(DI3_ORDER_FORM.discountPercent).getValue() || 0) / 100,
+    discount_rate: di3NormalizeOrderPercentInput_(
+      sheet.getRange(DI3_ORDER_FORM.discountPercent).getValue(),
+      sheet.getRange(DI3_ORDER_FORM.discountPercent).getNumberFormat(),
+      "Скидка"
+    ),
     delivery_method: sheet.getRange(DI3_ORDER_FORM.deliveryMethod).getValue(),
     notes: sheet.getRange(DI3_ORDER_FORM.notes).getValue(),
     request_token: di3GetFormRequestToken_("ORDER")
@@ -225,7 +233,7 @@ function di3BuildOrderPreviewPlan_(command) {
   });
   return di3BuildOrderFinancialPlan_({
     lines: lines,
-    commission_enabled: command.commission_enabled === true,
+    commission_paid_by_buyer: command.commission_paid_by_buyer === true,
     commission_rate: command.commission_rate,
     discount_enabled: command.discount_enabled === true,
     discount_rate: command.discount_rate
@@ -236,6 +244,11 @@ function di3PreviewOrderForm() {
   var sheet = di3GetSheetOrThrow_(DI3_ORDER_FORM_SHEET);
   var command = di3ReadOrderFormCommand_();
   var plan = di3BuildOrderPreviewPlan_(command);
+  sheet.getRange("F5").setValue("Комиссия площадке (" + (plan.commission_payer === "BUYER" ? "покупатель" : "продавец") + ")");
+  sheet.getRange("F8").setValue(plan.commission_payer === "SELLER"
+    ? "Выручка продавца после комиссии" : "Выручка продавца");
+  sheet.getRange("F10").setValue(plan.commission_payer === "SELLER"
+    ? "Прибыль продавца после комиссии" : "Прибыль продавца");
   var display = [
     [plan.goods_amount], [plan.commission_amount], [plan.discount_amount], [plan.payable_total],
     [plan.seller_revenue_estimate],
@@ -303,7 +316,7 @@ function di3NewOrderForm(options) {
     return { status: "CANCELLED_BY_USER", cleared: false };
   }
   sheet.getRange("B3:B8").clearContent();
-  sheet.getRange("B3").insertCheckboxes().setValue(false);
+  sheet.getRange("B3").insertCheckboxes().setValue(true);
   sheet.getRange("B4").setValue(0);
   sheet.getRange("B5").insertCheckboxes().setValue(false);
   sheet.getRange("B6").setValue(0);

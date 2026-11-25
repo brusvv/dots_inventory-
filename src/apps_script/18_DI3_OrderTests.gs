@@ -41,6 +41,47 @@ function di3RunOrderDomainUnitTests() {
     equal(plan.platform_commission_quote, 15);
     equal(plan.estimated_profit, 220);
   });
+  test("10% commission is 30 rubles on 300 rubles when buyer pays", function () {
+    var plan = di3BuildOrderFinancialPlan_({
+      commission_paid_by_buyer: true, commission_rate: 0.10,
+      lines: [{ product_id: "BUYER-FEE", quantity: 10, sale_unit_price: 30, estimated_unit_cost: 10.5 }]
+    });
+    equal(plan.commission_amount, 30);
+    equal(plan.commission_payer, "BUYER");
+    equal(plan.payable_total, 330);
+    equal(plan.seller_revenue_estimate, 300);
+    equal(plan.estimated_profit, 195);
+  });
+  test("10% commission is deducted from seller proceeds when seller pays", function () {
+    var plan = di3BuildOrderFinancialPlan_({
+      commission_paid_by_buyer: false, commission_rate: 0.10,
+      lines: [{ product_id: "SELLER-FEE", quantity: 10, sale_unit_price: 30, estimated_unit_cost: 10.5 }]
+    });
+    equal(plan.commission_amount, 30);
+    equal(plan.commission_payer, "SELLER");
+    equal(plan.payable_total, 300);
+    equal(plan.seller_revenue_estimate, 270);
+    equal(plan.estimated_profit, 165);
+  });
+  test("commission percent parser supports native and literal percent cell formats", function () {
+    equal(di3NormalizeOrderPercentInput_(0.1, "0.00%", "Комиссия"), 0.1);
+    equal(di3NormalizeOrderPercentInput_(10, '0.00"%"', "Комиссия"), 0.1);
+    equal(di3NormalizeOrderPercentInput_(9, '0.00"%"', "Комиссия"), 0.09);
+  });
+  test("seller-paid commission is deducted after seller discount while fee base stays gross", function () {
+    var plan = di3BuildOrderFinancialPlan_({
+      commission_paid_by_buyer: false, commission_rate: 0.10,
+      discount_enabled: true, discount_rate: 0.10,
+      lines: [{ product_id: "SELLER-DISCOUNT", quantity: 10, sale_unit_price: 30, estimated_unit_cost: 10.5 }]
+    });
+    equal(plan.goods_amount, 300);
+    equal(plan.commission_amount, 30);
+    equal(plan.discount_amount, 30);
+    equal(plan.payable_total, 270);
+    equal(plan.seller_revenue_estimate, 240);
+    equal(plan.estimated_profit, 135);
+  });
+
   test("duplicate product lines are rejected", function () {
     throws(function () {
       di3BuildOrderFinancialPlan_({ lines: [

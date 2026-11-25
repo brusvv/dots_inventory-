@@ -57,7 +57,12 @@
 
 `38_DI3_WarehouseDashboardTests.gs`: five pure tests passed locally on this snapshot.
 
-**Open:** actual rendering/refresh in Google Sheets. Confirm that labels match values, empty/unvalued products are excluded, order is descending, chart does not duplicate/vanish after repeated refresh, and M data remains intact.
+**Open:** actual rendering/refresh in Google Sheets. The user confirmed the chart remains blank in the live test copy. The latest local patch adds:
+- `average_known_unit_cost` (known inventory value / known units), fixing the missing H11 KPI value;
+- chart grid-row retention based on computed chart height (addresses D-1 clipping risk);
+- read-only `di3DiagnoseWarehouseDashboardChart()` / `di3LogWarehouseDashboardChartDiagnostics()` to inspect N1:O21, hidden state, chart ranges/count/type/anchor.
+
+The actual empty-chart cause is still unknown. Run the read-only diagnostics on a restored copy and inspect N1:O21 before changing the chart API code again. Local chart tests are now 7/7, but they still do not test actual Sheets rendering.
 
 ## Cross-project remaining work
 
@@ -91,8 +96,20 @@
 - BM-05: periodic isolated restore test.
 - BM-06: release acceptance and documentation.
 - Selective export/import for documents and ledger is a separate future feature.
-- Schema Versioning: runtime acceptance for baseline and v1→v2 on empty/non-empty copies; design v3+ migration path. Reverse migrations absent; rollback through verified backup/restore.
+- Schema Versioning: runtime acceptance for baseline and v1→v2 on empty/non-empty copies, plus the new v2→v3 `commission_payer` migration on restored empty/non-empty copies. Reverse migrations absent; rollback through verified backup/restore.
 
 ## RC9 readiness gate
 
 Do not call RC9 ready until the real Google Sheets end-to-end cycle is verified: supply → receipt → FIFO → order → dispatch → return → finance, with backup/restore, idempotent recovery and concurrency acceptance. Local Node tests are not a substitute for Google Apps Script runtime evidence.
+
+## Latest local patch — commission payer and Dashboard diagnostics (25.11.2026)
+
+- Fixed percent-rate parsing for both native percentage cells and literal-percent cells. The user's screenshot showed 300 ₽ goods × displayed 10% producing only 0.30 ₽; the old `/100` reader could double-divide a native percent value stored as 0.1.
+- Reinterpreted order calculator B3 as **Комиссию оплачивает покупатель**. Checked: fee is added to buyer payment. Unchecked: fee is deducted from seller revenue and profit. The commission base remains gross goods before seller discount.
+- Added `commission_payer` to `V3_Orders` and schema v3 migration `RC8_ORDER_COMMISSION_PAYER_V3` (v2→v3). Existing orders are backfilled to `BUYER`.
+- Settlement and Finance Dashboard use the stored payer; commission remains separately reported.
+- Added 13 Order Domain tests, including 300 ₽ / 10% / 105 ₽ FIFO examples for both payer modes.
+- Dashboard totals now calculate average known FIFO unit cost. Chart row retention is aligned to chart height. Added read-only chart diagnostics.
+- Local validation: syntax 49/49; Order Domain 13/13; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7.
+- User visually accepted UX-01–UX-06 except duplicate-product-identity test, which remains untested.
+- No live schema migration, order creation, dispatch, stock mutation or chart runtime test was performed.

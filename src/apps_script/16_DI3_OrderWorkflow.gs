@@ -115,18 +115,22 @@ function di3WriteOrderStatus_(order, newStatus, effectiveAt, operationId, note) 
   row[schema.indexOf("updated_at")] = new Date();
 
   // A sale is financially settled only after the buyer completes pickup/receipt.
-  // The quoted platform surcharge is never seller revenue or seller expense.
+  // The payer choice determines whether the fee is added to buyer payment or
+  // deducted from seller proceeds; the platform fee itself remains recorded.
   var sellerRevenueIndex = schema.indexOf("seller_revenue");
   var realizedFeeIndex = schema.indexOf("platform_commission_realized");
   var buyerPaidIndex = schema.indexOf("buyer_paid_total");
   var settlementStatusIndex = schema.indexOf("settlement_status");
   var finalizedAtIndex = schema.indexOf("settlement_finalized_at");
   if (newStatus === DI3_ORDER_STATUS.COMPLETED) {
-    var goods = Number(row[schema.indexOf("goods_amount")]) || 0;
-    var discount = Number(row[schema.indexOf("discount_amount")]) || 0;
-    row[sellerRevenueIndex] = di3OrderRoundMoney_(goods - discount);
-    row[realizedFeeIndex] = di3OrderRoundMoney_(Number(row[schema.indexOf("commission_amount")]) || 0);
-    row[buyerPaidIndex] = di3OrderRoundMoney_(Number(row[schema.indexOf("payable_total")]) || 0);
+    var goodsCents = di3OrderToCents_(Number(row[schema.indexOf("goods_amount")]) || 0);
+    var discountCents = di3OrderToCents_(Number(row[schema.indexOf("discount_amount")]) || 0);
+    var commissionCents = di3OrderToCents_(Number(row[schema.indexOf("commission_amount")]) || 0);
+    var payer = String(row[schema.indexOf("commission_payer")] || "BUYER");
+    var split = di3CalculateOrderCommissionSplit_(goodsCents, discountCents, commissionCents, payer);
+    row[sellerRevenueIndex] = di3MoneyFromMinorUnits_(split.seller_revenue_cents);
+    row[realizedFeeIndex] = di3MoneyFromMinorUnits_(commissionCents);
+    row[buyerPaidIndex] = di3MoneyFromMinorUnits_(split.buyer_paid_cents);
     row[settlementStatusIndex] = "SETTLED";
     row[finalizedAtIndex] = effectiveAt;
   } else if (newStatus === DI3_ORDER_STATUS.RETURNED || newStatus === DI3_ORDER_STATUS.CANCELLED) {
@@ -650,7 +654,11 @@ function di3GetOrderFinancialSummary(orderNumber) {
     commission_quote_amount: order.commission_amount,
     discount_amount: order.discount_amount,
     buyer_payable_quote: order.payable_total,
-    seller_revenue_estimate: di3OrderRoundMoney_(Number(order.goods_amount) - Number(order.discount_amount)),
+    seller_revenue_estimate: di3OrderRoundMoney_(
+      Number(order.goods_amount) - Number(order.discount_amount) -
+      (String(order.commission_payer || "BUYER") === "SELLER" ? Number(order.commission_amount || 0) : 0)
+    ),
+    commission_payer: String(order.commission_payer || "BUYER"),
     seller_revenue: order.seller_revenue,
     platform_commission_realized: order.platform_commission_realized,
     buyer_paid_total: order.buyer_paid_total,

@@ -10,7 +10,7 @@
   },
   "typescript_ast_audit": {
     "files": 49,
-    "functions": 549,
+    "functions": 554,
     "topLevelVars": 87,
     "parseErrors": [],
     "duplicateDeclarations": [],
@@ -24,7 +24,7 @@
   },
   "warehouse_dashboard_unit_tests": {
     "status": "PASS",
-    "passed": 5,
+    "passed": 7,
     "failed": 0,
     "failures": [],
     "runner": "tools/run_warehouse_dashboard_tests.js"
@@ -53,8 +53,16 @@
   "limitations": [
     "Local Node syntax and unit tests do not emulate Google Sheets rendering, Apps Script services, installed triggers, Drive, LockService or the full application regression harness.",
     "Product/supply selector staging, installable onEdit routing, toast messages and real YES/NO dialogs require runtime acceptance on a restored Google Sheets test copy.",
-    "The blank warehouse Dashboard chart remains unresolved; these UX patches do not modify the chart implementation.",
+    "The warehouse Dashboard chart remains visually blank in the user's Google Sheets copy. The read-only diagnostic function was added, but actual chart rendering has not been validated.",
+    "Schema v3 migration adding V3_Orders.commission_payer has not been executed; it requires Dry Run and a verified backup on a restored test copy.",
     "Apps Script manifest timezone could not be checked because appsscript.json was absent from the supplied source archive.",
-    "No live Google Sheets workbook, deployment, manual stock movement, batch recovery, Money Core migration, accounting-period close/reopen, FIFO diagnostic or FIFO rebuild was executed for these UX patches."
-  ]
+    "No live Google Sheets workbook, order creation/dispatch, manual stock movement, batch recovery, Money Core migration, accounting-period close/reopen, FIFO diagnostic or FIFO rebuild was executed for these patches."
+  ],
+  "order_domain_unit_tests": {
+    "status": "PASS",
+    "passed": 13,
+    "failed": 0,
+    "failures": [],
+    "runner": "tools/run_order_domain_tests.js"
+  }
 }

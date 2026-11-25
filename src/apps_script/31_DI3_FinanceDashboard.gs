@@ -115,8 +115,9 @@ function di3FinanceResolveItemCost_(itemRow, latestSnapshots) {
 
 /**
  * Builds a financial view from authoritative settlement/order snapshots and received supply lines.
- * Sales are recognized on completed_at only. Platform commission is a buyer-paid surcharge and
- * is shown separately; seller revenue is goods minus seller discount. Unknown COGS never becomes 0.
+ * Sales are recognized on completed_at only. Commission is always reported separately;
+ * it is either added to buyer payment or deducted from seller proceeds by commission_payer.
+ * Unknown COGS never becomes 0.
  */
 function di3GetFinanceDashboardData(filters) {
   filters = filters || {};
@@ -194,12 +195,18 @@ function di3GetFinanceDashboardData(filters) {
     }
     var discountShares = di3FinanceAllocateMinorByWeights_(discountMinor, lineGoodsMinor);
     var commissionShares = di3FinanceAllocateMinorByWeights_(commissionMinor, lineGoodsMinor);
+    var commissionPayer = String(order[28] || "BUYER").toUpperCase();
+    if (commissionPayer !== "BUYER" && commissionPayer !== "SELLER") {
+      warnings.push("Заказ " + String(order[1] || orderId) + ": неизвестный плательщик комиссии; для аналитики применено прежнее правило BUYER.");
+      commissionPayer = "BUYER";
+    }
     var storedSellerRevenue = order[23] === "" || order[23] == null ? null
       : di3MoneyToMinorUnits_(Number(order[23]), "Выручка продавца в заказе", false);
     var storedBuyerPaid = order[25] === "" || order[25] == null ? null
       : di3MoneyToMinorUnits_(Number(order[25]), "Сумма оплаты покупателя в заказе", false);
-    var calculatedSellerRevenue = goodsMinor - discountMinor;
-    var calculatedBuyerPaid = calculatedSellerRevenue + commissionMinor;
+    var calculatedSplit = di3CalculateOrderCommissionSplit_(goodsMinor, discountMinor, commissionMinor, commissionPayer);
+    var calculatedSellerRevenue = calculatedSplit.seller_revenue_cents;
+    var calculatedBuyerPaid = calculatedSplit.buyer_paid_cents;
     if (storedSellerRevenue != null && storedSellerRevenue !== calculatedSellerRevenue) {
       warnings.push("Заказ " + String(order[1] || orderId) + ": выручка продавца в документе не совпадает с суммой строк после скидки.");
     }
@@ -211,8 +218,11 @@ function di3GetFinanceDashboardData(filters) {
       var productId = String(item[3] || "");
       if (!allProducts && productId !== selectedProductId) return;
       matchedLineCount++;
-      var revenueMinor = lineGoodsMinor[index] - discountShares[index];
-      var buyerPaidMinor = revenueMinor + commissionShares[index];
+      var lineSplit = di3CalculateOrderCommissionSplit_(
+        lineGoodsMinor[index], discountShares[index], commissionShares[index], commissionPayer
+      );
+      var revenueMinor = lineSplit.seller_revenue_cents;
+      var buyerPaidMinor = lineSplit.buyer_paid_cents;
       var cogs = di3FinanceResolveItemCost_(item, latestSnapshots);
       var bucket = bucketFor(orderDate);
       bucket.order_ids[orderId] = true;

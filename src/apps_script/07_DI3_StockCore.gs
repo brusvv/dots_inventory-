@@ -711,6 +711,13 @@ function di3SuggestProductPricing(productId, targetGrossMargin) {
   return suggestion;
 }
 
+function di3CalculateAverageKnownUnitCost_(knownInventoryValue, knownUnits) {
+  var value = Number(knownInventoryValue);
+  var units = Number(knownUnits);
+  if (!Number.isFinite(value) || !Number.isFinite(units) || units <= 0) return null;
+  return di3MoneyRound_(value / units);
+}
+
 function di3GetWarehouseDashboardData(targetGrossMargin) {
   var pendingOperations = di3GetPendingStockOperations_();
   var margin = targetGrossMargin == null ? di3GetTargetGrossMargin_() : Number(targetGrossMargin);
@@ -722,7 +729,7 @@ function di3GetWarehouseDashboardData(targetGrossMargin) {
   var lots = di3ReadTableValues_("StockLots");
   var rows = [];
   var totals = { products: products.length, stock_units: 0, known_units: 0, unknown_units: 0, known_inventory_value: 0,
-    known_inventory_value_minor: 0, inventory_value: 0,
+    known_inventory_value_minor: 0, average_known_unit_cost: null, inventory_value: 0,
     pending_products: 0, data_status: pendingOperations.length ? "PENDING_RECONCILIATION" : "CURRENT" };
   products.forEach(function (product) {
     var valuation;
@@ -775,6 +782,7 @@ function di3GetWarehouseDashboardData(targetGrossMargin) {
     totals.known_inventory_value_minor += Number(valuation.known_inventory_value_minor || 0);
   });
   totals.known_inventory_value = di3MoneyFromMinorUnits_(totals.known_inventory_value_minor);
+  totals.average_known_unit_cost = di3CalculateAverageKnownUnitCost_(totals.known_inventory_value, totals.known_units);
   if (totals.pending_products > 0) {
     totals.stock_units = null;
     totals.known_units = null;

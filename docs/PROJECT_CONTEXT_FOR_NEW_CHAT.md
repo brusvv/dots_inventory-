@@ -27,8 +27,8 @@ Static audit performed while assembling this repository:
 
 - all 49 `.gs` files parsed successfully with Node.js v22.16.0;
 - TypeScript AST audit: 521 top-level function declarations, 86 top-level variable declarations, no parse errors and no duplicate top-level names;
-- warehouse chart tests: **5/5 PASS**; Supply Workspace UX: **9/9 PASS**; Catalog/Order UX: **12/12 PASS**; System Safety UX: **11/11 PASS**.
-- TypeScript AST: **549 functions / 87 top-level variables**, no parse errors or duplicate declarations; menu audit: **68 actions / 0 missing handlers**.
+- warehouse chart/average-cost tests: **7/7 PASS**; Order Domain: **13/13 PASS**; Supply Workspace UX: **9/9 PASS**; Catalog/Order UX: **12/12 PASS**; System Safety UX: **11/11 PASS**.
+- TypeScript AST: **554 functions / 87 top-level variables**, no parse errors or duplicate declarations; menu audit: **68 actions / 0 missing handlers**.
 
 These are static/local checks. The full Apps Script unit-test functions in the source were not all executed in a real Google Apps Script runtime. No claim is made that all 250+ previous Node tests were rerun against this RAR, because the prior Node harness is not included.
 
@@ -40,7 +40,7 @@ These are static/local checks. The full Apps Script unit-test functions in the s
 DI3_APP_CONFIG.TIME_ZONE = "Europe/Helsinki"
 ```
 
-`33_DI3_SchemaVersioning.gs` declares `DI3_SCHEMA_VERSION = 2`. The schema registry in `00_DI3_SchemaRegistry.gs` contains 24 system tables. The manifest was not part of the RAR, so its `timeZone` cannot be confirmed from this snapshot. Verify manifest and spreadsheet timezone against `Europe/Helsinki` before release or timezone-sensitive operations.
+`33_DI3_SchemaVersioning.gs` declares `DI3_SCHEMA_VERSION = 3` after the local commission-payer migration patch. The schema registry in `00_DI3_SchemaRegistry.gs` contains 24 system tables. The manifest was not part of the RAR, so its `timeZone` cannot be confirmed from this snapshot. Verify manifest and spreadsheet timezone against `Europe/Helsinki` before release or timezone-sensitive operations.
 
 ## 3. Core architecture and data model
 
@@ -60,7 +60,7 @@ The schema registry defines 24 system tables, including:
 - `DocumentStatusHistory` — status history;
 - `Settings`, `PeriodLocks`, `_AppMeta`, `SchemaMigrations` — settings, period guard, app metadata and schema migrations.
 
-The schema is version 2 in this source snapshot. Do not run Clean Start or imports to apply code-only patches. Schema migrations must follow Dry Run + verified backup rules in the existing code.
+The schema target is version 3 after the local commission-payer patch; v2→v3 appends `commission_payer` to `V3_Orders`. Do not run Clean Start or imports to apply code-only patches. Schema migrations must follow Dry Run + verified backup rules in the existing code.
 
 ### Operation safety
 
@@ -187,11 +187,11 @@ User's latest screenshot showed:
 - `KYUU DESIGN Lian, 6 мм` (`PRD-0028`): 80 units, 840 ₽ value, 10.50 ₽ average FIFO;
 - `Wallhack Black (Silent), 7 мм` (`PRD-0002`): 40 units, 2,100 ₽ value, 52.50 ₽ average FIFO.
 
-The correct Top order is Wallhack Black (2,100 ₽), then KYUU DESIGN Lian (840 ₽). The old screenshot had mismatched labels/values and displayed empty products. The current source addresses this through paired/sorted chart data and five tests.
+The correct Top order is Wallhack Black (2,100 ₽), then KYUU DESIGN Lian (840 ₽). The old screenshot had mismatched labels/values and displayed empty products. The current source addresses this through paired/sorted chart data and seven local tests.
 
 ### Dashboard acceptance still pending
 
-Local test of `di3RunWarehouseDashboardUnitTests()` passed 5/5 in this source package. Actual `Склад → Обновить Dashboard` rendering in the user's live/test Google Sheets is not yet confirmed from this snapshot. Verify that:
+Local test of `di3RunWarehouseDashboardUnitTests()` passed 7/7 in this source package. Actual `Склад → Обновить Dashboard` rendering in the user's live/test Google Sheets is not yet confirmed from this snapshot. Verify that:
 
 - chart labels are attached to the correct values;
 - only positive, fully valued stock appears;
@@ -249,7 +249,7 @@ Don't infer runtime acceptance from these modules existing. Inspect each module/
 - C-12: runtime acceptance for SettingsRepository, margin migration and timezone switch.
 - C-13: check tab order in real Sheets.
 - C-14: test delivery-method creation/selection/order flow.
-- C-15: reconcile buyer-paid commission vs seller revenue/profit on a real order.
+- C-15: verify BUYER vs SELLER commission payer calculations and settlement/Finance Dashboard on real test orders; local logic now distinguishes both.
 - C-16: runtime/visual Finance Dashboard acceptance using control orders, discounts, commissions, FIFO snapshots, UNKNOWN COGS, filters/charts and period boundaries.
 - C-17 phase 2: charts, conditional formatting, filters, tab order and permission/protection review (do not auto-enable protections without a role model).
 
@@ -308,3 +308,30 @@ UX-01–UX-10 are implemented in the local working tree. UX-07 protects batch pe
 
 
 UX-10 adds a confirmation summary before manually posting warehouse IN/OUT movements. It displays the stock/FIFO consequences and returns before posting when the user selects No. Validate this No path on a restored copy; do not confirm Yes solely for a UX test. See `docs/UX_PATCH_UX10.md`.
+
+
+## Latest user feedback and local patch — 25.11.2026
+
+The user visually tested UX-01–UX-06 and reported that all observed behavior works except the duplicate-product-identity scenario, which they have not tested yet. The remaining visible problems are the blank Warehouse Dashboard chart and incorrect order commission calculation.
+
+### Commission payer change
+
+- Order calculator B3 now means **Комиссию оплачивает покупатель**.
+- Checked: commission is added to buyer payable total; seller revenue/profit are not reduced by the fee.
+- Unchecked: buyer pays goods minus discount; commission is deducted from seller revenue and profit.
+- Commission is calculated whenever the rate is >0. The checkbox chooses payer, not whether commission exists.
+- Existing commission base is retained: gross goods before seller discount.
+- Percent reader handles native percent formats (stored fraction, e.g. 0.1) and literal-percent formats (`0.00"%"`, stored 10). This addresses the user's screenshot: 300 ₽ × displayed 10% had yielded 0.30 ₽.
+- `V3_Orders` now has appended `commission_payer`; schema version is 3, with `RC8_ORDER_COMMISSION_PAYER_V3` v2→v3. Existing orders are backfilled as BUYER to preserve previous policy. Apply only via normal Dry Run + verified backup setup.
+- Example with goods 300 ₽, fee 30 ₽, FIFO cost 105 ₽: buyer pays → buyer total 330 ₽, seller revenue 300 ₽, profit 195 ₽; seller pays → buyer total 300 ₽, seller revenue 270 ₽, profit 165 ₽.
+- Local order-domain tests: 13/13 PASS.
+
+### Warehouse Dashboard follow-up
+
+- User confirmed the Top-20 chart remains visually blank in Google Sheets.
+- Added `average_known_unit_cost` to warehouse totals; for known value 2,940 ₽ and 120 known units, H11 should display 24.50 ₽.
+- Chart row retention now follows computed chart height to avoid truncating rows under a 480px chart.
+- Added read-only `di3DiagnoseWarehouseDashboardChart()` and `di3LogWarehouseDashboardChartDiagnostics()`. Run the latter from the Apps Script editor on a restored test copy and provide the execution log. It reports N1:O21 helper values, hidden columns, chart count, source ranges, chart type and anchor.
+- The actual blank-chart cause is still not identified. Local Dashboard tests are 7/7 but do not emulate real Sheets chart rendering.
+
+Local validation after the patch: syntax 49/49; Order Domain 13/13; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7. No live workbook migration, order creation, dispatch, stock mutation, FIFO rebuild or actual chart runtime test was performed.

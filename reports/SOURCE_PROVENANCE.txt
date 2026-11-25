@@ -34,3 +34,15 @@ Local patch applied 2026-11-25:
 - Extended test module: 41_DI3_SystemSafetyUxTests.gs.
 - Extended local runner: tools/run_system_safety_ux_tests.js.
 - Base source archive SHA-256 remains the provenance of the original RAR, not of this patched working tree.
+
+Local patch applied 2026-11-25 — commission payer and Dashboard diagnostics:
+- Order calculator B3 now selects BUYER vs SELLER commission payer; the commission amount is calculated from the existing gross-before-discount base in both cases.
+- Percent input parsing supports native Sheets percentage cells and literal-percent cells, correcting the observed 300 ₽ × 10% → 0.30 ₽ result.
+- Added `commission_payer` to `V3_Orders`; schema version advanced to v3 with `RC8_ORDER_COMMISSION_PAYER_V3` (v2→v3). Existing orders are defaulted to BUYER.
+- Settlement and Finance Dashboard now deduct seller-paid commission from seller revenue/profit.
+- Dashboard totals include average known FIFO unit cost; chart grid compaction follows computed height; added read-only chart diagnostics.
+- Modified modules: 00, 07, 15, 16, 17, 18, 19, 28, 31, 33.
+- Added local runner: tools/run_order_domain_tests.js; added docs/UX_PATCH_COMMISSION_PAYER_AND_DASHBOARD.md.
+- Local tests: syntax 49/49; Order Domain 13/13; Supply UX 9/9; Catalog/Order UX 12/12; System Safety 11/11; Dashboard 7/7.
+- No live workbook migration, order creation, dispatch, stock mutation or actual chart rendering test was performed.
+- Base archive SHA-256 remains provenance of the unmodified 40.rar, not the patched working tree.

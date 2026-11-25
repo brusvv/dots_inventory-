@@ -90,7 +90,7 @@ var DI3_TABLE_SCHEMAS = Object.freeze({
     "delivery_method", "dispatched_at", "completed_at", "returning_at",
     "returned_at", "cancelled_at", "updated_at", "seller_revenue",
     "platform_commission_realized", "buyer_paid_total", "settlement_status",
-    "settlement_finalized_at"
+    "settlement_finalized_at", "commission_payer"
   ],
   V3_OrderItems: [
     "order_item_id", "order_id", "line_no", "product_id", "product_label_snapshot",
@@ -151,7 +151,13 @@ function di3ValidateExistingCoreSchemas_() {
       return;
     }
     var compatibleLegacy = false;
-    if (name === "V3_Supplies") {
+    if (name === "V3_Orders") {
+      var legacyOrder23 = expected.slice(0, 23).every(function (header, index) { return actual[index] === header; }) &&
+        actual.slice(23).every(function (value) { return value === ""; });
+      var settlementOrder28 = expected.slice(0, 28).every(function (header, index) { return actual[index] === header; }) &&
+        actual[28] === "";
+      compatibleLegacy = legacyOrder23 || settlementOrder28;
+    } else if (name === "V3_Supplies") {
       var supplies17 = expected.slice(0, 17).every(function (header, index) { return actual[index] === header; });
       var planningTail = actual.slice(17, 19);
       compatibleLegacy = supplies17 && (planningTail.every(function (value) { return value === ""; }) ||

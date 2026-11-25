@@ -141,6 +141,52 @@ function di3SetupWarehouseDashboard() {
   return { status: "READY", sheet: DI3_WAREHOUSE_DASHBOARD_SHEET };
 }
 
+/**
+ * Read-only runtime diagnostics for the Top-20 warehouse chart.
+ * Run from the Apps Script editor and inspect the execution log; no sheet data is changed.
+ */
+function di3DiagnoseWarehouseDashboardChart() {
+  var sheet = di3GetSpreadsheet_().getSheetByName(DI3_WAREHOUSE_DASHBOARD_SHEET);
+  if (!sheet) throw new Error("Лист «Склад» не найден.");
+  var helper = sheet.getRange(1, DI3_WAREHOUSE_VALUE_CHART_HELPER_START_COLUMN,
+    DI3_WAREHOUSE_VALUE_CHART_MAX_PRODUCTS + 1, 2);
+  var charts = sheet.getCharts();
+  return {
+    sheet: sheet.getName(),
+    last_row: sheet.getLastRow(),
+    max_rows: sheet.getMaxRows(),
+    max_columns: sheet.getMaxColumns(),
+    helper_range: helper.getA1Notation(),
+    helper_hidden: {
+      labels: sheet.isColumnHiddenByUser(DI3_WAREHOUSE_VALUE_CHART_HELPER_START_COLUMN),
+      values: sheet.isColumnHiddenByUser(DI3_WAREHOUSE_VALUE_CHART_HELPER_START_COLUMN + 1)
+    },
+    helper_display_values: helper.getDisplayValues(),
+    helper_raw_values: helper.getValues(),
+    chart_count: charts.length,
+    charts: charts.map(function (chart) {
+      var ranges = [];
+      try {
+        ranges = chart.getRanges().map(function (range) { return range.getA1Notation(); });
+      } catch (ignoreRanges) {}
+      var position = null;
+      try {
+        var info = chart.getContainerInfo();
+        position = { anchor_row: info.getAnchorRow(), anchor_column: info.getAnchorColumn() };
+      } catch (ignorePosition) {}
+      var type = "";
+      try { type = String(chart.getChartType()); } catch (ignoreType) {}
+      return { ranges: ranges, chart_type: type, position: position };
+    })
+  };
+}
+
+function di3LogWarehouseDashboardChartDiagnostics() {
+  var result = di3DiagnoseWarehouseDashboardChart();
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
 function di3RefreshWarehouseDashboard() {
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_WAREHOUSE_DASHBOARD_SHEET);
   if (!sheet) throw new Error("Сначала запусти di3SetupWarehouseDashboard().");
@@ -201,7 +247,9 @@ function di3RefreshWarehouseDashboard() {
   }
   if (chartPairs.length > 0) {
     var chartMatrix = [["Товар", "Стоимость оценённых остатков, ₽"]].concat(chartPairs);
-    di3EnsureSheetCapacity_(sheet, chartRow + 25, helperColumn + 1);
+    var chartHeight = Math.max(340, Math.min(480, 180 + chartPairs.length * 15));
+    var chartRows = Math.ceil(chartHeight / 21) + 2;
+    di3EnsureSheetCapacity_(sheet, chartRow + chartRows, helperColumn + 1);
     sheet.getRange(1, helperColumn, chartMatrix.length, 2).setValues(chartMatrix);
     sheet.getRange(2, helperColumn + 1, chartPairs.length, 1).setNumberFormat("#,##0.00 ₽");
     sheet.hideColumns(helperColumn, 2);
@@ -220,12 +268,12 @@ function di3RefreshWarehouseDashboard() {
       .setOption("title", "Топ-20 товаров по стоимости оценённых остатков")
       .setOption("legend", { position: "none" })
       .setOption("width", 980)
-      .setOption("height", Math.max(340, Math.min(480, 180 + chartPairs.length * 15)))
+      .setOption("height", chartHeight)
       .setOption("chartArea", { left: 285, top: 42, width: "68%", height: "82%" })
       .setOption("hAxis", { title: "Стоимость, ₽", minValue: 0, format: "#,##0" })
       .build();
     sheet.insertChart(chart);
-    di3CompactSheet_(sheet, chartRow + 18, helperColumn + 1);
+    di3CompactSheet_(sheet, chartRow + chartRows, helperColumn + 1);
   } else {
     if (!data.pending_operations.length) {
       sheet.getRange("A3").setValue(String(warningText || "Данные актуальны.") +

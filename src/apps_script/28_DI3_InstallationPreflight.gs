@@ -57,22 +57,40 @@ function di3PreflightCoreSchemas_() {
       return;
     }
 
-    if (name === "V3_Orders" && previousOrderHeaders.every(function (header, index) {
-      return actual[index] === header;
-    })) {
-      var tail = di3PreflightHeaderRow_(sheet, 1, expected.length).slice(previousOrderHeaders.length);
-      var newTail = expected.slice(previousOrderHeaders.length);
-      var tailBlank = tail.every(function (value) { return !value; });
-      var tailCurrent = tail.join("|") === newTail.join("|");
-      if (!tailBlank && !tailCurrent) {
-        issues.push("V3_Orders: хвост колонок X:AB занят неизвестными заголовками; миграция расчётов небезопасна.");
-      } else if (tailBlank && di3PreflightHasBodyValues_(sheet, previousOrderHeaders.length + 1, 5)) {
-        issues.push("V3_Orders: заголовки новых полей расчёта пусты, но в X:AB уже есть данные. Автоматическая миграция не будет их перезаписывать.");
-      } else if (tailBlank) {
-        planned.push({ type: "UPGRADE_SCHEMA", sheet: name, add_columns: newTail });
-        warnings.push("V3_Orders: будет выполнено аддитивное обновление старой 23-колоночной схемы.");
+    if (name === "V3_Orders") {
+      var legacyOrderPrefix = previousOrderHeaders.every(function (header, index) {
+        return actual[index] === header;
+      });
+      var settlementOrderPrefix = expected.length >= 28 && expected.slice(0, 28).every(function (header, index) {
+        return actual[index] === header;
+      });
+      if (legacyOrderPrefix && !settlementOrderPrefix) {
+        var legacyTail = actual.slice(previousOrderHeaders.length);
+        var expectedLegacyTail = expected.slice(previousOrderHeaders.length);
+        var legacyTailBlank = legacyTail.every(function (value) { return !value; });
+        var legacyTailCurrent = legacyTail.join("|") === expectedLegacyTail.join("|");
+        if (!legacyTailBlank && !legacyTailCurrent) {
+          issues.push("V3_Orders: хвост колонок X:AC занят неизвестными заголовками; миграция небезопасна.");
+        } else if (legacyTailBlank && di3PreflightHasBodyValues_(sheet, previousOrderHeaders.length + 1, expectedLegacyTail.length)) {
+          issues.push("V3_Orders: новые поля X:AC содержат данные при пустых заголовках. Автоматическая миграция не будет их перезаписывать.");
+        } else if (legacyTailBlank) {
+          planned.push({ type: "UPGRADE_SCHEMA", sheet: name, add_columns: expectedLegacyTail });
+          warnings.push("V3_Orders: будут добавлены поля расчёта и плательщик комиссии; старые заказы сохранят прежнее правило «платит покупатель».");
+        }
+        return;
       }
-      return;
+      if (settlementOrderPrefix) {
+        var payerHeader = actual[28] || "";
+        if (payerHeader && payerHeader !== "commission_payer") {
+          issues.push("V3_Orders: колонка AC занята неизвестным заголовком; добавление плательщика комиссии небезопасно.");
+        } else if (!payerHeader && di3PreflightHasBodyValues_(sheet, 29, 1)) {
+          issues.push("V3_Orders: колонка AC содержит данные при пустом заголовке. Автоматическая миграция остановлена.");
+        } else if (!payerHeader) {
+          planned.push({ type: "UPGRADE_SCHEMA", sheet: name, add_columns: ["commission_payer"] });
+          warnings.push("V3_Orders: будет добавлен плательщик комиссии; существующие заказы получат значение BUYER.");
+        }
+        return;
+      }
     }
 
     if (name === "V3_Supplies") {

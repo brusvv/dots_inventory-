@@ -1,9 +1,11 @@
 /** Dots Inventory v3 — explicit schema version and migration journal. */
-var DI3_SCHEMA_VERSION = 2;
+var DI3_SCHEMA_VERSION = 3;
 var DI3_SCHEMA_BASELINE_MIGRATION_KEY = "RC8_SCHEMA_BASELINE_ADOPTION";
 var DI3_SCHEMA_MIGRATION_DEFINITIONS = Object.freeze([
   { key: "RC8_SUPPLY_PLANNING_DATES_V2", from: 1, to: 2,
-    details: "Append supplier_order_date and expected_received_date to V3_Supplies; preserve all legacy columns and rows." }
+    details: "Append supplier_order_date and expected_received_date to V3_Supplies; preserve all legacy columns and rows." },
+  { key: "RC8_ORDER_COMMISSION_PAYER_V3", from: 2, to: 3,
+    details: "Append commission_payer to V3_Orders; backfill existing orders as BUYER to preserve the previous settlement policy." }
 ]);
 
 function di3GetSchemaVersion_() {
@@ -70,7 +72,7 @@ function di3GetSchemaVersioningReport_() {
       plannedChanges.push({ type: "RESUME_SCHEMA_MIGRATION", migration_key: DI3_SCHEMA_BASELINE_MIGRATION_KEY, from_schema_version: 0, to_schema_version: 1 });
     }
   }
-  if (currentVersion === 1 || currentVersion === 0) {
+  if (currentVersion < DI3_SCHEMA_VERSION) {
     DI3_SCHEMA_MIGRATION_DEFINITIONS.forEach(function (definition) {
       var matches = migrations.filter(function (row) { return row.migration_key === definition.key; });
       if (matches.length > 1) {
@@ -184,11 +186,21 @@ function di3EnsureSchemaVersioning_(backup) {
       throw new Error("Нельзя продолжить миграцию " + definition.key + " со статусом " + record.status + ".");
     }
     // The table must already have the additive columns before schema_version is advanced.
-    var supplySheet = di3GetSheetOrThrow_("V3_Supplies");
-    var expectedTail = ["supplier_order_date", "expected_received_date"];
-    var actualTail = supplySheet.getRange(1, 18, 1, 2).getDisplayValues()[0].map(di3NormalizeHeader_);
-    if (actualTail.join("|") !== expectedTail.join("|")) {
-      throw new Error("Миграция " + definition.key + " не завершена: заголовки V3_Supplies!R:S не готовы.");
+    if (definition.key === "RC8_SUPPLY_PLANNING_DATES_V2") {
+      var supplySheet = di3GetSheetOrThrow_("V3_Supplies");
+      var expectedSupplyTail = ["supplier_order_date", "expected_received_date"];
+      var actualSupplyTail = supplySheet.getRange(1, 18, 1, 2).getDisplayValues()[0].map(di3NormalizeHeader_);
+      if (actualSupplyTail.join("|") !== expectedSupplyTail.join("|")) {
+        throw new Error("Миграция " + definition.key + " не завершена: заголовки V3_Supplies!R:S не готовы.");
+      }
+    } else if (definition.key === "RC8_ORDER_COMMISSION_PAYER_V3") {
+      var orderSheet = di3GetSheetOrThrow_("V3_Orders");
+      var payerHeader = di3NormalizeHeader_(orderSheet.getRange(1, 29).getDisplayValue());
+      if (payerHeader !== "commission_payer") {
+        throw new Error("Миграция " + definition.key + " не завершена: заголовок V3_Orders!AC1 не готов.");
+      }
+    } else {
+      throw new Error("Неизвестная миграция схемы: " + definition.key);
     }
     if (di3GetSchemaVersion_() < definition.to) {
       di3SetAppMetaValue_("schema_version", definition.to);

@@ -16,7 +16,7 @@ This repository snapshot is a source export, not a fully bound clasp project. Th
 8. Run the applicable Apps Script unit test functions listed in README / context.
 9. Run runtime acceptance only on the test copy and record the complete Execution log JSON.
 
-Do not run Clean Start, imports, schema migration, restore, or any stock mutation just because code was replaced. The schema source declares version 2; use its existing Dry Run/backup requirements if a migration is actually indicated.
+Do not run Clean Start, imports, schema migration, restore, or any stock mutation just because code was replaced. The current schema source declares version 3. The new v2→v3 migration appends `commission_payer` to `V3_Orders`; use Dry Run and a verified backup before setup applies it. Existing orders are defaulted to `BUYER` to preserve previous settlement semantics.
 
 ## Apps Script unit-test entry points in this source
 
@@ -125,3 +125,37 @@ Runtime acceptance (restored test copy only):
 3. Do not choose **Yes** solely for UX acceptance. A confirmed movement has real stock effects and must be a separately approved test operation on a disposable copy.
 
 Local check: `node tools/run_system_safety_ux_tests.js` (11/11 PASS). This does not emulate Apps Script UI or prove the No path in a real workbook.
+
+## Commission payer / schema v3 patch (25.11.2026)
+
+Changed modules:
+- `00_DI3_SchemaRegistry.gs`
+- `07_DI3_StockCore.gs`
+- `15_DI3_OrderDomain.gs`
+- `16_DI3_OrderWorkflow.gs`
+- `17_DI3_OrderWorkspace.gs`
+- `18_DI3_OrderTests.gs`
+- `19_DI3_WarehouseViews.gs`
+- `28_DI3_InstallationPreflight.gs`
+- `31_DI3_FinanceDashboard.gs`
+- `33_DI3_SchemaVersioning.gs`
+- add local runner `tools/run_order_domain_tests.js`
+
+Before replacing modules:
+1. Use a restored test workbook and take a fresh verified backup.
+2. Run the existing installation Dry Run. It should report the additive `commission_payer` column in `V3_Orders` when the workbook is at schema v2.
+3. Run the normal setup/migration only after reviewing the Dry Run and backup. The migration appends `commission_payer` at column AC and backfills existing orders as `BUYER`; it must not alter their existing quote/settlement amounts.
+4. Confirm `_AppMeta.schema_version` advances from 2 to 3 and `SchemaMigrations` records `RC8_ORDER_COMMISSION_PAYER_V3` as COMPLETED.
+5. Verify the calculator checkbox B3: checked = buyer pays the platform fee; unchecked = seller pays it. Commission rate is calculated on gross goods before seller discount, as before.
+
+Expected 300 ₽ / 10% / 105 ₽ FIFO-cost preview:
+- B3 checked: fee 30 ₽, buyer pays 330 ₽, seller revenue 300 ₽, estimated profit 195 ₽.
+- B3 unchecked: fee 30 ₽, buyer pays 300 ₽, seller revenue 270 ₽, estimated profit 165 ₽.
+
+Test both native Sheets percentage formatting (e.g. stored value 0.1 with `0.00%`) and literal-percent formatting (e.g. stored value 10 with `0.00"%"`). The parser supports both. Do not create or dispatch an order solely for this preview test.
+
+## Warehouse Dashboard follow-up
+
+`di3LogWarehouseDashboardChartDiagnostics()` is a read-only runtime function. Run it from the Apps Script editor on the restored test copy and provide its Execution log. It reports helper range N1:O21 values, hidden columns, chart count, source ranges, chart type and anchor. It does not mutate business tables. Also verify H11 average-known FIFO cost; 2,940 ₽ / 120 known units should display 24.50 ₽.
+
+The chart itself remains unaccepted until the actual Google Sheets rendering is visible. Local chart-data tests are not a substitute.
