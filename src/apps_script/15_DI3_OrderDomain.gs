@@ -478,6 +478,24 @@ function di3CreateOrder(command) {
   });
 }
 
+/**
+ * Capture the identity available to the current Apps Script execution.
+ * Active-user email may be unavailable in trigger/recovery contexts; an empty
+ * value is intentional and must not be replaced with the effective-user email.
+ */
+function di3CaptureActorContext_() {
+  var email = "";
+  try {
+    email = String(Session.getActiveUser().getEmail() || "").trim();
+  } catch (ignore) {}
+  return {
+    email: email,
+    identity_status: email ? "IDENTIFIED" : "UNAVAILABLE",
+    identity_source: email ? "ACTIVE_USER" : "NONE"
+  };
+}
+
+/** Backwards-compatible string accessor for existing audit columns. */
 function di3GetActorEmail_() {
-  try { return Session.getActiveUser().getEmail() || ""; } catch (ignore) { return ""; }
+  return di3CaptureActorContext_().email;
 }
