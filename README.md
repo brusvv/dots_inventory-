@@ -34,6 +34,7 @@ From the repository root:
 
 ```bash
 bash tools/check_syntax.sh
+node tools/run_fifo_replay_tests.js
 node tools/run_warehouse_dashboard_tests.js
 node tools/run_order_domain_tests.js
 node tools/run_supply_workspace_ux_tests.js
@@ -41,6 +42,8 @@ node tools/run_catalog_order_ux_tests.js
 node tools/run_system_safety_ux_tests.js
 node tools/run_finance_schema_tests.js
 ```
+
+A GitHub Actions workflow `.github/workflows/quality-gates.yml` now runs syntax checks and all local regression runners on source changes. The new FIFO sequence tests are included in `tools/run_fifo_replay_tests.js`; their execution is not yet reflected in the historical 70/70 summary below.
 
 The syntax command checks all **50** `.gs` files (43 app modules + 7 temporary probes). The six local Node suites currently pass **70/70**: Order Domain 17/17, Supply Workspace UX 15/15, Catalog/Order UX 12/12, System Safety UX 13/13, Warehouse Dashboard 9/9 and Finance schema 4/4. The TypeScript AST audit reports 570 top-level functions and 88 top-level variable declarations, with no parse errors or duplicate declarations. The menu audit finds 68 actions and no missing handlers. These checks do not emulate Google Sheets rendering, Apps Script services, installed triggers, Drive, LockService or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or live stock operation was executed during local validation.
 
