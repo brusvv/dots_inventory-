@@ -1413,7 +1413,7 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
   var errors = [], warnings = [];
   var runsById = Object.create(null), allocationIds = Object.create(null), lotArchiveIds = Object.create(null);
   var eventIds = Object.create(null), allocationsByReplay = Object.create(null), lotsByReplay = Object.create(null);
-  var eventsByReplay = Object.create(null), latestByReplay = Object.create(null);
+  var eventsByReplay = Object.create(null), latestByReplay = Object.create(null), eventRunIds = Object.create(null);
   (runRows || []).forEach(function (row) {
     var runId = String(row[0] || "");
     if (!runId) { errors.push("FifoAllocationRuns: пустой run_id."); return; }
@@ -1457,6 +1457,7 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
     }
     if (!eventsByReplay[replayId]) eventsByReplay[replayId] = [];
     eventsByReplay[replayId].push(row);
+    eventRunIds[runId] = true;
   });
 
   Object.keys(eventsByReplay).forEach(function (replayId) {
@@ -1495,7 +1496,9 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
     }
   });
 
-  Object.keys(allocationsByReplay).concat(Object.keys(lotsByReplay)).forEach(function (replayId) {
+  var archivedReplayIds = Object.create(null);
+  Object.keys(allocationsByReplay).concat(Object.keys(lotsByReplay)).forEach(function (replayId) { archivedReplayIds[replayId] = true; });
+  Object.keys(archivedReplayIds).forEach(function (replayId) {
     if (!eventsByReplay[replayId]) warnings.push("FIFO archive " + replayId + " не имеет PREPARED event; возможно прерывание до записи журнала.");
   });
   var pendingRuns = 0;
@@ -1503,10 +1506,13 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
     var run = runsById[runId], status = String(run[2] || "");
     if (status === "PREPARED" || status === "FAILED") {
       pendingRuns++;
-      var hasReplay = Object.keys(eventsByReplay).some(function (replayId) {
-        return eventsByReplay[replayId].some(function (event) { return String(event[4]) === runId; });
-      });
-      if (!hasReplay) warnings.push("FIFO run " + runId + " (" + status + ") не имеет replay event; проверь, не прервался ли он до первого изменения проекции.");
+      if (!eventRunIds[runId]) warnings.push("FIFO run " + runId + " (" + status + ") не имеет replay event; проверь, не прервался ли он до первого изменения проекции.");
+      else {
+        var hasCommittedReplay = Object.keys(latestByReplay).some(function (replayId) {
+          return String(latestByReplay[replayId][4]) === runId && String(latestByReplay[replayId][3]) === "COMMITTED";
+        });
+        if (hasCommittedReplay) warnings.push("FIFO run " + runId + " (" + status + ") содержит COMMITTED replay, но сам run не завершён; повтори финализацию.");
+      }
     }
   });
   var pendingReplays = 0, committedReplays = 0, quarantinedReplays = 0;
