@@ -1205,10 +1205,9 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
 
   var fingerprintLedgerRows = (isFullReplay ? ledgerRows : newLedgerRows).slice()
     .sort(function (a, b) { return Number(a[12]) - Number(b[12]); });
-  var runInputFingerprint = di3BuildFifoFingerprint_({
-    mode: isFullReplay ? "FULL" : "INCREMENTAL_TAIL",
-    ledger: fingerprintLedgerRows
-  });
+  var runInputFingerprint = isFullReplay
+    ? di3BuildFifoReplayInputFingerprint_(null, ledgerRows, detailRows, lotRows)
+    : di3BuildFifoFingerprint_({ mode: "INCREMENTAL_TAIL", ledger: fingerprintLedgerRows });
   var run = di3CreateFifoRun_(isFullReplay ? "FULL_REPLAY:" + (reason || "MANUAL") : (reason || "INCREMENTAL"),
     ledgerCount, 0, productIds.length, {
       operation_id: operationId,
