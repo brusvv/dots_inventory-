@@ -185,7 +185,7 @@ function di3ApplyOrderDispatchOperation_(operationRecord, payload) {
   di3AppendTableRows_("StockLedger", missingLedger);
   di3AppendTableRows_("StockMovementDetails", missingDetails);
   di3UpdateOrderItemsDispatchLinks_(payload);
-  var fifo = di3RebuildFifoAllocations_("ORDER_DISPATCH", productIds);
+  var fifo = di3RebuildFifoAllocations_("ORDER_DISPATCH", productIds, { operation_id: String(operationId || "") });
   order = di3GetOrderById_(payload.order_id);
   if (String(order.status) !== DI3_ORDER_STATUS.IN_TRANSIT) {
     order = di3WriteOrderStatus_(order, DI3_ORDER_STATUS.IN_TRANSIT, new Date(payload.dispatched_at), operationId,
@@ -389,7 +389,7 @@ function di3ApplyOrderReturnOperation_(operationRecord, payload) {
   di3AppendTableRows_("StockLedger", built.ledger.filter(function (row) { return !keys[String(row[2])]; }));
   di3AppendTableRows_("StockMovementDetails", built.details.filter(function (row) { return !detailIds[String(row[0])]; }));
   di3AppendTableRows_("StockLots", built.lots.filter(function (row) { return !lotMovementIds[String(row[2])]; }));
-  var fifo = di3RebuildFifoAllocations_("ORDER_RETURN", productIds);
+  var fifo = di3RebuildFifoAllocations_("ORDER_RETURN", productIds, { operation_id: String(operationId || "") });
   order = di3GetOrderById_(payload.order_id);
   if (String(order.status) !== DI3_ORDER_STATUS.RETURNED) {
     order = di3WriteOrderStatus_(order, DI3_ORDER_STATUS.RETURNED, new Date(payload.returned_at), operationId,
