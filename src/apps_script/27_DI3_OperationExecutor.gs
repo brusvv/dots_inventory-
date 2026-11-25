@@ -142,11 +142,7 @@ function di3RegisterPreparedOperation_(spec) {
   var operationId = di3MakeUuid_();
   var startedAt = new Date();
   var actor = "";
-  try {
-    actor = typeof di3GetActorEmail_ === "function"
-      ? di3GetActorEmail_()
-      : (Session.getActiveUser().getEmail() || "");
-  } catch (ignoreActor) {}
+  try { actor = di3GetActorEmail_(); } catch (ignoreActor) {}
 
   // Persist payload first. An orphan payload is harmless; PREPARED without a
   // payload would be an unrecoverable stock/document operation.
