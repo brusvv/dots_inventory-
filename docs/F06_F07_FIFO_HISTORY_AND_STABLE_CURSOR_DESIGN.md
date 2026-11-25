@@ -190,3 +190,9 @@ Recommended implementation order for a clean workbook:
 4. Extend setup and restore-as-new to create/rebind every new table and metadata key.
 5. Run empty-workbook setup twice, then synthetic supply → receipt → FIFO → dispatch → return → finance scenarios.
 6. Only after acceptance, create the production workbook and enter/import real data.
+
+## Implementation specification
+
+See `docs/F07_STABLE_LEDGER_SEQUENCE_IMPLEMENTATION_SPEC.md` for the source-verified schema changes, the four current ledger writer paths, sequence allocation under ScriptLock, narrow-column tail discovery, recovery requirements, test matrix, and clean-baseline versioning constraints.
+
+An important design refinement: sequence allocation should not depend on a separately incremented metadata counter. The implementation specification proposes deriving the next block from the maximum validated sequence in the narrow ledger_sequence column while holding ScriptLock. This avoids a split-write counter reservation problem and remains independent of physical row order. Tail discovery likewise scans the sequence column and fetches only matching full rows.
