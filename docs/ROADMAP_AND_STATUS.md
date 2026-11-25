@@ -289,6 +289,19 @@ The following issues have source changes and local regression coverage. They are
 - Important schema-versioning finding: current versioning assumes baseline v1 plus sequential migrations through v3. A clean final baseline requires explicit clean-baseline adoption distinct from legacy upgrade paths; merely increasing DI3_SCHEMA_VERSION would break the existing initialization assumptions.
 - No application code or workbook changed in this step. F-07 remains open pending implementation, source tests, and runtime acceptance on a disposable empty workbook.
 
+
+## F-07 — source implementation pass — 26.11.2026
+
+- Implemented the first source pass: 13-column StockLedger baseline with immutable ledger_sequence, FIFO state version 4, renamed product watermark, and sequence-based global cursor metadata.
+- Added ScriptLock-only max+1 block allocation from a validated narrow-column scan. Movement ID, product ID and sequence columns are scanned; missing, invalid, non-positive and duplicate populated sequences fail closed. Gaps are accepted.
+- Persisted assigned sequence values in immutable payloads for manual stock movement, supply receipt, order dispatch and order return. Each corresponding ledger row builder writes the sequence as the final field and validates it before append.
+- Replaced physical-row tail offsets with sequence-based tail discovery and grouped full-row reads for only rows whose sequence exceeds the cursor. Physical row reorder no longer determines whether an event is skipped.
+- Product watermarks store max processed sequence; business event watermark remains effective_at / recorded_at / movement_id. FIFO integrity diagnostics now compare sequence watermarks, not row counts.
+- Added regression cases for reordered rows, sequence gaps, duplicate/missing values, ScriptLock enforcement and independent business/ingestion ordering. Updated the System Safety runner to load the sequence helper and added a GitHub Actions quality-gates workflow for syntax and all local test suites.
+- **Not verified:** source tests and syntax checks have not been executed in this environment; a new Actions run was not observed. No Apps Script runtime acceptance was performed.
+- **Deployment warning:** the new StockLedger schema is 13 columns and is intentionally incompatible with the existing 12-column workbook. Do not deploy to the current workbook. Production remains blocked on clean-baseline adoption, complete review, executed test suites, backup/restore validation and disposable-workbook runtime acceptance.
+- F-07 remains open; this is an implementation pass, not a release sign-off.
+
 ## Clean-baseline versioning audit — 26.11.2026
 
 - Added docs/CLEAN_BASELINE_SCHEMA_VERSIONING_DESIGN.md. It defines separate clean-final-baseline adoption and explicit legacy-upgrade paths; it does not assign a final schema version number until F-02 and F-06 contracts are frozen.
