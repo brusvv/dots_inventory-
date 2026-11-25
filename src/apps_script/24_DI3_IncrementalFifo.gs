@@ -1,5 +1,5 @@
 /** Dots Inventory v3 — incremental FIFO state, product-scoped replay and allocation compaction. */
-var DI3_FIFO_STATE_VERSION = "3";
+var DI3_FIFO_STATE_VERSION = "4";
 
 
 /** Return matching repository rows tagged with their physical sheet row number. */
@@ -20,15 +20,77 @@ function di3ReadTaggedRowsByColumnValues_(sheetName, columnIndexZeroBased, value
   });
 }
 
-/** Read only the append-only ledger tail after a persisted row-count cursor. */
-function di3ReadFifoLedgerTail_(cursor, ledgerCount) {
-  var count = Number(ledgerCount) - Number(cursor);
-  if (!Number.isInteger(count) || count < 0) throw new Error("Некорректный FIFO ledger tail.");
-  if (!count) return [];
-  var startRow = Number(cursor) + 2;
+/** Validate immutable ledger sequences and retain physical row locations only for reads. */
+function di3ReadLedgerSequenceIndex_() {
+  var sequenceIndex = DI3_TABLE_SCHEMAS.StockLedger.indexOf("ledger_sequence");
+  if (sequenceIndex < 0) throw new Error("StockLedger schema has no ledger_sequence column.");
   var sheet = di3GetSheetOrThrow_("StockLedger");
-  var rows = sheet.getRange(startRow, 1, count, DI3_TABLE_SCHEMAS.StockLedger.length).getValues();
-  rows.forEach(function (row, index) { row._di3RowNumber = startRow + index; });
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { max_sequence: 0, rows: [], movement_count: 0 };
+  var count = lastRow - 1;
+  var movementIds = sheet.getRange(2, 1, count, 1).getValues();
+  var sequences = sheet.getRange(2, sequenceIndex + 1, count, 1).getValues();
+  var seen = Object.create(null), rows = [], maxSequence = 0, movementCount = 0;
+  for (var i = 0; i < count; i++) {
+    var movementId = String(movementIds[i][0] == null ? "" : movementIds[i][0]).trim();
+    var raw = sequences[i][0], blankSequence = raw === "" || raw == null;
+    if (!movementId && blankSequence) continue;
+    if (!movementId) throw new Error("StockLedger: ledger_sequence заполнен без movement_id в строке " + (i + 2) + ".");
+    if (blankSequence) throw new Error("StockLedger: отсутствует ledger_sequence у движения " + movementId + " (строка " + (i + 2) + ").");
+    var sequence = Number(raw);
+    if (!Number.isSafeInteger(sequence) || sequence <= 0) throw new Error("StockLedger: ledger_sequence должен быть положительным целым числом у движения " + movementId + ".");
+    if (Object.prototype.hasOwnProperty.call(seen, String(sequence))) {
+      throw new Error("StockLedger: повторяется ledger_sequence " + sequence + " у движений " + seen[String(sequence)] + " и " + movementId + ".");
+    }
+    seen[String(sequence)] = movementId;
+    rows.push({ row_number: i + 2, sequence: sequence });
+    maxSequence = Math.max(maxSequence, sequence);
+    movementCount++;
+  }
+  return { max_sequence: maxSequence, rows: rows, movement_count: movementCount };
+}
+
+/** Allocate a unique sequence block while the caller owns the ScriptLock. */
+function di3AllocateLedgerSequenceBlock_(count) {
+  count = Number(count);
+  if (!Number.isInteger(count) || count < 1) throw new Error("Для выделения ledger sequence требуется положительное целое количество.");
+  if (typeof DI3_SCRIPT_LOCK_DEPTH_ !== "number" || DI3_SCRIPT_LOCK_DEPTH_ < 1) throw new Error("ledger_sequence можно выделять только внутри ScriptLock.");
+  var index = di3ReadLedgerSequenceIndex_();
+  if (index.max_sequence + count > Number.MAX_SAFE_INTEGER) throw new Error("Исчерпан диапазон безопасных целых чисел для ledger_sequence.");
+  var sequences = [];
+  for (var i = 1; i <= count; i++) sequences.push(index.max_sequence + i);
+  return sequences;
+}
+
+/** Store sequence identities in the immutable operation payload before ledger append. */
+function di3AssignLedgerSequencesToLines_(lines) {
+  if (!Array.isArray(lines) || !lines.length) throw new Error("Не переданы строки для назначения ledger_sequence.");
+  var sequences = di3AllocateLedgerSequenceBlock_(lines.length);
+  lines.forEach(function (line, index) { line.ledger_sequence = sequences[index]; });
+  return sequences;
+}
+
+/** Read full rows only for events whose immutable sequence exceeds the committed cursor. */
+function di3ReadFifoLedgerTail_(cursor, sequenceIndex) {
+  cursor = Number(cursor);
+  if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error("Некорректный FIFO ledger sequence cursor.");
+  var index = sequenceIndex || di3ReadLedgerSequenceIndex_();
+  var selected = index.rows.filter(function (item) { return item.sequence > cursor; })
+    .sort(function (a, b) { return a.row_number - b.row_number; });
+  if (!selected.length) return [];
+  var sheet = di3GetSheetOrThrow_("StockLedger"), width = DI3_TABLE_SCHEMAS.StockLedger.length;
+  var rows = [], groupStart = selected[0].row_number, groupEnd = groupStart;
+  function flushGroup_() {
+    var block = sheet.getRange(groupStart, 1, groupEnd - groupStart + 1, width).getValues();
+    block.forEach(function (row, offset) { row._di3RowNumber = groupStart + offset; rows.push(row); });
+  }
+  for (var i = 1; i < selected.length; i++) {
+    var rowNumber = selected[i].row_number;
+    if (rowNumber === groupEnd + 1) groupEnd = rowNumber;
+    else { flushGroup_(); groupStart = rowNumber; groupEnd = rowNumber; }
+  }
+  flushGroup_();
+  rows.sort(function (a, b) { return Number(a[12]) - Number(b[12]); });
   return rows;
 }
 
@@ -523,22 +585,28 @@ function di3PreflightFifoForProductScoped_(productId, candidateLedgerRow, candid
   return { status: "READY", mode: tailPlan.mode, product_id: String(productId) };
 }
 
-function di3SetFifoLedgerCursor_(count) {
-  di3SetAppMetaValue_("fifo_ledger_cursor", Number(count) || 0);
+function di3SetFifoLedgerSequenceCursor_(sequence) {
+  sequence = Number(sequence);
+  if (!Number.isSafeInteger(sequence) || sequence < 0) throw new Error("Некорректный fifo_ledger_sequence_cursor.");
+  di3SetAppMetaValue_("fifo_ledger_sequence_cursor", sequence);
 }
 
 function di3BuildFifoProductStateRows_(productIds, ledgerRows, lotRows) {
   var ids = {};
   (productIds || []).forEach(function (id) { if (id) ids[String(id)] = true; });
   var aggregates = {};
-  Object.keys(ids).forEach(function (id) { aggregates[id] = { product_id: id, last: null, movement_count: 0, last_row: 1, remaining: 0, unknown_remaining: false }; });
-  (ledgerRows || []).forEach(function (row, index) {
+  Object.keys(ids).forEach(function (id) {
+    aggregates[id] = { product_id: id, last: null, last_sequence: 0, movement_count: 0, remaining: 0, unknown_remaining: false };
+  });
+  (ledgerRows || []).forEach(function (row) {
     var id = String(row[3] || "");
     if (!ids[id]) return;
+    var sequence = Number(row[12]);
+    if (!Number.isSafeInteger(sequence) || sequence <= 0) throw new Error("Невалидный ledger_sequence при построении FifoProductState для движения " + row[0] + ".");
     var event = { movement_id: String(row[0]), effective_at: row[7], recorded_at: row[8] };
     var agg = aggregates[id];
     agg.movement_count++;
-    agg.last_row = Number(row._di3RowNumber || index + 2);
+    agg.last_sequence = Math.max(agg.last_sequence, sequence);
     if (!agg.last || di3FifoEventCompare_(event, agg.last) > 0) agg.last = event;
   });
   (lotRows || []).forEach(function (row) {
@@ -550,7 +618,7 @@ function di3BuildFifoProductStateRows_(productIds, ledgerRows, lotRows) {
   return Object.keys(aggregates).map(function (id) {
     var agg = aggregates[id];
     return [id, agg.last ? agg.last.effective_at : "", agg.last ? agg.last.recorded_at : "",
-      agg.last ? agg.last.movement_id : "", agg.last_row, agg.movement_count,
+      agg.last ? agg.last.movement_id : "", agg.last_sequence, agg.movement_count,
       agg.unknown_remaining ? "" : agg.remaining, new Date()];
   });
 }
@@ -560,21 +628,22 @@ function di3BuildIncrementalFifoProductStateRow_(productId, tailLedgerRows, lotR
     movement_id: String(previousStateRow[3]), effective_at: previousStateRow[1], recorded_at: previousStateRow[2]
   } : null;
   var movementCount = previousStateRow ? Number(previousStateRow[5]) || 0 : 0;
-  var lastRowNumber = previousStateRow ? Number(previousStateRow[4]) || 1 : 1;
+  var lastProcessedSequence = previousStateRow ? Number(previousStateRow[4]) || 0 : 0;
   (tailLedgerRows || []).forEach(function (row) {
+    var sequence = Number(row[12]);
+    if (!Number.isSafeInteger(sequence) || sequence <= 0) throw new Error("Невалидный ledger_sequence при обновлении FifoProductState для движения " + row[0] + ".");
     var event = { movement_id: String(row[0]), effective_at: row[7], recorded_at: row[8] };
     movementCount++;
-    lastRowNumber = Math.max(lastRowNumber, Number(row._di3RowNumber || 1));
+    lastProcessedSequence = Math.max(lastProcessedSequence, sequence);
     if (!lastEvent || di3FifoEventCompare_(event, lastEvent) > 0) lastEvent = event;
   });
-  var remaining = 0;
-  var unknownRemaining = false;
+  var remaining = 0, unknownRemaining = false;
   (lotRows || []).forEach(function (row) {
     if (row[13] === "" || row[13] == null || !Number.isFinite(Number(row[13]))) unknownRemaining = true;
     else remaining += Number(row[13]);
   });
   return [String(productId), lastEvent ? lastEvent.effective_at : "", lastEvent ? lastEvent.recorded_at : "",
-    lastEvent ? lastEvent.movement_id : "", lastRowNumber, movementCount,
+    lastEvent ? lastEvent.movement_id : "", lastProcessedSequence, movementCount,
     unknownRemaining ? "" : remaining, new Date()];
 }
 
@@ -597,16 +666,18 @@ function di3UpsertFifoProductStateRows_(stateRowsToWrite) {
 
 function di3RebuildFifoAllocations_(reason, affectedProductIds) {
   var ledgerSheet = di3GetSheetOrThrow_("StockLedger");
-  var ledgerLastRow = ledgerSheet.getLastRow();
-  var ledgerCount = Math.max(0, ledgerLastRow - 1);
+  var ledgerCount = Math.max(0, ledgerSheet.getLastRow() - 1);
+  var sequenceIndex = di3ReadLedgerSequenceIndex_();
+  var maxLedgerSequence = sequenceIndex.max_sequence;
   var isFullReplay = !Array.isArray(affectedProductIds) || !affectedProductIds.length;
-  var cursorRaw = di3GetAppMetaValue_("fifo_ledger_cursor");
+  var cursorRaw = di3GetAppMetaValue_("fifo_ledger_sequence_cursor");
   var cursor = cursorRaw == null || cursorRaw === "" ? null : Number(cursorRaw);
-  if (!isFullReplay && (!Number.isInteger(cursor) || cursor < 0 || cursor > ledgerCount)) isFullReplay = true;
+  var stateVersion = di3GetAppMetaValue_("fifo_state_version");
+  if (!isFullReplay && (String(stateVersion) !== DI3_FIFO_STATE_VERSION ||
+      !Number.isSafeInteger(cursor) || cursor < 0 || cursor > maxLedgerSequence)) isFullReplay = true;
 
   var ledgerRows = null, detailRows = null, lotRows = null, newLedgerRows = [];
-  var productIds = [];
-  var candidateReplay = null;
+  var productIds = [], candidateReplay = null;
   if (isFullReplay) {
     ledgerRows = di3ReadTableValues_("StockLedger");
     detailRows = di3ReadTableValues_("StockMovementDetails");
@@ -614,8 +685,8 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds) {
     productIds = Array.from(new Set(ledgerRows.map(function (row) { return String(row[3] || ""); }).filter(Boolean)));
     candidateReplay = di3BuildFifoReplayPlan_(ledgerRows, detailRows, lotRows, null);
   } else {
-    // Normal operations read only rows appended after the FIFO cursor.
-    newLedgerRows = di3ReadFifoLedgerTail_(cursor, ledgerCount);
+    // Scan narrow identity columns, then read full rows only for sequences beyond the cursor.
+    newLedgerRows = di3ReadFifoLedgerTail_(cursor, sequenceIndex);
     productIds = Array.from(new Set(newLedgerRows.map(function (row) { return String(row[3] || ""); }).filter(Boolean)));
   }
 
@@ -648,10 +719,8 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds) {
         var productState = productStateRows.length ? productStateRows[0] : null;
         // Recovery may resume after the product state was written but before the
         // global ledger cursor. Ignore tail rows already represented by that state.
-        var lastProcessedLedgerRow = productState ? Number(productState[4]) || 1 : 1;
-        var tailRows = ledgerTailForProduct.filter(function (row) {
-          return Number(row._di3RowNumber || 0) > lastProcessedLedgerRow;
-        });
+        var lastProcessedSequence = productState ? Number(productState[4]) || 0 : 0;
+        var tailRows = ledgerTailForProduct.filter(function (row) { return Number(row[12]) > lastProcessedSequence; });
         if (!tailRows.length) return;
         var tailMovementIds = tailRows.map(function (row) { return String(row[0]); });
         var tailDetails = di3ReadTaggedRowsByColumnValues_("StockMovementDetails", 0, tailMovementIds);
@@ -681,7 +750,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds) {
       if (productIds.length && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
         di3RefreshAllOrderFifoSnapshots_(reason || "FIFO_RECALCULATION", run.run_id, productIds);
       }
-      di3SetFifoLedgerCursor_(ledgerCount);
+      di3SetFifoLedgerSequenceCursor_(maxLedgerSequence);
       di3SetAppMetaValue_("fifo_state_version", DI3_FIFO_STATE_VERSION);
     }
     if (isFullReplay && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
@@ -707,27 +776,27 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds) {
 function di3EnsureIncrementalFifoReady_() {
   if (!di3GetSpreadsheet_().getSheetByName("_AppMeta")) return { status: "SCHEMAS_NOT_READY" };
   var version = di3GetAppMetaValue_("fifo_state_version");
-  var cursor = di3GetAppMetaValue_("fifo_ledger_cursor");
-  // Row count is metadata; do not download the ledger merely to verify a valid cursor.
-  var ledgerSheet = di3GetSheetOrThrow_("StockLedger");
-  var currentLedgerLength = Math.max(0, ledgerSheet.getLastRow() - 1);
-  if (String(version) === DI3_FIFO_STATE_VERSION && cursor !== null && cursor !== "" &&
-      Number.isInteger(Number(cursor)) && Number(cursor) >= 0 && Number(cursor) <= currentLedgerLength) {
-    return { status: Number(cursor) === currentLedgerLength ? "ALREADY_READY" : "PENDING_LEDGER_TAIL",
-      cursor: Number(cursor), ledger_rows: currentLedgerLength };
+  var cursorRaw = di3GetAppMetaValue_("fifo_ledger_sequence_cursor");
+  var cursor = cursorRaw === "" || cursorRaw == null ? null : Number(cursorRaw);
+  var sequenceIndex = di3ReadLedgerSequenceIndex_();
+  var maxLedgerSequence = sequenceIndex.max_sequence;
+  if (String(version) === DI3_FIFO_STATE_VERSION && Number.isSafeInteger(cursor) &&
+      cursor >= 0 && cursor <= maxLedgerSequence) {
+    return { status: cursor === maxLedgerSequence ? "ALREADY_READY" : "PENDING_LEDGER_TAIL",
+      cursor: cursor, max_ledger_sequence: maxLedgerSequence, ledger_rows: sequenceIndex.movement_count };
   }
-  if (currentLedgerLength && typeof di3GetPendingStockOperations_ === "function") {
+  if (sequenceIndex.movement_count && typeof di3GetPendingStockOperations_ === "function") {
     var pending = di3GetPendingStockOperations_();
     if (pending.length) return { status: "PENDING_OPERATIONS", pending_operations: pending.length,
       message: "FIFO bootstrap отложен: сначала восстанови незавершённые складские операции." };
   }
-  var result = currentLedgerLength
+  var result = sequenceIndex.movement_count
     ? di3RebuildFifoAllocations_("FIFO_INCREMENTAL_BOOTSTRAP", null)
     : { mode: "EMPTY", allocations_created: 0, movements_replayed: 0 };
   di3SetAppMetaValue_("fifo_state_version", DI3_FIFO_STATE_VERSION);
-  di3SetFifoLedgerCursor_(currentLedgerLength);
-  if (!currentLedgerLength) di3UpsertFifoProductStateRows_([]);
-  return { status: "READY", bootstrap: result };
+  di3SetFifoLedgerSequenceCursor_(maxLedgerSequence);
+  if (!sequenceIndex.movement_count) di3UpsertFifoProductStateRows_([]);
+  return { status: "READY", bootstrap: result, max_ledger_sequence: maxLedgerSequence };
 }
 
 /** Full FIFO reconstruction is mutating and therefore always requires a menu confirmation. */
