@@ -58,6 +58,7 @@ function di3AllocateLedgerSequenceBlock_(count) {
   count = Number(count);
   if (!Number.isInteger(count) || count < 1) throw new Error("Для выделения ledger sequence требуется положительное целое количество.");
   if (typeof DI3_SCRIPT_LOCK_DEPTH_ !== "number" || DI3_SCRIPT_LOCK_DEPTH_ < 1) throw new Error("ledger_sequence можно выделять только внутри ScriptLock.");
+  di3AssertNoPendingFifoRuns_();
   var index = di3ReadLedgerSequenceIndex_();
   if (index.max_sequence + count > Number.MAX_SAFE_INTEGER) throw new Error("Исчерпан диапазон безопасных целых чисел для ledger_sequence.");
   var sequences = [];
@@ -500,6 +501,118 @@ function di3PrepareFifoReplay_(context, predicate, productId, currentRows) {
     already_target: false, source_rows: sourceRows,
     lot_archive_rows: lotArchiveRowsToWrite, fingerprints: fingerprints
   };
+}
+
+function di3GetPendingFifoReplayEventsForRun_(runId) {
+  var matches = di3ReadRowsByColumnValue_("FifoReplayEvents", 4, runId);
+  var latestByReplay = Object.create(null);
+  matches.forEach(function (match) {
+    var row = match.values, replayId = String(row[1]);
+    if (!latestByReplay[replayId] || Number(row[2]) > Number(latestByReplay[replayId].values[2])) {
+      latestByReplay[replayId] = match;
+    }
+  });
+  return Object.keys(latestByReplay).map(function (id) { return latestByReplay[id]; })
+    .filter(function (match) { return String(match.values[3]) === "PREPARED"; });
+}
+
+/** Recover every durable PREPARED replay before processing any new tail rows. */
+function di3RecoverPendingFifoReplaysForRun_(run, reason) {
+  var pending = di3GetPendingFifoReplayEventsForRun_(run.run_id);
+  if (!pending.length) return { recovered: 0, products: [], full_replay: false };
+  var ledgerRows = di3ReadTableValues_("StockLedger");
+  var detailRows = di3ReadTableValues_("StockMovementDetails");
+  var lotRows = di3ReadTableValues_("StockLots");
+  var recoveredProducts = Object.create(null);
+  var fullReplayRecovered = false;
+  var replayedMovements = 0;
+
+  pending.forEach(function (match) {
+    var event = match.values;
+    var context = {
+      replay_id: String(event[1]), fifo_run_id: String(event[4]), operation_id: String(event[5] || ""),
+      scope_type: String(event[6]), scope_json: String(event[7]), input_fingerprint: String(event[8]),
+      reason: "RECOVERY:" + String(reason || "FIFO"), archived_at: run.created_at,
+      lot_rows: lotRows
+    };
+    var fingerprints = {
+      source_allocations: String(event[9]), target_allocations: String(event[10]),
+      source_lots: String(event[11]), target_lots: String(event[12])
+    };
+    try {
+      if (context.scope_type === "PRODUCT") {
+        var scope = JSON.parse(context.scope_json);
+        if (!Array.isArray(scope) || scope.length !== 1 || !scope[0]) throw new Error("Некорректный PRODUCT replay scope.");
+        var productId = String(scope[0]);
+        var actualInputFingerprint = di3BuildFifoReplayInputFingerprint_(productId, ledgerRows, detailRows, lotRows);
+        if (actualInputFingerprint !== context.input_fingerprint) throw new Error("Изменился immutable input fingerprint товара " + productId + ".");
+        var replay = di3BuildProductFifoReplayPlan_(productId, ledgerRows, detailRows, lotRows);
+        var targetRows = di3BuildFifoAllocationRows_(run.run_id, replay.allocations, context.replay_id);
+        var remaining = {};
+        replay.remaining_lots.forEach(function (lot) { remaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
+        lotRows.filter(function (row) { return String(row[1]) === productId; }).forEach(function (row) {
+          if (!Object.prototype.hasOwnProperty.call(remaining, String(row[0]))) remaining[String(row[0])] = Number(row[8]);
+        });
+        context.target_rows = targetRows;
+        context.target_remaining = remaining;
+        di3ReplaceFifoProjectionSafely_(function (row) { return String(row[4]) === productId; },
+          targetRows, lotRows, remaining, productId, context);
+        var productLedgerRows = ledgerRows.filter(function (row) { return String(row[3]) === productId; });
+        di3UpsertFifoProductStateRows_(di3BuildFifoProductStateRows_([productId], productLedgerRows, lotRows));
+        recoveredProducts[productId] = true;
+        replayedMovements += replay.movement_count;
+      } else if (context.scope_type === "FULL") {
+        if (context.scope_json !== "FULL") throw new Error("Некорректный FULL replay scope.");
+        var fullInputFingerprint = di3BuildFifoReplayInputFingerprint_(null, ledgerRows, detailRows, lotRows);
+        if (fullInputFingerprint !== context.input_fingerprint) throw new Error("Изменился immutable input fingerprint полного FIFO replay.");
+        var fullReplay = di3BuildFifoReplayPlan_(ledgerRows, detailRows, lotRows, null);
+        var fullTargetRows = di3BuildFifoAllocationRows_(run.run_id, fullReplay.allocations, context.replay_id);
+        var fullRemaining = {};
+        fullReplay.remaining_lots.forEach(function (lot) { fullRemaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
+        lotRows.forEach(function (row) {
+          if (!Object.prototype.hasOwnProperty.call(fullRemaining, String(row[0]))) fullRemaining[String(row[0])] = Number(row[8]);
+        });
+        context.target_rows = fullTargetRows;
+        context.target_remaining = fullRemaining;
+        di3ReplaceFifoProjectionSafely_(function () { return true; }, fullTargetRows, lotRows, fullRemaining, null, context);
+        var allProductIds = Array.from(new Set(ledgerRows.map(function (row) { return String(row[3] || ""); }).filter(Boolean)));
+        di3UpsertFifoProductStateRows_(di3BuildFifoProductStateRows_(allProductIds, ledgerRows, lotRows));
+        fullReplayRecovered = true;
+        replayedMovements += fullReplay.movement_count;
+      } else {
+        throw new Error("Unsupported FIFO replay scope type: " + context.scope_type);
+      }
+    } catch (recoveryError) {
+      try {
+        di3AppendFifoReplayEvent_(context, "QUARANTINED", fingerprints, {
+          recovery_error: recoveryError && recoveryError.message ? recoveryError.message : String(recoveryError)
+        });
+      } catch (ignoreQuarantineWrite) {}
+      throw new Error("FIFO replay " + context.replay_id + " помещён в quarantine: " +
+        (recoveryError && recoveryError.message ? recoveryError.message : String(recoveryError)));
+    }
+  });
+  return {
+    recovered: pending.length,
+    products: Object.keys(recoveredProducts),
+    full_replay: fullReplayRecovered,
+    movements_replayed: replayedMovements
+  };
+}
+
+/** Block new stock events while an earlier FIFO run is unresolved. */
+function di3AssertNoPendingFifoRuns_() {
+  var sheet = di3GetSheetOrThrow_("FifoAllocationRuns");
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return true;
+  var statuses = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+  for (var i = 0; i < statuses.length; i++) {
+    var status = String(statuses[i][0] || "");
+    if (status === "PREPARED" || status === "FAILED") {
+      throw new Error("Незавершённый FIFO run обнаружен. Сначала восстанови или проверь run в журнале FIFO: строка " + (i + 2) + ".");
+    }
+  }
+  return true;
 }
 
 function di3CommitFifoReplayEventsForRun_(runId) {
