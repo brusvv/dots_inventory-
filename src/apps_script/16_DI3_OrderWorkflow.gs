@@ -65,7 +65,7 @@ function di3BuildOrderDispatchRows_(operationId, payload) {
       line.movement_id, operationId, line.event_key, line.product_id,
       "ORDER", payload.order_id, -line.quantity,
       new Date(payload.dispatched_at), new Date(payload.recorded_at), "", "",
-      "Списание при отправке заказа " + payload.order_number
+      "Списание при отправке заказа " + payload.order_number, line.ledger_sequence
     ]);
     details.push([
       line.movement_id, line.display_code, "OUT", "ORDER_DISPATCH",
@@ -227,6 +227,7 @@ function di3DispatchOrder_(order, effectiveAt) {
     di3AssertNoBackdatedMovementBeforeReturnedOrder_(item.product_id, date, "отправка заказа");
   });
   var payload = di3BuildOrderDispatchPayload_(order, items, date);
+  di3AssignLedgerSequencesToLines_(payload.lines);
   // Preflight before creating the operation record, so insufficient stock does not leave a rejected token.
   var candidate = di3BuildOrderDispatchRows_("PREFLIGHT", payload);
   di3PreflightFifoForProductsScoped_(candidate.ledger, candidate.details, [],
@@ -346,7 +347,7 @@ function di3BuildOrderReturnRows_(operationId, payload) {
       line.movement_id, operationId, line.event_key, line.product_id,
       "ORDER_RETURN", payload.order_id, line.quantity,
       new Date(payload.returned_at), new Date(payload.recorded_at), "", "",
-      "Фактический возврат заказа " + payload.order_number
+      "Фактический возврат заказа " + payload.order_number, line.ledger_sequence
     ]);
     details.push([
       line.movement_id, line.display_code, "IN", "ORDER_RETURN", "", "",
@@ -427,6 +428,7 @@ function di3ReturnOrder_(order, effectiveAt) {
     di3AssertNoBackdatedMovementBeforeReturnedOrder_(item.product_id, date, "возврат заказа");
   });
   var payload = di3BuildOrderReturnPayload_(order, items, date);
+  di3AssignLedgerSequencesToLines_(payload.lines);
   var built = di3BuildOrderReturnRows_("PREFLIGHT", payload);
   di3PreflightFifoForProductsScoped_(built.ledger, built.details, built.lots,
     payload.lines.map(function (line) { return line.product_id; }));
