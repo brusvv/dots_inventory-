@@ -21,6 +21,7 @@ const files = [
   "src/apps_script/36_DI3_SupplyFullEdit.gs",
   "src/apps_script/29_DI3_SettingsRepository.gs",
   "src/apps_script/30_DI3_MoneyCore.gs",
+  "src/apps_script/32_DI3_BackupRestore.gs",
   "src/apps_script/41_DI3_SystemSafetyUxTests.gs"
 ];
 for (const file of files) {
