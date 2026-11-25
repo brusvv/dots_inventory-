@@ -292,6 +292,19 @@ function di3GetPendingFifoRunForOperation_(operationId) {
   };
 }
 
+function di3AssertNoConflictingPendingFifoRuns_(reusableRunId) {
+  var rows = di3ReadTableValues_("FifoAllocationRuns");
+  var conflicts = rows.filter(function (row) {
+    var status = String(row[2] || "");
+    return (status === "PREPARED" || status === "FAILED") && String(row[0]) !== String(reusableRunId || "");
+  });
+  if (conflicts.length) {
+    throw new Error("Обнаружен другой незавершённый FIFO run (" + conflicts.map(function (row) { return row[0]; }).join(", ") +
+      "). Сначала восстанови именно его; параллельный full/product replay запрещён.");
+  }
+  return true;
+}
+
 /** Stable SHA-256 fingerprint for replay inputs and projection snapshots. */
 function di3BuildFifoFingerprint_(value) {
   if (typeof di3BuildManualOperationPayloadHash_ !== "function") {
@@ -692,10 +705,12 @@ function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount, o
     allow_resume_empty_tail: !!options.allow_resume_empty_tail
   });
   if (reusable) {
+    di3AssertNoConflictingPendingFifoRuns_(reusable.run_id);
     if (reusable.status === "FAILED") di3UpdateFifoRunStatus_(reusable.row_number, "PREPARED", "", "", null);
     reusable.status = "PREPARED";
     return reusable;
   }
+  di3AssertNoConflictingPendingFifoRuns_("");
   // Run records are append-only. Read the last sequence, not the entire history.
   var lastSequence = lastRow >= 2 ? Number(sheet.getRange(lastRow, 2, 1, 1).getValue()) : 0;
   if (!Number.isFinite(lastSequence) || lastSequence < 0) {
