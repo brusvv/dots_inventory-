@@ -732,9 +732,11 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
     productIds = Array.from(new Set(newLedgerRows.map(function (row) { return String(row[3] || ""); }).filter(Boolean)));
   }
 
+  var fingerprintLedgerRows = (isFullReplay ? ledgerRows : newLedgerRows).slice()
+    .sort(function (a, b) { return Number(a[12]) - Number(b[12]); });
   var runInputFingerprint = di3BuildFifoFingerprint_({
     mode: isFullReplay ? "FULL" : "INCREMENTAL_TAIL",
-    ledger: isFullReplay ? ledgerRows : newLedgerRows
+    ledger: fingerprintLedgerRows
   });
   var run = di3CreateFifoRun_(isFullReplay ? "FULL_REPLAY:" + (reason || "MANUAL") : (reason || "INCREMENTAL"),
     ledgerCount, 0, productIds.length, {
