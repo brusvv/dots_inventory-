@@ -104,10 +104,6 @@ function di3ReadVerifiedOperationPayload_(operationRecord) {
 }
 
 /**
- * Registers the immutable payload before the PREPARED row. Returns the existing
- * operation for a repeated idempotency key after verifying identity and hash.
- */
-/**
  * Resolve the original initiator from the immutable Operations row.
  * A missing operation actor remains blank; recovery executor identity must not
  * be substituted for the initiator. Non-operation/manual events use the
@@ -121,6 +117,10 @@ function di3GetOperationInitiatorActor_(operationId) {
   return String(operation.values[10] || "").trim();
 }
 
+/**
+ * Registers the immutable payload before the PREPARED row. Returns the existing
+ * operation for a repeated idempotency key after verifying identity and hash.
+ */
 function di3RegisterPreparedOperation_(spec) {
   spec = spec || {};
   var idempotencyKey = String(spec.idempotency_key || "");
