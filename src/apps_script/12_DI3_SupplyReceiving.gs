@@ -476,7 +476,7 @@ function di3CompleteSupplyReceipt_(supply, operationId, operationRowNumber, payl
     if (!savedLotMovementIds[line.movement_id]) throw new Error("Не создан FIFO-слой для движения " + line.movement_id + ".");
   });
 
-  var fifo = di3RebuildFifoAllocations_("SUPPLY_RECEIPT", productIds);
+  var fifo = di3RebuildFifoAllocations_("SUPPLY_RECEIPT", productIds, { operation_id: String(operationId || "") });
   var costHistoryAdded = di3EnsureSupplyCostHistory_(supply, payload);
   var currentVariantsUpdated = di3SetCurrentPackVariantsFromReceipt_(payload);
 
