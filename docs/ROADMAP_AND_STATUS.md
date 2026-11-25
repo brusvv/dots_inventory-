@@ -157,7 +157,8 @@ The following issues have source changes and local regression coverage. They are
 - **F-04:** payload-size guard only; chunking/compaction remains a future design task.
 - **F-06/F-07:** FIFO allocation archival and stable cursors remain open; require a migration/replay design.
 - **F-09:** per-view isolation and journal warning are added, but O(N) read cost and scoped refresh remain open.
-- **F-10:** append-only reopen/close audit is still needed.
+- **F-10:** PeriodLocks now appends immutable `LOCKED` / `REOPENED` events; current state is derived from the latest event per period. No schema migration is needed. Runtime acceptance and local test execution remain pending; previously overwritten legacy history cannot be recovered.
+- **F-10:** append-only period event source patch is implemented; structural tests were added but are not yet run, and close → reopen → re-close runtime acceptance remains pending.
 - **F-14:** true multi-session ScriptLock contention/recovery is not proven by local tests.
 - **F-17:** delivery-method catalogue needs the user's actual options; none are invented.
 - **F-20:** reliable actor attribution still needs an approved identity model.
