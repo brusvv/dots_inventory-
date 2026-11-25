@@ -142,6 +142,8 @@ function di3RunSystemSafetyUxUnitTests() {
   test("operation-backed domain audit uses the immutable initiator, not the recovery executor", function () {
     var originalFind = di3FindRowByFirstColumn_;
     var originalGetActor = di3GetActorEmail_;
+    var originalInitiator = di3GetOperationInitiatorActor_;
+    var originalCurrency = di3GetBaseCurrency_;
     try {
       di3FindRowByFirstColumn_ = function (table, operationId) {
         equal(table, "Operations");
@@ -154,9 +156,40 @@ function di3RunSystemSafetyUxUnitTests() {
       equal(di3GetOperationInitiatorActor_("operation-empty"), "", "A blank persisted initiator must stay blank");
       equal(di3GetOperationInitiatorActor_(""), "recovery-user-b@example.test", "Non-operation events use the current actor");
       equal(di3GetOperationInitiatorActor_("missing-operation"), "", "A missing operation must not be attributed to the current executor");
+
+      di3GetOperationInitiatorActor_ = function () { return "user-a@example.test"; };
+      di3GetBaseCurrency_ = function () { return "RUB"; };
+      var dispatch = di3BuildOrderDispatchRows_("operation-a", {
+        order_id: "order-1", order_number: "ORD-1", dispatched_at: "2026-11-25T10:00:00Z",
+        recorded_at: "2026-11-25T10:01:00Z",
+        lines: [{ movement_id: "move-out", event_key: "evt-out", product_id: "product-1", quantity: 1,
+          display_code: "P-1", sale_unit_price: 100, line_revenue: 100 }]
+      });
+      equal(dispatch.details[0][8], "user-a@example.test", "Dispatch detail must record the initiator");
+
+      var returned = di3BuildOrderReturnRows_("operation-a", {
+        order_id: "order-1", order_number: "ORD-1", returned_at: "2026-11-25T12:00:00Z",
+        recorded_at: "2026-11-25T12:01:00Z",
+        lines: [{ movement_id: "move-in", event_key: "evt-in", product_id: "product-1", quantity: 1,
+          display_code: "P-1", cost_status: "KNOWN", original_dispatch_movement_id: "move-out",
+          source_lot_id: "lot-1", lot_id: "lot-return", pack_variant_id: "pack-1", unit_cost: 50, total_cost_minor: 5000 }]
+      });
+      equal(returned.details[0][8], "user-a@example.test", "Return detail must record the initiator");
+
+      var receipt = di3BuildSupplyReceiptRows_("operation-a", {
+        supply_id: "supply-1", supply_number: "SUP-1",
+        lines: [{ movement_id: "move-supply", event_key: "evt-supply", product_id: "product-1",
+          quantity: 1, display_code: "P-1", cost_status: "KNOWN",
+          effective_at: "2026-11-25T12:00:00Z", recorded_at: "2026-11-25T12:01:00Z",
+          lot_id: "lot-supply", pack_variant_id: "pack-1", unit_cost: 50, total_cost_minor: 5000,
+          supply_item_id: "item-1" }]
+      });
+      equal(receipt.details[0][8], "user-a@example.test", "Supply receipt detail must record the initiator");
     } finally {
       di3FindRowByFirstColumn_ = originalFind;
       di3GetActorEmail_ = originalGetActor;
+      di3GetOperationInitiatorActor_ = originalInitiator;
+      di3GetBaseCurrency_ = originalCurrency;
     }
     includes(di3EnsureOrderStatusHistory_.toString(), "di3GetOperationInitiatorActor_");
     includes(di3EnsureSupplyStatusHistory_.toString(), "di3GetOperationInitiatorActor_");
