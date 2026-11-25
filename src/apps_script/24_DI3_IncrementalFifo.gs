@@ -704,7 +704,9 @@ function di3UpsertFifoProductStateRows_(stateRowsToWrite) {
   return stateRowsToWrite.length;
 }
 
-function di3RebuildFifoAllocations_(reason, affectedProductIds) {
+function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
+  options = options || {};
+  var operationId = String(options.operation_id || "");
   var ledgerSheet = di3GetSheetOrThrow_("StockLedger");
   var ledgerCount = Math.max(0, ledgerSheet.getLastRow() - 1);
   var sequenceIndex = di3ReadLedgerSequenceIndex_();
@@ -730,8 +732,18 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds) {
     productIds = Array.from(new Set(newLedgerRows.map(function (row) { return String(row[3] || ""); }).filter(Boolean)));
   }
 
+  var runInputFingerprint = di3BuildFifoFingerprint_({
+    mode: isFullReplay ? "FULL" : "INCREMENTAL_TAIL",
+    ledger: isFullReplay ? ledgerRows : newLedgerRows
+  });
   var run = di3CreateFifoRun_(isFullReplay ? "FULL_REPLAY:" + (reason || "MANUAL") : (reason || "INCREMENTAL"),
-    ledgerCount, 0, productIds.length);
+    ledgerCount, 0, productIds.length, {
+      operation_id: operationId,
+      scope_type: isFullReplay ? "FULL" : "PRODUCT_SET",
+      scope_json: isFullReplay ? "FULL" : JSON.stringify(productIds.slice().sort()),
+      input_fingerprint: runInputFingerprint,
+      full_replay: isFullReplay
+    });
   var created = 0, replaced = 0, replayedMovements = 0, updatedLots = 0;
   var fullReplayStateRows = null;
   try {
