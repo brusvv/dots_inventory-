@@ -137,3 +137,25 @@ Do not use `Session.getEffectiveUser()` as a fallback for the initiating user. I
 - No application source, schema, manifest, triggers, spreadsheet, operation payload, stock event or business record was changed.
 - No Apps Script or Node tests were run for this audit.
 - Do not deploy an identity/schema patch until the intended meaning of every existing actor column is agreed and the restored-workbook tests above can be performed.
+
+
+## Implementation progress — centralized identity capture
+
+The first source-level implementation slice is now in place:
+
+- Added `di3CaptureActorContext_()` as the single identity acquisition point. It returns `email`, `identity_status` (`IDENTIFIED` / `UNAVAILABLE`) and `identity_source` (`ACTIVE_USER` / `NONE`).
+- Kept `di3GetActorEmail_()` as a backwards-compatible string accessor for existing schema columns.
+- Routed operation registration, operation-attempt execution, supply draft/status history, order status/movement history, PeriodLocks, schema migration records, supply full-edit metadata and settings actor lookup through the shared accessor.
+- Removed the duplicate direct active-user lookups and the executor's direct Session fallback. No code path substitutes `Session.getEffectiveUser()`.
+- Added a structural regression check to `di3RunSystemSafetyUxUnitTests()` for the shared helper, identity status/source markers and absence of effective-user fallback.
+
+### Boundaries not yet solved
+
+This slice centralizes *acquisition*, but it does not yet persist the normalized context object or distinguish the operation initiator from the executor in domain-event rows. Existing actor columns remain email strings. In particular, handlers that write domain audit rows during recovery may still use the recovery executor's email. The next implementation slice must pass the immutable initiator identity from the registered `Operations.actor` record into the relevant domain audit writes, while `OperationAttempts.actor` continues to represent the actual executor.
+
+### Verification
+
+- Source edits were committed through the GitHub repository connection.
+- The structural test was added but **has not been executed**.
+- No Apps Script deployment, workbook mutation, schema migration, trigger change or live business-data change was performed.
+- Runtime acceptance still requires a restored workbook and separate user/trigger execution contexts.
