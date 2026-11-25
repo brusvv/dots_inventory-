@@ -388,7 +388,7 @@ function di3RunStockCoreUnitTests() {
   });
 
   test("display product code does not reveal the full UUID", function () {
-    var code = di3GetShortProductCode_("50f4cef3-3dbc-460d-9c83-0d6f2dc5f8df");
+    var code = di3GetShortProductCodeWithMap_("50f4cef3-3dbc-460d-9c83-0d6f2dc5f8df", {});
     equal(code, "PRD-50F4CEF3");
     equal(code.indexOf("50f4cef3-3dbc-460d-9c83-0d6f2dc5f8df") === -1, true);
   });
