@@ -276,6 +276,22 @@ function di3SelectReusableFifoRun_(candidateRows, options) {
   };
 }
 
+function di3GetPendingFifoRunForOperation_(operationId) {
+  if (!operationId) return null;
+  var matches = di3ReadRowsByColumnValue_("FifoAllocationRuns", 10, operationId)
+    .filter(function (match) {
+      var status = String(match.values[2] || "");
+      return status === "PREPARED" || status === "FAILED";
+    });
+  if (matches.length > 1) throw new Error("Для операции найдено несколько незавершённых FIFO run: " + operationId + ".");
+  if (!matches.length) return null;
+  var row = matches[0].values;
+  return {
+    run_id: String(row[0]), status: String(row[2]), scope_type: String(row[12] || ""),
+    scope_json: String(row[13] || ""), input_fingerprint: String(row[14] || "")
+  };
+}
+
 /** Stable SHA-256 fingerprint for replay inputs and projection snapshots. */
 function di3BuildFifoFingerprint_(value) {
   if (typeof di3BuildManualOperationPayloadHash_ !== "function") {
@@ -491,6 +507,15 @@ function di3PrepareFifoReplay_(context, predicate, productId, currentRows) {
   });
   di3AppendFifoArchiveRowsIdempotently_("FifoAllocationArchive", allocationArchiveRows);
   di3AppendFifoArchiveRowsIdempotently_("FifoLotCacheArchive", lotArchiveRowsToWrite);
+  var verifiedArchive = di3ReadFifoReplayArchiveSnapshots_(context.replay_id);
+  var verifiedSourceAllocationFingerprint = di3BuildFifoAllocationSnapshotFingerprint_(verifiedArchive.allocation_rows);
+  var verifiedSourceLotSnapshot = verifiedArchive.lot_archive_rows.map(function (row) {
+    return [String(row[2]), String(row[3]), row[4]];
+  });
+  var verifiedSourceLotFingerprint = di3BuildFifoFingerprint_(verifiedSourceLotSnapshot);
+  if (verifiedSourceAllocationFingerprint !== sourceAllocationFingerprint || verifiedSourceLotFingerprint !== currentLotFingerprint) {
+    throw new Error("FIFO archive snapshot does not exactly match the active source projection for " + context.replay_id + ".");
+  }
   fingerprints.source_allocations = sourceAllocationFingerprint;
   fingerprints.source_lots = currentLotFingerprint;
   di3AppendFifoReplayEvent_(context, "PREPARED", fingerprints, {
@@ -1144,6 +1169,11 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
   var sequenceIndex = di3ReadLedgerSequenceIndex_();
   var maxLedgerSequence = sequenceIndex.max_sequence;
   var isFullReplay = !Array.isArray(affectedProductIds) || !affectedProductIds.length;
+  var pendingOperationRun = di3GetPendingFifoRunForOperation_(operationId);
+  if (pendingOperationRun) {
+    if (pendingOperationRun.scope_type === "FULL") isFullReplay = true;
+    else if (isFullReplay) throw new Error("Нельзя запускать отдельный full rebuild поверх незавершённого operation-backed FIFO run.");
+  }
   var cursorRaw = di3GetAppMetaValue_("fifo_ledger_sequence_cursor");
   var cursor = cursorRaw == null || cursorRaw === "" ? null : Number(cursorRaw);
   var stateVersion = di3GetAppMetaValue_("fifo_state_version");
