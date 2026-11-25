@@ -244,6 +244,29 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("installation preflight blocks unknown populated tabs but ignores managed and blank tabs", function () {
+    function fakeSheet(name, lastRow, lastColumn, charts, hidden) {
+      return {
+        getName: function () { return name; },
+        getLastRow: function () { return lastRow; },
+        getLastColumn: function () { return lastColumn; },
+        getCharts: function () { return new Array(charts || 0); },
+        isSheetHidden: function () { return !!hidden; }
+      };
+    }
+    var unexpected = di3FindUnexpectedPopulatedTabs_([
+      fakeSheet("StockLedger", 20, 13, 0),
+      fakeSheet("Продукты", 30, 21, 0),
+      fakeSheet("Sheet1", 0, 0, 0),
+      fakeSheet("Scratch", 4, 3, 0, true),
+      fakeSheet("Imported chart", 0, 0, 1)
+    ]);
+    equal(unexpected.length, 2);
+    equal(unexpected[0].name, "Scratch");
+    equal(unexpected[0].hidden, true);
+    equal(unexpected[1].name, "Imported chart");
+  });
+
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
     ["StockLedger", "StockAllocations", "FifoAllocationRuns", "FifoAllocationArchive",
       "FifoLotCacheArchive", "FifoReplayEvents"].forEach(function (sheetName) {
