@@ -3,6 +3,17 @@
 Дата: 26.11.2026  
 Статус: **source-audited implementation specification; application code and workbook data unchanged**
 
+## Source implementation groundwork — 26.11.2026
+
+- Added clean-baseline schemas for `FifoAllocationArchive`, `FifoLotCacheArchive` and `FifoReplayEvents`, including both source and target lot-cache fingerprints.
+- Extended `FifoAllocationRuns` with `operation_id`, parent `replay_id`, `scope_type`, `scope_json` and `input_fingerprint`.
+- Passed the immutable `operation_id` from manual movement, supply receipt, order dispatch and order return handlers into `di3RebuildFifoAllocations_`.
+- Added a SHA-256 fingerprint helper and persisted top-level run scope/input metadata. Added the archive tables to backup priority ordering.
+- Verified the clean-baseline schema contract in the FIFO source test suite.
+
+**Not implemented yet:** deterministic allocation IDs; idempotent archive snapshot writes; PREPARED/COMMITTED event transitions; stable child replay IDs for each product replay; pending-run reuse; crash recovery and quarantine. F-06 remains incomplete and no active projection is archived yet.
+
+**Source verification:** GitHub Actions run `45710629961` passed syntax checks for 50 `.gs` files and all seven Node suites (99/99). This validates the source/test harness only; Apps Script runtime fault-injection and backup/restore acceptance remain pending.
 ## 1. Цель и границы
 
 F-06 должен сохранять каждую вытесненную версию активных FIFO-распределений и обеспечивать восстановление после остановки Apps Script между отдельными записями Google Sheets.
