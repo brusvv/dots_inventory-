@@ -327,6 +327,18 @@ function di3RunStockCoreUnitTests() {
     }), null);
   });
 
+  test("pending operation run can resume after global cursor already advanced", function () {
+    var row = ["run-1", 7, "PREPARED", "ORDER_DISPATCH", new Date(), "", 12, 4, 1, "",
+      "op-1", "OP:op-1", "PRODUCT_SET", '["p1"]', "fingerprint-a"];
+    var reusable = di3SelectReusableFifoRun_([{ row_number: 9, values: row }], {
+      operation_id: "op-1", scope_type: "PRODUCT_SET", scope_json: "[]",
+      input_fingerprint: "empty-tail-fingerprint", allow_resume_empty_tail: true
+    });
+    equal(reusable.run_id, "run-1");
+    equal(reusable.scope_json, '["p1"]');
+    equal(reusable.resumed_after_cursor_advance, true);
+  });
+
   test("multiple pending FIFO runs for one operation fail closed", function () {
     var row = ["run-1", 7, "PREPARED", "ORDER_DISPATCH", new Date(), "", 12, 4, 1, "",
       "op-1", "OP:op-1", "PRODUCT_SET", '["p1"]', "fingerprint-a"];
