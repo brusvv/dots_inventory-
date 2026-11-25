@@ -24,7 +24,7 @@ jobs:
 
           expected_sha256 = "1d176f7b6396950a86ac36355575832fb58aac9afe408c4734be5f287890ed75"
           paths = sorted(glob.glob("archives/rc8-source.tar.xz.b64.part-*"))
-          expected_names = [f"archives/rc8-source.tar.xz.b64.part-{i:03d}" for i in range(12)]
+          expected_names = [f"archives/rc8-source.tar.xz.b64.part-{i:03d}" for i in range(28)]
           if paths != expected_names:
               raise SystemExit(f"Expected exactly 12 archive parts; found: {paths}")
 
