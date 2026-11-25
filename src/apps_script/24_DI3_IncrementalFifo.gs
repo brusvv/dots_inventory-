@@ -761,8 +761,6 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds) {
       if (productIds.length && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
         di3RefreshAllOrderFifoSnapshots_(reason || "FIFO_RECALCULATION", run.run_id, productIds);
       }
-      di3SetFifoLedgerSequenceCursor_(maxLedgerSequence);
-      di3SetAppMetaValue_("fifo_state_version", DI3_FIFO_STATE_VERSION);
     }
     if (isFullReplay && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
       di3RefreshAllOrderFifoSnapshots_(reason || "FIFO_FULL_REBUILD", run.run_id, productIds);
