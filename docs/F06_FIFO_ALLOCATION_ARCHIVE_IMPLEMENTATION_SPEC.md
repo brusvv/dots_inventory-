@@ -42,7 +42,7 @@ F-06 реализуется после F-07: sequence watermark даёт уст�
 `StockAllocations` содержит 14 полей:
 `allocation_id, allocation_run_id, movement_id, lot_id, product_id, allocation_type, quantity, unit_cost, cost_status, allocated_cost, effective_at, recorded_at, reverses_allocation_id, allocated_cost_minor`.
 
-`Исходная `FifoAllocationRuns` содержала 10 полей:
+Исходная `FifoAllocationRuns` содержала 10 полей:
 `run_id, run_sequence, status, reason, created_at, committed_at, ledger_rows_count, allocation_rows_count, products_count, error`.
 
 `FifoProductState` содержит физический `last_ledger_row_number`; его замена sequence watermark относится к F-07.
@@ -120,7 +120,7 @@ Append-only lifecycle log. Рекомендуемые поля:
 | replay_event_id | Уникальный event ID |
 | replay_id | Стабильная идентичность replay |
 | event_sequence | Монотонный порядковый номер события внутри replay |
-| event_type | PREPARED / COMMITTED / ABORTED / QUARANTINED |
+| event_type | PREPARED / COMMITTED / QUARANTINED (ABORTED reserved, not currently used) |
 | fifo_run_id | Run, выполняющий replay |
 | operation_id | Исходная операция или пусто для ручного rebuild |
 | scope_type | PRODUCT или FULL |
