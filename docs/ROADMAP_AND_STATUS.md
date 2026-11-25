@@ -165,6 +165,16 @@ The following issues have source changes and local regression coverage. They are
 
 
 
+## F-19 — FIFO replay and recovery regression coverage — 25.11.2026
+
+- Extended the pure Stock Core suite with incremental-vs-full replay equivalence, backdated-event replay selection, partially-applied OUT recovery routing, UNKNOWN/FREE cost semantics and same-timestamp deterministic ordering.
+- Added tools/run_fifo_replay_tests.js to execute the Stock Core suite with the Incremental FIFO module loaded in a Node VM.
+- Added docs/F19_FIFO_REPLAY_RECOVERY_TESTS.md with coverage, execution command and acceptance boundaries.
+- **Tests added, not executed here:** the GitHub repository could not be checked out in this environment, so neither the new runner nor the repository syntax script was run. Run both locally before treating F-19 as source-verified.
+- These are pure in-memory tests only. Google Sheets write interruption, OperationExecutor recovery, LockService concurrency and restored-workbook acceptance remain open.
+- No Apps Script behavior, workbook data, stock ledger, FIFO projection or cursor was changed.
+
+
 ## F-06 / F-07 FIFO history and stable-cursor design — 25.11.2026
 
 - Audited the current FIFO replacement and cursor paths in 24_DI3_IncrementalFifo.gs.
