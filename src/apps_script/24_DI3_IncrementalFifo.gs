@@ -1153,6 +1153,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
     if (fullReplayStateRows) di3UpsertFifoProductStateRows_(fullReplayStateRows);
     di3SetFifoLedgerSequenceCursor_(maxLedgerSequence);
     di3SetAppMetaValue_("fifo_state_version", DI3_FIFO_STATE_VERSION);
+    di3CommitFifoReplayEventsForRun_(run.run_id);
     di3UpdateFifoRunStatus_(run.row_number, "COMMITTED", new Date(), "", created);
     return {
       run_id: run.run_id, run_sequence: run.run_sequence,
