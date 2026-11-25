@@ -348,8 +348,16 @@ function di3RunSystemSafetyUxUnitTests() {
         getMaxColumns: function () { return headers.length; },
         getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
       };
-      var metaSheet = {};
-      var migrationSheet = {};
+      function headerOnlySheet(name) {
+        var expected = DI3_TABLE_SCHEMAS[name];
+        return {
+          getLastRow: function () { return 1; },
+          getMaxColumns: function () { return expected.length; },
+          getRange: function () { return { getDisplayValues: function () { return [expected]; } }; }
+        };
+      }
+      var metaSheet = headerOnlySheet("_AppMeta");
+      var migrationSheet = headerOnlySheet("SchemaMigrations");
       var record = { migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY, from_schema_version: 0,
         to_schema_version: DI3_SCHEMA_VERSION, status: "COMPLETED", row_number: 2 };
       di3GetSpreadsheet_ = function () {
