@@ -296,6 +296,8 @@ The following issues have source changes and local regression coverage. They are
 
 ## F-06 — FIFO allocation archive and crash-recovery specification — 26.11.2026
 
+- Follow-up F-07 call-site audit checked the other supply/order/history/backup/schema modules: no additional direct StockLedger append path was found. Historical supply uses the existing supply-receipt operation path; full supply-document edit is explicitly document-only. The four writer paths in the F-07 spec remain the complete identified set.
+
 - Audited the active allocation replacement path, FIFO run lifecycle, allocation ID generation, and all four stock-operation call sites.
 - Confirmed that the current rollback helper only handles caught write errors; abrupt Apps Script termination between sheet writes can leave a partially replaced projection. A subsequent retry currently creates a new FIFO run ID, so it cannot reliably identify the interrupted replay.
 - Confirmed that allocation rows currently receive random UUIDs on every rebuild. F-06 therefore requires deterministic allocation IDs for a stable replay identity and target fingerprint.
