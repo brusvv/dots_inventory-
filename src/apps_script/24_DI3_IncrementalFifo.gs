@@ -267,7 +267,7 @@ function di3SelectReusableFifoRun_(candidateRows, options) {
     }
   }
   return {
-    run_id: String(row[0]), run_sequence: Number(row[1]), row_number: Number(match.row_number || 0),
+    run_id: String(row[0]), run_sequence: Number(row[1]), row_number: Number(match.row_number || 0), created_at: row[4],
     operation_id: String(row[10] || ""), replay_id: String(row[11] || ""),
     scope_type: String(row[12] || ""), scope_json: String(row[13] || ""),
     input_fingerprint: String(row[14] || ""), status: String(row[2] || ""),
@@ -319,7 +319,7 @@ function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount, o
   var row = [runId, sequence, "PREPARED", reason || "INCREMENTAL_FIFO", new Date(), "",
     ledgerCount, allocationCount, productCount, "", operationId, replayId, scopeType, scopeJson, inputFingerprint];
   di3AppendTableRows_("FifoAllocationRuns", [row]);
-  return { run_id: runId, run_sequence: sequence, row_number: sheet.getLastRow(),
+  return { run_id: runId, run_sequence: sequence, row_number: sheet.getLastRow(), created_at: row[4],
     operation_id: operationId, replay_id: replayId, scope_type: scopeType, scope_json: scopeJson,
     input_fingerprint: inputFingerprint };
 }
