@@ -160,7 +160,7 @@ The following issues have source changes and local regression coverage. They are
 - **F-10:** PeriodLocks now appends `LOCKED` / `REOPENED` events; current state is derived from the latest event per period. Structural tests were added, but local execution and close → reopen → re-close runtime acceptance remain pending. Previously overwritten legacy history cannot be recovered.
 - **F-14:** true multi-session ScriptLock contention/recovery is not proven by local tests.
 - **F-17:** delivery-method catalogue needs the user's actual options; none are invented.
-- **F-20:** reliable actor attribution still needs an approved identity model.
+- **F-20:** source audit completed; initiator/executor attribution is partially implemented but inconsistent across domain writes and recovery. The identity contract and acceptance plan are documented in `docs/F20_OPERATION_IDENTITY_AUDIT.md`; implementation is not started.
 - The Warehouse Dashboard chart remains blank in the user's Sheets copy. The next step is to run the existing read-only chart diagnostics on the restored test copy and inspect N1:O21 plus the chart's actual source range.
 
 
@@ -207,3 +207,15 @@ The following issues have source changes and local regression coverage. They are
 - Proposed retry-safe orchestration using the existing `ORDER_CREATE` and `ORDER_DISPATCH` operations plus the existing completion settlement transition; no second FIFO engine or new operation type unless tests prove the existing lifecycle cannot safely resume.
 - **Not implemented:** no source behavior, schema, menu, tests or workbook data changed for F-02. The design is documented in `docs/F02_HISTORICAL_SALES_DESIGN.md`.
 - **Decision required before UI implementation:** exact dispatch date/time is recommended. A date-only value is ambiguous because same-day FIFO events are secondarily ordered by actual `recorded_at`; silently choosing midnight/noon/end-of-day could change historical lot attribution.
+
+
+## F-20 — operation identity and actor attribution audit — 25.11.2026
+
+- Audited operation registration, immutable payloads, attempt/recovery journal, manual quarantine release, domain actor fields and the unified edit trigger.
+- Confirmed the intended distinction already exists in the schema: `Operations.actor` captures the registration actor; `OperationAttempts.actor` captures the actor for each execution attempt.
+- Found inconsistent actor acquisition paths (shared helper/fallback, direct `Session.getActiveUser()`, and settings-specific helper). Some domain audit rows acquire actor inside the handler, so recovery can attribute the event to the recovery executor rather than the original initiator.
+- Found that `di3GetOperationAttemptStats_` omits the persisted actor field from its returned attempt diagnostics.
+- Documented identity limitations: active-user identity may be unavailable; effective-user identity must not be substituted as the initiating person; trigger context currently does not persist actor source or execution context.
+- Proposed a normalized actor context with separate initiator, executor and domain-event semantics, plus pure tests and restored-workbook acceptance scenarios.
+- **Design only:** no Apps Script behavior, schema, manifest, triggers, workbook data, operation payloads or business records changed. No tests were run for this audit.
+- Design: `docs/F20_OPERATION_IDENTITY_AUDIT.md`.
