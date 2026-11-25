@@ -1083,6 +1083,7 @@ function di3PostManualStockMovement(command) {
     // Keep the original request hash stable while storing the registration time
     // in the immutable event envelope for deterministic FIFO ties.
     var storedPayload = Object.assign({}, payload, { recorded_at: startedAt.toISOString() });
+    di3AssignLedgerSequencesToLines_([storedPayload]);
     var movementId = di3MakeUuid_();
     var operation = di3RegisterPreparedOperation_({
       idempotency_key: idempotencyKey,
@@ -1116,7 +1117,7 @@ function di3ApplyManualStockOperation_(operationRecord, storedPayload) {
   var ledgerRow = existingMovement ? existingMovement.values : [
     movementId, operationId, eventKey, storedPayload.product_id, "MANUAL_STOCK",
     movementId, storedPayload.direction === "IN" ? storedPayload.quantity : -storedPayload.quantity,
-    effectiveAt, recordedAt, "", "", storedPayload.note
+    effectiveAt, recordedAt, "", "", storedPayload.note, storedPayload.ledger_sequence
   ];
   if (existingMovement) ledgerRow._di3RowNumber = Number(existingMovement.row_number);
   var revenue = storedPayload.direction === "OUT" && storedPayload.reason_code === "OFFLINE_SALE"
