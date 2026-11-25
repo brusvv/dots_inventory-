@@ -784,7 +784,7 @@ function di3SaveSupplyDraft(options) {
     });
     if (!statusExists && options.skipInitialStatusHistory !== true) {
       var actor = "";
-      try { actor = Session.getActiveUser().getEmail() || ""; } catch (ignore) {}
+      actor = di3GetActorEmail_();
       di3AppendTableRows_("DocumentStatusHistory", [[
         di3MakeUuid_(), "SUPPLY", supplyId, "", DI3_SUPPLY_STATUS.CREATED,
         now, actor, "", isNewDraft ? "Создание черновика поставки" : "Восстановление истории черновика"
