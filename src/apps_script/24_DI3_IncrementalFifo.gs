@@ -390,6 +390,12 @@ function di3AppendFifoArchiveRowsIdempotently_(tableName, rows) {
 function di3GetLatestFifoReplayEvent_(replayId) {
   var matches = di3ReadRowsByColumnValue_("FifoReplayEvents", 1, replayId);
   if (!matches.length) return null;
+  matches.forEach(function (match) {
+    var sequence = Number(match.values[2]);
+    if (!Number.isSafeInteger(sequence) || sequence <= 0) {
+      throw new Error("FifoReplayEvents: invalid event_sequence for replay " + replayId + ".");
+    }
+  });
   matches.sort(function (a, b) { return Number(a.values[2]) - Number(b.values[2]); });
   for (var i = 1; i < matches.length; i++) {
     if (Number(matches[i - 1].values[2]) === Number(matches[i].values[2])) {
@@ -558,6 +564,9 @@ function di3GetPendingFifoReplayEventsForRun_(runId) {
   var latestByReplay = Object.create(null);
   matches.forEach(function (match) {
     var row = match.values, replayId = String(row[1]);
+    if (!Number.isSafeInteger(Number(row[2])) || Number(row[2]) <= 0) {
+      throw new Error("FifoReplayEvents: invalid event_sequence for replay " + replayId + ".");
+    }
     var previous = latestByReplay[replayId];
     if (previous && Number(row[2]) === Number(previous.values[2])) {
       throw new Error("FifoReplayEvents: duplicate event_sequence for replay " + replayId + ".");
