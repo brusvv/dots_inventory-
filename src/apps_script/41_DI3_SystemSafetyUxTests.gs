@@ -121,6 +121,30 @@ function di3RunSystemSafetyUxUnitTests() {
     includes(di3SettingsActor_.toString(), "di3GetActorEmail_()");
   });
 
+  test("operation-backed domain audit uses the immutable initiator, not the recovery executor", function () {
+    var originalFind = di3FindRowByFirstColumn_;
+    var originalGetActor = di3GetActorEmail_;
+    try {
+      di3FindRowByFirstColumn_ = function (table, operationId) {
+        equal(table, "Operations");
+        if (operationId === "operation-a") return { values: ["operation-a", "", "", "", "", "COMMITTED", "", "", "", "", "user-a@example.test"] };
+        if (operationId === "operation-empty") return { values: ["operation-empty", "", "", "", "", "COMMITTED", "", "", "", "", ""] };
+        return null;
+      };
+      di3GetActorEmail_ = function () { return "recovery-user-b@example.test"; };
+      equal(di3GetOperationInitiatorActor_("operation-a"), "user-a@example.test");
+      equal(di3GetOperationInitiatorActor_("operation-empty"), "", "A blank persisted initiator must stay blank");
+      equal(di3GetOperationInitiatorActor_(""), "recovery-user-b@example.test", "Non-operation events use the current actor");
+      equal(di3GetOperationInitiatorActor_("missing-operation"), "", "A missing operation must not be attributed to the current executor");
+    } finally {
+      di3FindRowByFirstColumn_ = originalFind;
+      di3GetActorEmail_ = originalGetActor;
+    }
+    includes(di3EnsureOrderStatusHistory_.toString(), "di3GetOperationInitiatorActor_");
+    includes(di3EnsureSupplyStatusHistory_.toString(), "di3GetOperationInitiatorActor_");
+    includes(di3BuildOrderDispatchRows_.toString(), "di3GetOperationInitiatorActor_");
+  });
+
   test("operation attempt diagnostics preserve the executor actor across recovery and manual review", function () {
     var originalGetSpreadsheet = di3GetSpreadsheet_;
     var originalReadTableValues = di3ReadTableValues_;
