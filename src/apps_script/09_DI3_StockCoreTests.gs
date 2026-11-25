@@ -361,6 +361,83 @@ function di3RunStockCoreUnitTests() {
     equal(DI3_TABLE_SCHEMAS.FifoReplayEvents.length, 15);
   });
 
+  test("FIFO replay archives source snapshots before replacement and commits append-only events", function () {
+    var originals = {
+      readOne: di3ReadRowsByColumnValue_,
+      readMany: di3ReadRowsByColumnValues_,
+      append: di3AppendTableRows_,
+      getSheet: di3GetSheetOrThrow_,
+      makeUuid: di3MakeUuid_,
+      fingerprint: di3BuildFifoFingerprint_,
+      restore: di3RestoreFifoReplaySourceSnapshot_
+    };
+    var stores = { FifoAllocationArchive: [], FifoLotCacheArchive: [], FifoReplayEvents: [] };
+    var uuid = 0, restoreCalls = 0;
+    function matches(table, column, value) {
+      return (stores[table] || []).map(function (row, index) {
+        return { row_number: index + 2, values: row };
+      }).filter(function (match) { return String(match.values[column]) === String(value); });
+    }
+    try {
+      di3ReadRowsByColumnValue_ = function (table, column, value) { return matches(table, column, value); };
+      di3ReadRowsByColumnValues_ = function (table, column, values) {
+        var targets = Object.create(null); values.forEach(function (v) { targets[String(v)] = true; });
+        return (stores[table] || []).map(function (row, index) {
+          return { row_number: index + 2, values: row };
+        }).filter(function (match) { return Object.prototype.hasOwnProperty.call(targets, String(match.values[column])); });
+      };
+      di3AppendTableRows_ = function (table, rows) { stores[table].push.apply(stores[table], rows.map(function (row) { return row.slice(); })); };
+      di3GetSheetOrThrow_ = function (table) {
+        return { getLastRow: function () { return (stores[table] || []).length + 1; } };
+      };
+      di3MakeUuid_ = function () { uuid++; return "event-" + uuid; };
+      di3BuildFifoFingerprint_ = function (value) { return JSON.stringify(value); };
+      di3RestoreFifoReplaySourceSnapshot_ = function () { restoreCalls++; return { allocations: 1, lots: 1 }; };
+
+      var sourceAllocation = ["alloc-old", "run-old", "move-1", "lot-1", "p1", "CONSUME", 2, 5,
+        "KNOWN", 10, new Date("2026-01-01"), new Date("2026-01-01"), "", 1000];
+      var targetAllocation = ["alloc-target", "run-1", "move-1", "lot-1", "p1", "CONSUME", 2, 5,
+        "KNOWN", 10, new Date("2026-01-01"), new Date("2026-01-01"), "", 1000];
+      var lot = ["lot-1", "p1", "move-in", "SUPPLY", "s1", "pv1", new Date("2026-01-01"),
+        new Date("2026-01-01"), 5, 5, "KNOWN", "EUR", "", 5, 2500];
+      var context = {
+        replay_id: "OP:op-1:PRODUCT:p1", fifo_run_id: "run-1", operation_id: "op-1",
+        scope_type: "PRODUCT", scope_json: '["p1"]', input_fingerprint: "input-fp",
+        reason: "PRODUCT_REPLAY:BACKDATED_EVENT", archived_at: new Date("2026-01-02"),
+        target_rows: [targetAllocation], target_remaining: { "lot-1": 3 }, lot_rows: [lot]
+      };
+      var prepared = di3PrepareFifoReplay_(context, function () { return true; }, "p1", [sourceAllocation]);
+      equal(prepared.already_target, false);
+      equal(stores.FifoAllocationArchive.length, 1);
+      equal(stores.FifoLotCacheArchive.length, 1);
+      equal(stores.FifoReplayEvents.length, 1);
+      equal(stores.FifoReplayEvents[0][3], "PREPARED");
+
+      var interrupted = di3PrepareFifoReplay_(context, function () { return true; }, "p1", []);
+      equal(restoreCalls, 1, "A partial active projection must request source restoration");
+      equal(interrupted.source_rows[0][0], "alloc-old");
+
+      lot[13] = 3;
+      var alreadyTarget = di3PrepareFifoReplay_(context, function () { return true; }, "p1", [targetAllocation]);
+      equal(alreadyTarget.already_target, true);
+      equal(stores.FifoAllocationArchive.length, 1, "Retry must not duplicate archive snapshots");
+      equal(stores.FifoReplayEvents.length, 1, "Retry must not duplicate PREPARED event");
+
+      di3CommitFifoReplayEventsForRun_("run-1");
+      equal(stores.FifoReplayEvents.length, 2);
+      equal(stores.FifoReplayEvents[1][3], "COMMITTED");
+      equal(di3GetPendingFifoReplayEventsForRun_("run-1").length, 0);
+    } finally {
+      di3ReadRowsByColumnValue_ = originals.readOne;
+      di3ReadRowsByColumnValues_ = originals.readMany;
+      di3AppendTableRows_ = originals.append;
+      di3GetSheetOrThrow_ = originals.getSheet;
+      di3MakeUuid_ = originals.makeUuid;
+      di3BuildFifoFingerprint_ = originals.fingerprint;
+      di3RestoreFifoReplaySourceSnapshot_ = originals.restore;
+    }
+  });
+
   test("FifoProductState stores the maximum ledger sequence independently of business event order", function () {
     var ledger = [
       ["backdated", "op", "event", "p1", "TEST", "doc", 1, new Date("2026-01-01"), new Date("2026-01-10"), "", "", "", 18],
