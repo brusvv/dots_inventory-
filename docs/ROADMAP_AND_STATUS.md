@@ -165,6 +165,18 @@ The following issues have source changes and local regression coverage. They are
 
 
 
+## F-06 / F-07 FIFO history and stable-cursor design — 25.11.2026
+
+- Audited the current FIFO replacement and cursor paths in 24_DI3_IncrementalFifo.gs.
+- Confirmed that StockAllocations is the active projection: product replay and full replay replace rows, while the current rollback helper only restores on caught write errors and cannot make multi-sheet writes atomic against process termination.
+- Confirmed that fifo_ledger_cursor is currently a physical data-row count; incremental tail reads use cursor + 2, and FifoProductState stores/compares a physical last ledger row number.
+- Documented a separate append-only allocation-history event log with replay-scoped PREPARED/COMMITTED events and deterministic recovery, keeping StockAllocations active-only.
+- Documented migration to immutable ledger_sequence watermarks for global and per-product cursors, preserving FIFO business ordering by effective_at → recorded_at → movement_id.
+- Added regression, recovery, migration and concurrency acceptance criteria.
+- **Design only:** no Apps Script behavior, schema, workbook data, ledger, allocation projection or FIFO cursor was changed. Implementation is deferred until the sequence migration and archive recovery protocol can be tested together on a restored disposable copy.
+- Design: docs/F06_F07_FIFO_HISTORY_AND_STABLE_CURSOR_DESIGN.md.
+
+
 ## F-10 source patch — append-only period audit (25.11.2026)
 
 - `di3CloseAccountingPeriod()` and `di3ReopenAccountingPeriod()` now append events to `PeriodLocks`; neither updates an existing event row.
