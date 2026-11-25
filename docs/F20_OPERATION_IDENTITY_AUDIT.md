@@ -181,3 +181,19 @@ The supply receipt detail writer was also updated after the initial slice: its e
 Manual warehouse stock movements were included in the same pass: the existing `StockMovementDetails.actor` slot is now populated from the operation's persisted initiator. The source regression check covers this writer too.
 
 The existing local runner `tools/run_system_safety_ux_tests.js` was extended to load the source modules required by these assertions (`00`, `07), `15`, and `29`) in addition to its previous modules. This prevents the new checks from referring to functions that are absent from the test VM. The runner itself remains unexecuted here.
+
+
+## Implementation progress — remaining manual and administrative audit paths
+
+The follow-up source audit covered the remaining actor-bearing administrative paths:
+
+- Supply draft creation/history records use the centralized accessor. These are not operation-backed stock mutations and have no operation ID.
+- Full supply-document edits capture `edited_by` once in the immutable operation payload; the resulting `DocumentStatusHistory` rows use that persisted payload value during both initial execution and recovery.
+- Period close/reopen events use the centralized accessor and remain append-only.
+- Schema migration records use the centralized accessor.
+- Manual quarantine release uses the settings wrapper, which delegates to the centralized accessor; the separate `MANUAL_REOPEN` row retains reviewer identity and reason.
+- Simplified redundant wrappers around the centralized accessor in these modules.
+
+The system-safety test runner now loads the source modules needed to check these additional paths. Added source assertions for manual quarantine review, period close/reopen, schema migration, and supply full-edit payload/history attribution.
+
+**Still not executed:** the runner, JavaScript syntax checks, and restored-workbook acceptance. The runner update only establishes its module list; it is not evidence that the suite passes.
