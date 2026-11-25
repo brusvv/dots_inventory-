@@ -801,6 +801,15 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
       full_replay: isFullReplay,
       allow_resume_empty_tail: !isFullReplay && !newLedgerRows.length
     });
+  var runProductIds = productIds.slice();
+  if (run.scope_type === "PRODUCT_SET" && run.scope_json) {
+    try {
+      var savedScope = JSON.parse(run.scope_json);
+      if (Array.isArray(savedScope)) runProductIds = savedScope.map(String);
+    } catch (ignoreScopeJson) {
+      throw new Error("FifoAllocationRuns содержит некорректный scope_json у run " + run.run_id + ".");
+    }
+  }
   var created = 0, replaced = 0, replayedMovements = 0, updatedLots = 0;
   var fullReplayStateRows = null;
   try {
@@ -857,7 +866,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
       });
       if (stateRowsToWrite.length) di3UpsertFifoProductStateRows_(stateRowsToWrite);
       if (productIds.length && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
-        di3RefreshAllOrderFifoSnapshots_(reason || "FIFO_RECALCULATION", run.run_id, productIds);
+        di3RefreshAllOrderFifoSnapshots_(reason || "FIFO_RECALCULATION", run.run_id, runProductIds);
       }
     }
     if (isFullReplay && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
