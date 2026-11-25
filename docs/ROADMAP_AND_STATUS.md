@@ -229,3 +229,13 @@ The following issues have source changes and local regression coverage. They are
 - No schema, spreadsheet, operation payload, business record, stock event, or runtime behavior was changed.
 - **Test execution pending:** the existing `tools/run_system_safety_ux_tests.js` runner loads both the executor and the updated test module, but it was not executed in this environment. Run the runner and full syntax check before deployment.
 - Remaining F-20 work: centralize actor-context capture, distinguish initiator from executor, and propagate the persisted initiator into domain audit writes without substituting the trigger/recovery executor.
+
+
+## F-20 — centralized actor identity capture — 25.11.2026
+
+- Added `di3CaptureActorContext_()` as the single source for active-user identity, with explicit `IDENTIFIED` / `UNAVAILABLE` status and `ACTIVE_USER` / `NONE` source.
+- Preserved `di3GetActorEmail_()` as the backwards-compatible string API and routed the duplicated actor reads in supply, order, period, schema migration, operation executor and settings paths through it.
+- Removed the direct Session fallback from operation registration/execution. No effective-user fallback is introduced.
+- Added a structural regression check in `di3RunSystemSafetyUxUnitTests()`.
+- **Not verified:** test suite and syntax checks have not been run. No deployment or workbook changes were made.
+- **Still open:** propagate the persisted initiating actor from `Operations.actor` into domain audit events during recovery; preserve the actual executor in `OperationAttempts.actor`; add identity-status persistence only after schema and runtime semantics are reviewed.
