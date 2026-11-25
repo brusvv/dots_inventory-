@@ -12,7 +12,6 @@ function di3FindUnexpectedPopulatedTabs_(sheets) {
   var allowed = Object.create(null);
   DI3_CORE_TABLE_NAMES.forEach(function (name) { allowed[name] = true; });
   DI3_MANAGED_WORKSPACE_SHEET_NAMES.forEach(function (name) { allowed[name] = true; });
-  ["Sheet1", "Лист1", "Лист 1"].forEach(function (name) { allowed[name] = true; });
   return (sheets || []).filter(function (sheet) {
     var name = String(sheet.getName());
     if (allowed[name]) return false;
