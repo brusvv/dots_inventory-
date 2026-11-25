@@ -37,6 +37,98 @@ function di3GetSchemaMigrationRows_() {
   });
 }
 
+/**
+ * A clean baseline is either a genuinely empty, unversioned workbook or a
+ * workbook already carrying the single clean-baseline journal record.
+ * Existing business rows and legacy headers can never enter this path.
+ */
+function di3GetCleanBaselineState_() {
+  var ss = di3GetSpreadsheet_();
+  var metaSheet = ss.getSheetByName("_AppMeta");
+  var currentVersion = 0;
+  var migrations = [];
+  var issues = [];
+  try { currentVersion = metaSheet ? di3GetSchemaVersion_() : 0; }
+  catch (versionError) { issues.push(versionError.message || String(versionError)); }
+  try {
+    var migrationSheet = ss.getSheetByName("SchemaMigrations");
+    migrations = migrationSheet ? di3GetSchemaMigrationRows_() : [];
+  } catch (migrationError) {
+    issues.push("Не удалось прочитать SchemaMigrations: " + (migrationError.message || String(migrationError)));
+  }
+  var cleanRows = migrations.filter(function (row) { return row.migration_key === DI3_CLEAN_BASELINE_MIGRATION_KEY; });
+  var otherRows = migrations.filter(function (row) { return row.migration_key !== DI3_CLEAN_BASELINE_MIGRATION_KEY; });
+
+  if (cleanRows.length > 1) issues.push("В SchemaMigrations обнаружены дубли CLEAN_FINAL_BASELINE_ADOPTION.");
+  if (otherRows.length) issues.push("Обнаружены записи legacy-миграций; clean baseline не может использоваться.");
+  var record = cleanRows.length === 1 ? cleanRows[0] : null;
+  if (record && record.status !== "STARTED" && record.status !== "COMPLETED") {
+    issues.push("Clean baseline имеет недопустимый статус " + record.status + ".");
+  }
+  if (record && (record.from_schema_version !== 0 || record.to_schema_version !== DI3_SCHEMA_VERSION)) {
+    issues.push("Параметры clean baseline не соответствуют текущей целевой версии схемы.");
+  }
+  if (record && currentVersion !== 0 && currentVersion !== DI3_SCHEMA_VERSION) {
+    issues.push("schema_version не согласован с clean baseline.");
+  }
+  if (record && record.status === "COMPLETED" && currentVersion !== DI3_SCHEMA_VERSION) {
+    issues.push("Завершённый clean baseline требует schema_version целевой версии.");
+  }
+  if (!record && currentVersion !== 0) {
+    issues.push("Версия схемы уже установлена без записи clean baseline.");
+  }
+
+  // The clean path accepts only absent, blank or exact-current system headers.
+  DI3_CORE_TABLE_NAMES.forEach(function (name) {
+    var sheet = ss.getSheetByName(name);
+    if (!sheet) return;
+    var expected = DI3_TABLE_SCHEMAS[name];
+    var width = Math.min(expected.length, sheet.getMaxColumns());
+    var actual = width ? sheet.getRange(1, 1, 1, width).getDisplayValues()[0].map(di3NormalizeHeader_) : [];
+    while (actual.length < expected.length) actual.push("");
+    var blank = actual.every(function (value) { return value === ""; });
+    var exact = expected.every(function (header, index) { return actual[index] === header; });
+    if (!blank && !exact) issues.push(name + ": обнаружена нецелостная или legacy-схема; clean baseline запрещён.");
+    if (!record && sheet.getLastRow() > 1) {
+      issues.push(name + ": найдены строки данных без clean-baseline identity.");
+    }
+  });
+
+  return {
+    eligible: issues.length === 0,
+    current_version: currentVersion,
+    record: record,
+    migrations_count: migrations.length,
+    issues: issues
+  };
+}
+
+function di3GetCleanBaselineVersioningReport_(state) {
+  var warnings = [];
+  var planned = [];
+  if (!state.record) {
+    warnings.push("Обнаружена новая пустая книга. Будет зарегистрирован единый clean baseline без исторических RC8-миграций.");
+    planned.push({ type: "ADOPT_CLEAN_FINAL_BASELINE", migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY,
+      from_schema_version: 0, to_schema_version: DI3_SCHEMA_VERSION });
+  } else if (state.record.status === "STARTED") {
+    warnings.push("Clean baseline был прерван; setup повторно проверит конечные заголовки и завершит регистрацию.");
+    planned.push({ type: "RESUME_CLEAN_FINAL_BASELINE", migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY,
+      from_schema_version: 0, to_schema_version: DI3_SCHEMA_VERSION });
+  }
+  return {
+    status: "READY",
+    installation_path: "CLEAN_FINAL_BASELINE",
+    current_version: state.current_version,
+    target_version: DI3_SCHEMA_VERSION,
+    migrations_count: state.migrations_count,
+    baseline_migration: state.record,
+    schema_migrations: [],
+    issues: [],
+    warnings: warnings,
+    planned_changes: planned
+  };
+}
+
 function di3GetSchemaVersioningReport_() {
   var issues = [];
   var warnings = [];
@@ -490,95 +582,5 @@ function di3EnsureSchemaVersioning_(backup) {
   return { status: initializedBaseline ? "INITIALIZED" : (changed ? "UPGRADED" : "CURRENT"), schema_version: finalVersion,
     migrations_count: di3GetSchemaMigrationRows_().length, changed: changed };
 }
-/**
- * A clean baseline is either a genuinely empty, unversioned workbook or a
- * workbook already carrying the single clean-baseline journal record.
- * Existing business rows and legacy headers can never enter this path.
- */
-function di3GetCleanBaselineState_() {
-  var ss = di3GetSpreadsheet_();
-  var metaSheet = ss.getSheetByName("_AppMeta");
-  var currentVersion = 0;
-  var migrations = [];
-  var issues = [];
-  try { currentVersion = metaSheet ? di3GetSchemaVersion_() : 0; }
-  catch (versionError) { issues.push(versionError.message || String(versionError)); }
-  try {
-    var migrationSheet = ss.getSheetByName("SchemaMigrations");
-    migrations = migrationSheet ? di3GetSchemaMigrationRows_() : [];
-  } catch (migrationError) {
-    issues.push("Не удалось прочитать SchemaMigrations: " + (migrationError.message || String(migrationError)));
-  }
-  var cleanRows = migrations.filter(function (row) { return row.migration_key === DI3_CLEAN_BASELINE_MIGRATION_KEY; });
-  var otherRows = migrations.filter(function (row) { return row.migration_key !== DI3_CLEAN_BASELINE_MIGRATION_KEY; });
 
-  if (cleanRows.length > 1) issues.push("В SchemaMigrations обнаружены дубли CLEAN_FINAL_BASELINE_ADOPTION.");
-  if (otherRows.length) issues.push("Обнаружены записи legacy-миграций; clean baseline не может использоваться.");
-  var record = cleanRows.length === 1 ? cleanRows[0] : null;
-  if (record && record.status !== "STARTED" && record.status !== "COMPLETED") {
-    issues.push("Clean baseline имеет недопустимый статус " + record.status + ".");
-  }
-  if (record && (record.from_schema_version !== 0 || record.to_schema_version !== DI3_SCHEMA_VERSION)) {
-    issues.push("Параметры clean baseline не соответствуют текущей целевой версии схемы.");
-  }
-  if (record && currentVersion !== 0 && currentVersion !== DI3_SCHEMA_VERSION) {
-    issues.push("schema_version не согласован с clean baseline.");
-  }
-  if (record && record.status === "COMPLETED" && currentVersion !== DI3_SCHEMA_VERSION) {
-    issues.push("Завершённый clean baseline требует schema_version целевой версии.");
-  }
-  if (!record && currentVersion !== 0) {
-    issues.push("Версия схемы уже установлена без записи clean baseline.");
-  }
-
-  // The clean path accepts only absent, blank or exact-current system headers.
-  DI3_CORE_TABLE_NAMES.forEach(function (name) {
-    var sheet = ss.getSheetByName(name);
-    if (!sheet) return;
-    var expected = DI3_TABLE_SCHEMAS[name];
-    var width = Math.min(expected.length, sheet.getMaxColumns());
-    var actual = width ? sheet.getRange(1, 1, 1, width).getDisplayValues()[0].map(di3NormalizeHeader_) : [];
-    while (actual.length < expected.length) actual.push("");
-    var blank = actual.every(function (value) { return value === ""; });
-    var exact = expected.every(function (header, index) { return actual[index] === header; });
-    if (!blank && !exact) issues.push(name + ": обнаружена нецелостная или legacy-схема; clean baseline запрещён.");
-    if (!record && sheet.getLastRow() > 1) {
-      issues.push(name + ": найдены строки данных без clean-baseline identity.");
-    }
-  });
-
-  return {
-    eligible: issues.length === 0,
-    current_version: currentVersion,
-    record: record,
-    migrations_count: migrations.length,
-    issues: issues
-  };
-}
-
-function di3GetCleanBaselineVersioningReport_(state) {
-  var warnings = [];
-  var planned = [];
-  if (!state.record) {
-    warnings.push("Обнаружена новая пустая книга. Будет зарегистрирован единый clean baseline без исторических RC8-миграций.");
-    planned.push({ type: "ADOPT_CLEAN_FINAL_BASELINE", migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY,
-      from_schema_version: 0, to_schema_version: DI3_SCHEMA_VERSION });
-  } else if (state.record.status === "STARTED") {
-    warnings.push("Clean baseline был прерван; setup повторно проверит конечные заголовки и завершит регистрацию.");
-    planned.push({ type: "RESUME_CLEAN_FINAL_BASELINE", migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY,
-      from_schema_version: 0, to_schema_version: DI3_SCHEMA_VERSION });
-  }
-  return {
-    status: "READY",
-    installation_path: "CLEAN_FINAL_BASELINE",
-    current_version: state.current_version,
-    target_version: DI3_SCHEMA_VERSION,
-    migrations_count: state.migrations_count,
-    baseline_migration: state.record,
-    schema_migrations: [],
-    issues: [],
-    warnings: warnings,
-    planned_changes: planned
-  };
-}
 
