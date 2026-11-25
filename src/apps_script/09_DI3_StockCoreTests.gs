@@ -426,6 +426,14 @@ function di3RunStockCoreUnitTests() {
       var orphan = di3BuildFifoReplayArchiveDiagnostics_([run], [allocationArchive], [lotArchive], []);
       equal(orphan.ok, true);
       equal(orphan.warnings.some(function (warning) { return warning.indexOf("не имеет PREPARED event") >= 0; }), true);
+
+      var changedTerminal = event.slice();
+      changedTerminal[2] = 2;
+      changedTerminal[3] = "COMMITTED";
+      changedTerminal[10] = "tampered-target-fingerprint";
+      var transitionAudit = di3BuildFifoReplayArchiveDiagnostics_([run], [allocationArchive], [lotArchive], [event, changedTerminal]);
+      equal(transitionAudit.ok, false);
+      equal(transitionAudit.errors.some(function (error) { return error.indexOf("immutable replay identity/fingerprint") >= 0; }), true);
     } finally { di3BuildFifoFingerprint_ = originalFingerprint; }
   });
 
