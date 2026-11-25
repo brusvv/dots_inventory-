@@ -258,13 +258,15 @@ function di3RunSystemSafetyUxUnitTests() {
       fakeSheet("StockLedger", 20, 13, 0),
       fakeSheet("Продукты", 30, 21, 0),
       fakeSheet("Sheet1", 0, 0, 0),
+      fakeSheet("Sheet1", 2, 2, 0),
       fakeSheet("Scratch", 4, 3, 0, true),
       fakeSheet("Imported chart", 0, 0, 1)
     ]);
-    equal(unexpected.length, 2);
-    equal(unexpected[0].name, "Scratch");
-    equal(unexpected[0].hidden, true);
-    equal(unexpected[1].name, "Imported chart");
+    equal(unexpected.length, 3);
+    equal(unexpected[0].name, "Sheet1");
+    equal(unexpected[1].name, "Scratch");
+    equal(unexpected[1].hidden, true);
+    equal(unexpected[2].name, "Imported chart");
   });
 
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
