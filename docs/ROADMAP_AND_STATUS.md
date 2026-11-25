@@ -69,7 +69,7 @@ The actual empty-chart cause is still unknown. Run the read-only diagnostics on 
 ### FIFO / stock / sales
 - C-01: benchmark in real GAS at 500/1,000/2,000 movements; measure runtime, Sheets reads/writes, TextFinder, quotas.
 - C-02: runtime acceptance for PeriodGuard, historical profit and `OrderCostSnapshots`.
-- **F-01:** return FIFO lookup is fixed in source and locally regression-tested; runtime scenario (dispatch A → later unrelated FIFO run → return A) remains pending on a restored copy.\n- **F-10:** source now appends `LOCKED` / `REOPENED` events instead of overwriting `PeriodLocks`; current state is folded from the latest event per period. Three structural regression checks were added but not yet executed. Runtime close → reopen → re-close acceptance remains pending.
+- **F-01:** return FIFO lookup is fixed in source and locally regression-tested; runtime scenario (dispatch A → later unrelated FIFO run → return A) remains pending on a restored copy.
 - C-03: implement partial returns; agree policy first. This is separate from the full-return F-01 defect.
 - C-04/C-05: real Apps Script fault/recovery acceptance for OperationExecutor flows.
 - C-06: test LockService with two independent execution sessions, including receipt/cancel/dispatch races.
