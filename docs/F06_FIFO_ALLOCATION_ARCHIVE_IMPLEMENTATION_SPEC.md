@@ -112,12 +112,13 @@ Append-only lifecycle log. Рекомендуемые поля:
 | event_type | PREPARED / COMMITTED / ABORTED / QUARANTINED |
 | fifo_run_id | Run, выполняющий replay |
 | operation_id | Исходная операция или пусто для ручного rebuild |
-| scope_type | PRODUCT_SET или FULL |
+| scope_type | PRODUCT или FULL |
 | scope_json | Канонически отсортированный список product_id либо FULL |
 | input_fingerprint | Fingerprint ledger/lot/detail входа |
 | source_allocations_fingerprint | Fingerprint вытесняемого active snapshot |
 | target_allocations_fingerprint | Fingerprint детерминированной новой проекции |
 | source_lot_cache_fingerprint | Fingerprint исходных remaining_quantity для затронутых lot IDs |
+| target_lot_cache_fingerprint | Fingerprint целевых remaining_quantity после replay |
 | created_at | Время события |
 | details_json | Ограниченные диагностические сведения |
 
@@ -149,15 +150,37 @@ Run row остаётся диагностической записью испо�
 
 Для четырёх operation handlers передавать `operation_id` в `di3RebuildFifoAllocations_`.
 
-Идентичность определяется:
+Текущий control flow обрабатывает затронутые товары независимо: часть товаров может пройти incremental append, а часть — `PRODUCT_REPLAY_REQUIRED` и полную замену активной проекции. Поэтому одна складская операция может породить несколько независимых product replay.
+
+Идентичность каждого product replay определяется:
 - исходным `operation_id`;
-- каноническим scope (полный список затронутых product_id, отсортированный и дедуплицированный);
-- типом replay;
-- fingerprint входного ledger-среза после F-07.
+- одним `product_id` в scope;
+- типом `PRODUCT`;
+- fingerprint полной истории ledger/details/immutable lot inputs этого товара после F-07.
 
-Повторное исполнение того же operation_id с тем же scope и input fingerprint должно найти существующий PREPARED replay и продолжить его. Если тот же operation_id неожиданно даёт другой scope или fingerprint — fail closed, не создавать второй replay.
+Канонический ID: `OP:<operation_id>:PRODUCT:<product_id>`. Повтор той же операции с тем же товаром и fingerprint должен найти существующий PREPARED replay и продолжить его. Другой fingerprint для уже зарегистрированного replay ID — fail closed.
 
-Одна operation может иметь только один FIFO replay identity для одной операции. Если архитектура позднее потребует нескольких независимых replay внутри одной операции, это должно быть отдельным явно версионированным контрактом.
+Incremental-путь, который только добавляет новые allocations и не заменяет старую проекцию, не создаёт archive replay event. Archive протокол применяется к каждому товару, для которого реально выполняется product replay.
+
+### 4.2 Full replay
+
+Full replay имеет scope `FULL` и один replay ID на весь ledger replay. Для ручного/системного запуска без operation ID канонический ID: `FULL:<fifo_run_id>`. Run row должен быть записан до archive snapshots и сохранять этот ID. При повторном запуске сначала ищется незавершённый full replay; новый run поверх него не создаётся.
+
+Для operation-backed full replay (если такой путь появится) ID должен быть `OP:<operation_id>:FULL`.
+
+### 4.3 Run identity и повторное использование
+
+Один `FifoAllocationRuns` row представляет верхнеуровневый вызов FIFO и может содержать несколько product replay events. Для operation-backed вызова parent replay ID — `OP:<operation_id>`; для full replay — `FULL:<fifo_run_id>`. `FifoReplayEvents.replay_id` — дочерняя идентичность конкретного product replay либо full replay.
+
+Если PREPARED event уже существует, recovery повторно использует его `fifo_run_id` и соответствующий run row. Если run row был помечен FAILED после пойманной ошибки, его можно вернуть в PREPARED только после проверки последнего lifecycle event и input fingerprint. Нельзя создавать новый run ID для продолжения уже начатого replay.
+
+### 4.4 Стабильные allocation IDs
+
+Новая allocation строка получает детерминированный ID, вычисленный из:
+- replay_id;
+- стабильного ordinal allocation в детерминированном FIFO plan.
+
+Не использовать физический номер строки или случайный UUID. Повторная сборка одинакового replay должна выдавать идентичные строки и одинаковый target fingerprint.
 
 ### 4.2 Ручной full rebuild
 
@@ -207,7 +230,7 @@ Run row остаётся диагностической записью испо�
 4. Проверить source/target fingerprints и ожидаемое количество строк.
 5. Не изменять allocations и lots вне scope.
 
-Для full replay scope охватывает всю активную таблицу и все lots, включённые в полный replay.
+Для product replay scope охватывает только один product_id и его lots. Для full replay scope охватывает всю активную таблицу и все lots, включённые в полный replay.
 
 ### Шаг 3 — завершить связанные проекции
 
@@ -218,15 +241,15 @@ Run row остаётся диагностической записью испо�
 
 ### Шаг 4 — COMMITTED
 
-Append COMMITTED event с теми же replay_id и fingerprint. Только после него run можно считать завершённым.
+После завершения всех product states, order snapshots и global cursor append COMMITTED event для каждого PREPARED replay в этом верхнеуровневом run. Только после этого run можно считать завершённым.
 
 ### Recovery
 
-Для последнего lifecycle event каждого replay:
+Recovery должен запускаться до обработки нового ledger tail и до фильтрации по product state watermark. Это обязательно: product state или global cursor могли успеть обновиться перед принудительным завершением, и обычный tail reader уже не выберет replayваемые строки. Для последнего lifecycle event каждого replay:
 
 - **Нет PREPARED, есть только частичные archive snapshots:** проверить replay identity и source snapshot; достроить недостающие архивные строки, затем PREPARED.
-- **PREPARED + active projection fingerprint равен source fingerprint:** проекция ещё старая; безопасно повторить замену.
-- **PREPARED + active projection fingerprint равен target fingerprint:** проекция уже записана; не заменять повторно, завершить state/cursor/order snapshots и append COMMITTED.
+- **PREPARED + active allocation и lot-cache fingerprints равны source fingerprints:** проекция ещё старая; безопасно повторить замену.
+- **PREPARED + active allocation и lot-cache fingerprints равны target fingerprints:** проекция уже записана; не заменять повторно, завершить state/cursor/order snapshots и append COMMITTED.
 - **PREPARED + active projection fingerprint не равен ни source, ни target:** не пытаться угадать состояние; восстановить source projection из архива и lot cache, затем повторить только если input fingerprint всё ещё совпадает. Если безопасное восстановление не проходит — QUARANTINED.
 - **COMMITTED:** no-op.
 - **ABORTED:** no-op для автоматического recovery; новый replay требует новой явной операции.
