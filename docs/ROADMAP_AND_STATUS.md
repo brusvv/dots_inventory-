@@ -271,3 +271,10 @@ The following issues have source changes and local regression coverage. They are
 - Added docs/C01_F09_PERFORMANCE_AUDIT_AND_BENCHMARK_PLAN.md with a disposable-workbook benchmark matrix for 500 / 1,000 / 2,000 movements, one vs. many affected products, product replay, full rebuild, journal and dashboard refresh.
 - This is a source audit and measurement plan only. No performance claim, code optimization, Apps Script execution, or workbook change is made. Batch reads, journal windowing and selective view refresh should be implemented only after runtime measurements identify the bottleneck.
 - C-01 remains open until real Apps Script timing and read/write counts are recorded. F-09 remains partially mitigated; per-view error isolation is in place, but full-history read cost and scoped refresh remain open.
+
+## Clean-workbook architecture decision — 26.11.2026
+
+- The owner confirmed that recreating the spreadsheet from zero is acceptable because little business data has been entered.
+- Preferred release strategy: implement the final baseline schema before creating the production workbook, rather than carrying avoidable legacy schema/cursor migrations into the new workbook.
+- F-06/F-07 design now records the clean-install path: ledger_sequence and append-only FIFO allocation history exist from the first stock movement; legacy backfill is retained only as a compatibility/test case.
+- This does not authorize live workbook deletion or recreation. The production workbook should be created only after baseline schema, setup idempotency, backup/restore and end-to-end acceptance pass on a disposable empty workbook.
