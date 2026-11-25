@@ -278,3 +278,11 @@ The following issues have source changes and local regression coverage. They are
 - Preferred release strategy: implement the final baseline schema before creating the production workbook, rather than carrying avoidable legacy schema/cursor migrations into the new workbook.
 - F-06/F-07 design now records the clean-install path: ledger_sequence and append-only FIFO allocation history exist from the first stock movement; legacy backfill is retained only as a compatibility/test case.
 - This does not authorize live workbook deletion or recreation. The production workbook should be created only after baseline schema, setup idempotency, backup/restore and end-to-end acceptance pass on a disposable empty workbook.
+
+## F-07 — stable ledger sequence implementation specification — 26.11.2026
+
+- Verified current schema and cursor implementation: StockLedger has 12 columns without ledger_sequence; FIFO state v3 stores physical last_ledger_row_number; fifo_ledger_cursor is a physical data-row count; tail reading uses cursor + 2.
+- Identified four domain writer paths to update: manual warehouse movement (07), supply receipt (12), order dispatch and return (16). These public paths are lock-wrapped; recovery must reuse sequence values persisted in immutable operation payloads.
+- Added docs/F07_STABLE_LEDGER_SEQUENCE_IMPLEMENTATION_SPEC.md. The proposed design appends ledger_sequence to the clean baseline, changes global and per-product cursors to sequence watermarks, discovers tail rows by scanning the narrow sequence column (not physical row offsets), and preserves effective_at / recorded_at / movement_id as FIFO business ordering.
+- Important schema-versioning finding: current versioning assumes baseline v1 plus sequential migrations through v3. A clean final baseline requires explicit clean-baseline adoption distinct from legacy upgrade paths; merely increasing DI3_SCHEMA_VERSION would break the existing initialization assumptions.
+- No application code or workbook changed in this step. F-07 remains open pending implementation, source tests, and runtime acceptance on a disposable empty workbook.
