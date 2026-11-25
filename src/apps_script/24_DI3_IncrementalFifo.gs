@@ -1408,6 +1408,140 @@ function di3RunFullFifoRebuild() {
   });
 }
 
+/** Pure archive/event consistency audit; safe for read-only diagnostics and Node tests. */
+function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, lotArchiveRows, eventRows) {
+  var errors = [], warnings = [];
+  var runsById = Object.create(null), allocationIds = Object.create(null), lotArchiveIds = Object.create(null);
+  var eventIds = Object.create(null), allocationsByReplay = Object.create(null), lotsByReplay = Object.create(null);
+  var eventsByReplay = Object.create(null), latestByReplay = Object.create(null);
+  (runRows || []).forEach(function (row) {
+    var runId = String(row[0] || "");
+    if (!runId) { errors.push("FifoAllocationRuns: пустой run_id."); return; }
+    if (runsById[runId]) errors.push("FifoAllocationRuns: повторный run_id " + runId + ".");
+    runsById[runId] = row;
+  });
+  (allocationArchiveRows || []).forEach(function (row) {
+    var archiveId = String(row[0] || ""), replayId = String(row[1] || "");
+    if (!archiveId || !replayId || !String(row[4] || "")) {
+      errors.push("FifoAllocationArchive: пустой archive_row_id, replay_id или source_allocation_id.");
+      return;
+    }
+    if (allocationIds[archiveId]) errors.push("FifoAllocationArchive: повторный archive_row_id " + archiveId + ".");
+    allocationIds[archiveId] = true;
+    if (!allocationsByReplay[replayId]) allocationsByReplay[replayId] = [];
+    allocationsByReplay[replayId].push(row.slice(4, 18));
+  });
+  (lotArchiveRows || []).forEach(function (row) {
+    var archiveId = String(row[0] || ""), replayId = String(row[1] || "");
+    if (!archiveId || !replayId || !String(row[2] || "") || !String(row[3] || "")) {
+      errors.push("FifoLotCacheArchive: пустой archive_row_id, replay_id, lot_id или product_id.");
+      return;
+    }
+    if (lotArchiveIds[archiveId]) errors.push("FifoLotCacheArchive: повторный archive_row_id " + archiveId + ".");
+    lotArchiveIds[archiveId] = true;
+    if (!lotsByReplay[replayId]) lotsByReplay[replayId] = [];
+    lotsByReplay[replayId].push([String(row[2]), String(row[3]), row[4]]);
+  });
+  (eventRows || []).forEach(function (row) {
+    var eventId = String(row[0] || ""), replayId = String(row[1] || "");
+    var sequence = Number(row[2]), eventType = String(row[3] || ""), runId = String(row[4] || "");
+    if (!eventId || !replayId || !runId || !Number.isSafeInteger(sequence) || sequence <= 0) {
+      errors.push("FifoReplayEvents: пустая идентичность или некорректный event_sequence.");
+      return;
+    }
+    if (eventIds[eventId]) errors.push("FifoReplayEvents: повторный replay_event_id " + eventId + ".");
+    eventIds[eventId] = true;
+    if (!runsById[runId]) errors.push("FifoReplayEvents: replay " + replayId + " ссылается на отсутствующий run " + runId + ".");
+    else if (String(runsById[runId][10] || "") !== String(row[5] || "")) {
+      errors.push("FifoReplayEvents: operation_id не совпадает с FifoAllocationRuns для replay " + replayId + ".");
+    }
+    if (!eventsByReplay[replayId]) eventsByReplay[replayId] = [];
+    eventsByReplay[replayId].push(row);
+  });
+
+  Object.keys(eventsByReplay).forEach(function (replayId) {
+    var events = eventsByReplay[replayId].slice().sort(function (a, b) { return Number(a[2]) - Number(b[2]); });
+    var terminal = false;
+    events.forEach(function (event, index) {
+      var sequence = Number(event[2]), type = String(event[3] || "");
+      if (sequence !== index + 1) errors.push("FifoReplayEvents: пропуск или неверный порядок event_sequence для replay " + replayId + ".");
+      if (index === 0 && type !== "PREPARED") errors.push("FifoReplayEvents: первое событие replay " + replayId + " должно быть PREPARED.");
+      if (index > 0 && (terminal || (type !== "COMMITTED" && type !== "QUARANTINED"))) {
+        errors.push("FifoReplayEvents: недопустимый переход состояния для replay " + replayId + ".");
+      }
+      if (type === "COMMITTED" || type === "QUARANTINED") terminal = true;
+      if (["PREPARED", "COMMITTED", "QUARANTINED"].indexOf(type) < 0) {
+        errors.push("FifoReplayEvents: неизвестный event_type " + type + " для replay " + replayId + ".");
+      }
+    });
+    var latest = events[events.length - 1];
+    latestByReplay[replayId] = latest;
+    var sourceAllocations = (allocationsByReplay[replayId] || []).slice();
+    var sourceLots = (lotsByReplay[replayId] || []).slice();
+    var allocationFingerprint = di3BuildFifoAllocationSnapshotFingerprint_(sourceAllocations);
+    sourceLots.sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])); });
+    var lotFingerprint = di3BuildFifoFingerprint_(sourceLots);
+    if (allocationFingerprint !== String(latest[9]) || lotFingerprint !== String(latest[11])) {
+      errors.push("FIFO archive: source snapshot fingerprint не совпадает с событием replay " + replayId + ".");
+    }
+    if (String(latest[3]) === "PREPARED") warnings.push("FIFO replay " + replayId + " остаётся PREPARED и требует recovery.");
+    if (String(latest[3]) === "QUARANTINED") warnings.push("FIFO replay " + replayId + " находится в QUARANTINED и требует ручной сверки.");
+    var run = runsById[String(latest[4])];
+    if (run && String(run[2]) === "COMMITTED" && String(latest[3]) !== "COMMITTED") {
+      errors.push("FifoAllocationRuns " + latest[4] + " помечен COMMITTED, но replay " + replayId + " не COMMITTED.");
+    }
+    if (run && String(run[2]) === "FAILED" && String(latest[3]) === "COMMITTED") {
+      warnings.push("FIFO run " + latest[4] + " имеет COMMITTED replay, но статус run FAILED; требуется повторная финализация.");
+    }
+  });
+
+  Object.keys(allocationsByReplay).concat(Object.keys(lotsByReplay)).forEach(function (replayId) {
+    if (!eventsByReplay[replayId]) warnings.push("FIFO archive " + replayId + " не имеет PREPARED event; возможно прерывание до записи журнала.");
+  });
+  var pendingRuns = 0;
+  Object.keys(runsById).forEach(function (runId) {
+    var run = runsById[runId], status = String(run[2] || "");
+    if (status === "PREPARED" || status === "FAILED") {
+      pendingRuns++;
+      var hasReplay = Object.keys(eventsByReplay).some(function (replayId) {
+        return eventsByReplay[replayId].some(function (event) { return String(event[4]) === runId; });
+      });
+      if (!hasReplay) warnings.push("FIFO run " + runId + " (" + status + ") не имеет replay event; проверь, не прервался ли он до первого изменения проекции.");
+    }
+  });
+  var pendingReplays = 0, committedReplays = 0, quarantinedReplays = 0;
+  Object.keys(latestByReplay).forEach(function (replayId) {
+    var status = String(latestByReplay[replayId][3]);
+    if (status === "PREPARED") pendingReplays++;
+    else if (status === "COMMITTED") committedReplays++;
+    else if (status === "QUARANTINED") quarantinedReplays++;
+  });
+  return {
+    ok: errors.length === 0,
+    errors: errors,
+    warnings: warnings,
+    summary: {
+      fifo_runs: Object.keys(runsById).length,
+      pending_runs: pendingRuns,
+      allocation_archive_rows: (allocationArchiveRows || []).length,
+      lot_cache_archive_rows: (lotArchiveRows || []).length,
+      replay_events: (eventRows || []).length,
+      pending_replays: pendingReplays,
+      committed_replays: committedReplays,
+      quarantined_replays: quarantinedReplays
+    }
+  };
+}
+
+function di3GetFifoReplayArchiveDiagnostics_() {
+  return di3BuildFifoReplayArchiveDiagnostics_(
+    di3ReadTableValues_("FifoAllocationRuns"),
+    di3ReadTableValues_("FifoAllocationArchive"),
+    di3ReadTableValues_("FifoLotCacheArchive"),
+    di3ReadTableValues_("FifoReplayEvents")
+  );
+}
+
 /** Read-only integrity check for FIFO ledger, active allocations, lot caches and per-product cursors. */
 function di3GetFifoIntegrityDiagnostics_() {
   var ledgerRows = di3ReadTableValues_("StockLedger");
@@ -1415,8 +1549,9 @@ function di3GetFifoIntegrityDiagnostics_() {
   var lotRows = di3ReadTableValues_("StockLots");
   var allocationRows = di3ReadTableValues_("StockAllocations");
   var stateRows = di3ReadTableValues_("FifoProductState");
-  var errors = [];
-  var warnings = [];
+  var replayArchiveDiagnostics = di3GetFifoReplayArchiveDiagnostics_();
+  var errors = replayArchiveDiagnostics.errors.slice();
+  var warnings = replayArchiveDiagnostics.warnings.slice();
   var movementById = {};
   var detailById = {};
   var lotById = {};
@@ -1549,6 +1684,14 @@ function di3GetFifoIntegrityDiagnostics_() {
       lots: lotRows.length,
       active_allocations: allocationRows.length,
       fifo_product_states: stateRows.length,
+      fifo_runs: replayArchiveDiagnostics.summary.fifo_runs,
+      fifo_pending_runs: replayArchiveDiagnostics.summary.pending_runs,
+      fifo_archive_allocation_rows: replayArchiveDiagnostics.summary.allocation_archive_rows,
+      fifo_archive_lot_rows: replayArchiveDiagnostics.summary.lot_cache_archive_rows,
+      fifo_replay_events: replayArchiveDiagnostics.summary.replay_events,
+      fifo_pending_replays: replayArchiveDiagnostics.summary.pending_replays,
+      fifo_committed_replays: replayArchiveDiagnostics.summary.committed_replays,
+      fifo_quarantined_replays: replayArchiveDiagnostics.summary.quarantined_replays,
       fifo_state_version: String(version || ""),
       fifo_ledger_sequence_cursor: cursor,
       max_ledger_sequence: maxLedgerSequence,
