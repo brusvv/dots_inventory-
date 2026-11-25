@@ -162,7 +162,7 @@ function di3RunSystemSafetyUxUnitTests() {
       var dispatch = di3BuildOrderDispatchRows_("operation-a", {
         order_id: "order-1", order_number: "ORD-1", dispatched_at: "2026-11-25T10:00:00Z",
         recorded_at: "2026-11-25T10:01:00Z",
-        lines: [{ movement_id: "move-out", event_key: "evt-out", product_id: "product-1", quantity: 1,
+        lines: [{ movement_id: "move-out", event_key: "evt-out", product_id: "product-1", ledger_sequence: 1, quantity: 1,
           display_code: "P-1", sale_unit_price: 100, line_revenue: 100 }]
       });
       equal(dispatch.details[0][8], "user-a@example.test", "Dispatch detail must record the initiator");
@@ -170,7 +170,7 @@ function di3RunSystemSafetyUxUnitTests() {
       var returned = di3BuildOrderReturnRows_("operation-a", {
         order_id: "order-1", order_number: "ORD-1", returned_at: "2026-11-25T12:00:00Z",
         recorded_at: "2026-11-25T12:01:00Z",
-        lines: [{ movement_id: "move-in", event_key: "evt-in", product_id: "product-1", quantity: 1,
+        lines: [{ movement_id: "move-in", event_key: "evt-in", product_id: "product-1", ledger_sequence: 2, quantity: 1,
           display_code: "P-1", cost_status: "KNOWN", original_dispatch_movement_id: "move-out",
           source_lot_id: "lot-1", lot_id: "lot-return", pack_variant_id: "pack-1", unit_cost: 50, total_cost_minor: 5000 }]
       });
@@ -178,7 +178,7 @@ function di3RunSystemSafetyUxUnitTests() {
 
       var receipt = di3BuildSupplyReceiptRows_("operation-a", {
         supply_id: "supply-1", supply_number: "SUP-1",
-        lines: [{ movement_id: "move-supply", event_key: "evt-supply", product_id: "product-1",
+        lines: [{ movement_id: "move-supply", event_key: "evt-supply", product_id: "product-1", ledger_sequence: 3,
           quantity: 1, display_code: "P-1", cost_status: "KNOWN",
           effective_at: "2026-11-25T12:00:00Z", recorded_at: "2026-11-25T12:01:00Z",
           lot_id: "lot-supply", pack_variant_id: "pack-1", unit_cost: 50, total_cost_minor: 5000,
