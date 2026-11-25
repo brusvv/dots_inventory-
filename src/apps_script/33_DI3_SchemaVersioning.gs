@@ -142,8 +142,7 @@ function di3SetSchemaMigrationStatus_(rowNumber, status, errorText) {
 }
 
 function di3CreateSchemaMigrationRecord_(definition, backup) {
-  var actor = "";
-  actor = di3GetActorEmail_();
+  var actor = di3GetActorEmail_();
   var backupId = backup && backup.backup_file_id ? String(backup.backup_file_id) : "";
   di3AppendTableRows_("SchemaMigrations", [[
     di3MakeUuid_(), definition.key, definition.from, definition.to,
