@@ -874,7 +874,7 @@ function di3ReplaceFifoProjectionSafely_(predicate, newAllocationRows, lotRows, 
     ? di3PrepareFifoReplay_(replayContext, predicate, productId, previousRows)
     : null;
   if (prepared && prepared.already_target) {
-    return { allocations_removed: 0, allocations_written: (newAllocationRows || []).length,
+    return { allocations_removed: 0, allocations_written: 0, allocations_already_present: (newAllocationRows || []).length,
       replay_id: replayContext.replay_id, replay_already_applied: true };
   }
   if (prepared) previousRows = prepared.source_rows.map(function (row) { return row.slice(0, 14); });
