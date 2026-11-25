@@ -65,7 +65,7 @@ function di3BuildOrderDispatchRows_(operationId, payload) {
       line.movement_id, operationId, line.event_key, line.product_id,
       "ORDER", payload.order_id, -line.quantity,
       new Date(payload.dispatched_at), new Date(payload.recorded_at), "", "",
-      "Списание при отправке заказа " + payload.order_number, line.ledger_sequence
+      "Списание при отправке заказа " + payload.order_number, di3RequireLedgerSequence_(line.ledger_sequence, line.movement_id)
     ]);
     details.push([
       line.movement_id, line.display_code, "OUT", "ORDER_DISPATCH",
@@ -347,7 +347,7 @@ function di3BuildOrderReturnRows_(operationId, payload) {
       line.movement_id, operationId, line.event_key, line.product_id,
       "ORDER_RETURN", payload.order_id, line.quantity,
       new Date(payload.returned_at), new Date(payload.recorded_at), "", "",
-      "Фактический возврат заказа " + payload.order_number, line.ledger_sequence
+      "Фактический возврат заказа " + payload.order_number, di3RequireLedgerSequence_(line.ledger_sequence, line.movement_id)
     ]);
     details.push([
       line.movement_id, line.display_code, "IN", "ORDER_RETURN", "", "",
