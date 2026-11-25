@@ -718,22 +718,31 @@ function di3RestoreLotRemainingSnapshot_(lotRows) {
   });
 }
 
-/** Replaces one FIFO projection with rollback protection if allocation or lot-cache writes fail. */
-function di3ReplaceFifoProjectionSafely_(predicate, newAllocationRows, lotRows, remainingByLotId, productId) {
+/** Replaces one FIFO projection after a durable source snapshot and PREPARED event. */
+function di3ReplaceFifoProjectionSafely_(predicate, newAllocationRows, lotRows, remainingByLotId, productId, replayContext) {
   var previousRows = (productId
     ? di3ReadTaggedRowsByColumnValue_("StockAllocations", 4, productId)
     : di3ReadTableValues_("StockAllocations")).filter(predicate);
+  var prepared = replayContext
+    ? di3PrepareFifoReplay_(replayContext, predicate, productId, previousRows)
+    : null;
+  if (prepared && prepared.already_target) {
+    return { allocations_removed: 0, allocations_written: (newAllocationRows || []).length,
+      replay_id: replayContext.replay_id, replay_already_applied: true };
+  }
+  if (prepared) previousRows = prepared.source_rows.map(function (row) { return row.slice(0, 14); });
   var removed = 0;
   try {
     removed = di3DeleteStockAllocationRows_(predicate, productId);
     if (newAllocationRows && newAllocationRows.length) di3AppendTableRows_("StockAllocations", newAllocationRows);
     di3UpdateLotRemainingRows_(lotRows, remainingByLotId || {});
-    return { allocations_removed: removed, allocations_written: (newAllocationRows || []).length };
+    return { allocations_removed: removed, allocations_written: (newAllocationRows || []).length,
+      replay_id: replayContext ? replayContext.replay_id : "" };
   } catch (writeError) {
     var rollbackError = null;
     try {
       di3DeleteStockAllocationRows_(predicate, productId);
-      if (previousRows.length) di3AppendTableRows_("StockAllocations", previousRows.map(function (row) { return row.slice(); }));
+      if (previousRows.length) di3AppendTableRows_("StockAllocations", previousRows.map(function (row) { return row.slice(0, 14); }));
       di3RestoreLotRemainingSnapshot_(lotRows);
     } catch (restoreError) {
       rollbackError = restoreError;
