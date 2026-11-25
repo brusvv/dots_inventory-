@@ -1,7 +1,7 @@
 # F-07 — stable StockLedger sequence: implementation specification
 
 Date: 2026-11-26  
-Status: source audit and implementation specification; no runtime or workbook changes.
+Status: source implementation pass; CI verified; Apps Script runtime acceptance and workbook changes remain pending.
 
 ## Decision
 
@@ -35,7 +35,7 @@ The first source implementation pass is now present on `main`:
 
 This implementation pass is not a release-ready F-07 sign-off. It still requires source review, execution of all local runners and syntax checks, and runtime acceptance on a disposable empty workbook. It is not compatible with the old 12-column StockLedger layout; do not deploy it to the existing workbook. The clean-baseline adoption and legacy-workbook isolation remain prerequisites before production installation.
 
-## Current implementation verified
+## Initial pre-implementation source state (audit baseline)
 
 - `DI3_TABLE_SCHEMAS.StockLedger` currently has 12 columns and no stable event sequence.
 - `DI3_FIFO_STATE_VERSION` is currently `3`.
