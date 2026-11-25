@@ -283,6 +283,249 @@ function di3BuildFifoFingerprint_(value) {
   return di3BuildManualOperationPayloadHash_(value);
 }
 
+/** Fingerprint immutable replay inputs; mutable StockLots.remaining_quantity is excluded. */
+function di3BuildFifoReplayInputFingerprint_(productId, ledgerRows, detailRows, lotRows) {
+  var scopedLedger = (ledgerRows || []).filter(function (row) {
+    return productId == null || String(row[3]) === String(productId);
+  }).slice().sort(function (a, b) { return Number(a[12]) - Number(b[12]); });
+  var movementIds = Object.create(null);
+  scopedLedger.forEach(function (row) { movementIds[String(row[0])] = true; });
+  var scopedDetails = (detailRows || []).filter(function (row) {
+    return Object.prototype.hasOwnProperty.call(movementIds, String(row[0]));
+  }).slice().sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])); });
+  var scopedLots = (lotRows || []).filter(function (row) {
+    return productId == null || String(row[1]) === String(productId);
+  }).map(function (row) {
+    return row.slice(0, 13).concat(row.slice(14));
+  }).sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])); });
+  return di3BuildFifoFingerprint_({
+    product_id: productId == null ? "FULL" : String(productId),
+    ledger: scopedLedger,
+    details: scopedDetails,
+    lots: scopedLots
+  });
+}
+
+function di3BuildFifoAllocationSnapshotFingerprint_(allocationRows) {
+  var stableRows = (allocationRows || []).map(function (row) { return row.slice(0, 14); })
+    .sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])); });
+  return di3BuildFifoFingerprint_(stableRows);
+}
+
+function di3BuildFifoLotCacheSnapshot_(lotRows, remainingByLotId, productId) {
+  return (lotRows || []).filter(function (row) {
+    return productId == null || String(row[1]) === String(productId);
+  }).map(function (row) {
+    var lotId = String(row[0]);
+    var remaining = remainingByLotId && Object.prototype.hasOwnProperty.call(remainingByLotId, lotId)
+      ? remainingByLotId[lotId] : row[13];
+    return [lotId, String(row[1]), remaining];
+  }).sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])); });
+}
+
+function di3AppendFifoArchiveRowsIdempotently_(tableName, rows) {
+  if (!rows || !rows.length) return 0;
+  var ids = rows.map(function (row) { return String(row[0]); });
+  var existing = di3ReadRowsByColumnValues_(tableName, 0, ids);
+  var existingById = Object.create(null);
+  existing.forEach(function (match) {
+    var id = String(match.values[0]);
+    if (existingById[id]) throw new Error(tableName + ": duplicate archive_row_id " + id + ".");
+    existingById[id] = match.values;
+  });
+  var missing = [];
+  rows.forEach(function (row) {
+    var id = String(row[0]), saved = existingById[id];
+    if (!saved) { missing.push(row); return; }
+    if (di3BuildFifoFingerprint_(saved) !== di3BuildFifoFingerprint_(row)) {
+      throw new Error(tableName + ": archive row content mismatch for " + id + ".");
+    }
+  });
+  di3AppendTableRows_(tableName, missing);
+  return missing.length;
+}
+
+function di3GetLatestFifoReplayEvent_(replayId) {
+  var matches = di3ReadRowsByColumnValue_("FifoReplayEvents", 1, replayId);
+  if (!matches.length) return null;
+  matches.sort(function (a, b) { return Number(a.values[2]) - Number(b.values[2]); });
+  for (var i = 1; i < matches.length; i++) {
+    if (Number(matches[i - 1].values[2]) === Number(matches[i].values[2])) {
+      throw new Error("FifoReplayEvents: duplicate event_sequence for replay " + replayId + ".");
+    }
+  }
+  return matches[matches.length - 1];
+}
+
+function di3AppendFifoReplayEvent_(context, eventType, fingerprints, details) {
+  var latest = di3GetLatestFifoReplayEvent_(context.replay_id);
+  if (latest) {
+    var latestRow = latest.values;
+    if (String(latestRow[8]) !== String(context.input_fingerprint) ||
+        String(latestRow[9]) !== String(fingerprints.source_allocations) ||
+        String(latestRow[10]) !== String(fingerprints.target_allocations) ||
+        String(latestRow[11]) !== String(fingerprints.source_lots) ||
+        String(latestRow[12]) !== String(fingerprints.target_lots)) {
+      throw new Error("FIFO replay " + context.replay_id + " уже существует с другими fingerprint-значениями.");
+    }
+    if (String(latestRow[3]) === eventType || String(latestRow[3]) === "COMMITTED") return latest;
+    if (String(latestRow[3]) !== "PREPARED") {
+      throw new Error("FIFO replay " + context.replay_id + " находится в терминальном состоянии " + latestRow[3] + ".");
+    }
+  }
+  var eventSequence = latest ? Number(latest.values[2]) + 1 : 1;
+  var row = [
+    di3MakeUuid_(), context.replay_id, eventSequence, eventType,
+    context.fifo_run_id, context.operation_id || "", context.scope_type,
+    context.scope_json, context.input_fingerprint,
+    fingerprints.source_allocations, fingerprints.target_allocations,
+    fingerprints.source_lots, fingerprints.target_lots,
+    new Date(), JSON.stringify(details || {})
+  ];
+  di3AppendTableRows_("FifoReplayEvents", [row]);
+  return { row_number: di3GetSheetOrThrow_("FifoReplayEvents").getLastRow(), values: row };
+}
+
+function di3ReadFifoReplayArchiveSnapshots_(replayId) {
+  var allocationMatches = di3ReadRowsByColumnValue_("FifoAllocationArchive", 1, replayId);
+  var lotMatches = di3ReadRowsByColumnValue_("FifoLotCacheArchive", 1, replayId);
+  var allocationIds = Object.create(null), lotIds = Object.create(null);
+  allocationMatches.forEach(function (match) {
+    var id = String(match.values[0]);
+    if (allocationIds[id]) throw new Error("FifoAllocationArchive: duplicate archive row " + id + ".");
+    allocationIds[id] = true;
+  });
+  lotMatches.forEach(function (match) {
+    var id = String(match.values[0]);
+    if (lotIds[id]) throw new Error("FifoLotCacheArchive: duplicate archive row " + id + ".");
+    lotIds[id] = true;
+  });
+  allocationMatches.sort(function (a, b) { return String(a.values[4]).localeCompare(String(b.values[4])); });
+  lotMatches.sort(function (a, b) { return String(a.values[2]).localeCompare(String(b.values[2])); });
+  return {
+    allocation_rows: allocationMatches.map(function (match) { return match.values.slice(4, 18); }),
+    allocation_archive_rows: allocationMatches.map(function (match) { return match.values; }),
+    lot_archive_rows: lotMatches.map(function (match) { return match.values; })
+  };
+}
+
+function di3RestoreFifoReplaySourceSnapshot_(predicate, productId, sourceRows, lotArchiveRows, lotRows) {
+  di3DeleteStockAllocationRows_(predicate, productId);
+  if (sourceRows && sourceRows.length) {
+    di3AppendTableRows_("StockAllocations", sourceRows.map(function (row) { return row.slice(0, 14); }));
+  }
+  var sourceRemaining = Object.create(null);
+  (lotArchiveRows || []).forEach(function (row) { sourceRemaining[String(row[2])] = row[4]; });
+  di3UpdateLotRemainingRows_(lotRows, sourceRemaining);
+  return { allocations: (sourceRows || []).length, lots: Object.keys(sourceRemaining).length };
+}
+
+/** Persist source snapshots and PREPARED before any active FIFO projection write. */
+function di3PrepareFifoReplay_(context, predicate, productId, currentRows) {
+  var currentAllocationRows = (currentRows || []).map(function (row) { return row.slice(0, 14); });
+  var currentAllocationFingerprint = di3BuildFifoAllocationSnapshotFingerprint_(currentAllocationRows);
+  var currentLotSnapshot = di3BuildFifoLotCacheSnapshot_(context.lot_rows, null, productId);
+  var currentLotFingerprint = di3BuildFifoFingerprint_(currentLotSnapshot);
+  var targetAllocationFingerprint = di3BuildFifoAllocationSnapshotFingerprint_(context.target_rows);
+  var targetLotSnapshot = di3BuildFifoLotCacheSnapshot_(context.lot_rows, context.target_remaining, productId);
+  var targetLotFingerprint = di3BuildFifoFingerprint_(targetLotSnapshot);
+  var fingerprints = {
+    source_allocations: "",
+    target_allocations: targetAllocationFingerprint,
+    source_lots: "",
+    target_lots: targetLotFingerprint
+  };
+  var latest = di3GetLatestFifoReplayEvent_(context.replay_id);
+  var sourceRows, lotArchiveRows, sourceAllocationFingerprint, sourceLotFingerprint;
+  if (latest) {
+    var event = latest.values;
+    if (String(event[4]) !== String(context.fifo_run_id) ||
+        String(event[5] || "") !== String(context.operation_id || "") ||
+        String(event[6]) !== String(context.scope_type) ||
+        String(event[7]) !== String(context.scope_json) ||
+        String(event[8]) !== String(context.input_fingerprint) ||
+        String(event[10]) !== targetAllocationFingerprint ||
+        String(event[12]) !== targetLotFingerprint) {
+      throw new Error("FIFO replay identity/fingerprint mismatch for " + context.replay_id + ".");
+    }
+    var archive = di3ReadFifoReplayArchiveSnapshots_(context.replay_id);
+    sourceRows = archive.allocation_rows;
+    lotArchiveRows = archive.lot_archive_rows;
+    sourceAllocationFingerprint = di3BuildFifoAllocationSnapshotFingerprint_(sourceRows);
+    var sourceLotSnapshot = lotArchiveRows.map(function (row) { return [String(row[2]), String(row[3]), row[4]]; });
+    sourceLotFingerprint = di3BuildFifoFingerprint_(sourceLotSnapshot);
+    if (sourceAllocationFingerprint !== String(event[9]) || sourceLotFingerprint !== String(event[11])) {
+      throw new Error("FIFO replay archive is incomplete or inconsistent for " + context.replay_id + ".");
+    }
+    if (String(event[3]) === "COMMITTED") {
+      if (currentAllocationFingerprint !== targetAllocationFingerprint || currentLotFingerprint !== targetLotFingerprint) {
+        throw new Error("COMMITTED FIFO replay projection no longer matches its target fingerprint: " + context.replay_id + ".");
+      }
+      return { already_target: true, already_committed: true, source_rows: sourceRows, lot_archive_rows: lotArchiveRows, fingerprints: fingerprints };
+    }
+    if (String(event[3]) !== "PREPARED") {
+      throw new Error("FIFO replay cannot resume from state " + event[3] + ".");
+    }
+    fingerprints.source_allocations = sourceAllocationFingerprint;
+    fingerprints.source_lots = sourceLotFingerprint;
+    var isTarget = currentAllocationFingerprint === targetAllocationFingerprint && currentLotFingerprint === targetLotFingerprint;
+    var isSource = currentAllocationFingerprint === sourceAllocationFingerprint && currentLotFingerprint === sourceLotFingerprint;
+    if (isTarget) return { already_target: true, source_rows: sourceRows, lot_archive_rows: lotArchiveRows, fingerprints: fingerprints };
+    if (!isSource) {
+      di3RestoreFifoReplaySourceSnapshot_(predicate, productId, sourceRows, lotArchiveRows, context.lot_rows);
+    }
+    return { already_target: false, source_rows: sourceRows, lot_archive_rows: lotArchiveRows, fingerprints: fingerprints };
+  }
+
+  sourceRows = currentAllocationRows;
+  sourceAllocationFingerprint = currentAllocationFingerprint;
+  var archivedAt = context.archived_at || new Date();
+  var allocationArchiveRows = sourceRows.map(function (row) {
+    if (!row[0]) throw new Error("Нельзя архивировать StockAllocations без allocation_id.");
+    return ["F06A:" + context.replay_id + ":" + String(row[0]), context.replay_id, archivedAt, context.reason || "FIFO_REPLAY"]
+      .concat(row);
+  });
+  var lotArchiveRowsToWrite = currentLotSnapshot.map(function (row) {
+    return ["F06L:" + context.replay_id + ":" + row[0], context.replay_id, row[0], row[1], row[2], archivedAt];
+  });
+  di3AppendFifoArchiveRowsIdempotently_("FifoAllocationArchive", allocationArchiveRows);
+  di3AppendFifoArchiveRowsIdempotently_("FifoLotCacheArchive", lotArchiveRowsToWrite);
+  fingerprints.source_allocations = sourceAllocationFingerprint;
+  fingerprints.source_lots = currentLotFingerprint;
+  di3AppendFifoReplayEvent_(context, "PREPARED", fingerprints, {
+    archive_allocations: allocationArchiveRows.length,
+    archive_lots: lotArchiveRowsToWrite.length
+  });
+  return {
+    already_target: false, source_rows: sourceRows,
+    lot_archive_rows: lotArchiveRowsToWrite, fingerprints: fingerprints
+  };
+}
+
+function di3CommitFifoReplayEventsForRun_(runId) {
+  var matches = di3ReadRowsByColumnValue_("FifoReplayEvents", 4, runId);
+  var latestByReplay = Object.create(null);
+  matches.forEach(function (match) {
+    var row = match.values, replayId = String(row[1]);
+    if (!latestByReplay[replayId] || Number(row[2]) > Number(latestByReplay[replayId].values[2])) {
+      latestByReplay[replayId] = match;
+    }
+  });
+  Object.keys(latestByReplay).forEach(function (replayId) {
+    var row = latestByReplay[replayId].values;
+    if (String(row[3]) !== "PREPARED") return;
+    var context = {
+      replay_id: String(row[1]), fifo_run_id: String(row[4]), operation_id: String(row[5] || ""),
+      scope_type: String(row[6]), scope_json: String(row[7]), input_fingerprint: String(row[8])
+    };
+    di3AppendFifoReplayEvent_(context, "COMMITTED", {
+      source_allocations: String(row[9]), target_allocations: String(row[10]),
+      source_lots: String(row[11]), target_lots: String(row[12])
+    }, { committed_by_run: String(runId) });
+  });
+  return Object.keys(latestByReplay).length;
+}
+
 function di3CreateFifoRun_(reason, ledgerCount, allocationCount, productCount, options) {
   options = options || {};
   var sheet = di3GetSheetOrThrow_("FifoAllocationRuns");
