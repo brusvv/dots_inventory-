@@ -756,7 +756,7 @@ function di3ReplaceFifoProjectionSafely_(predicate, newAllocationRows, lotRows, 
   }
 }
 
-function di3ApplyIncrementalFifoForProduct_(productId, runId, tailLedgerRows, detailRows, lotRows, activeAllocationRows, stateRows, allLedgerRows, operationId) {
+function di3ApplyIncrementalFifoForProduct_(productId, runId, tailLedgerRows, detailRows, lotRows, activeAllocationRows, stateRows, allLedgerRows, operationId, runCreatedAt) {
   var plan = di3BuildFifoTailPlanForProduct_(productId, tailLedgerRows, detailRows, lotRows, activeAllocationRows, stateRows);
   if (plan.mode === "NO_NEW_EVENTS") return { mode: plan.mode, movements_replayed: 0, allocations_created: 0, allocations_replaced: 0, lots_updated: 0, movement_costs: {} };
   if (plan.mode === "PRODUCT_REPLAY_REQUIRED") {
@@ -771,8 +771,21 @@ function di3ApplyIncrementalFifoForProduct_(productId, runId, tailLedgerRows, de
     });
     // Pass the full sheet row set: di3UpdateLotRemainingRows_ maps array indexes to physical row numbers.
     // The remaining map itself contains only this product's lot IDs, so other products stay untouched.
+    var replayContext = {
+      replay_id: replayId,
+      fifo_run_id: String(runId),
+      operation_id: String(operationId || ""),
+      scope_type: "PRODUCT",
+      scope_json: JSON.stringify([String(productId)]),
+      input_fingerprint: di3BuildFifoReplayInputFingerprint_(productId, ledgerRows, detailRows, lotRows),
+      reason: "PRODUCT_REPLAY:" + String(plan.reason || "REPLAY"),
+      archived_at: runCreatedAt,
+      target_rows: allocationRows,
+      target_remaining: remainingFromReplay,
+      lot_rows: lotRows || []
+    };
     var replaceResult = di3ReplaceFifoProjectionSafely_(function (row) { return String(row[4]) === String(productId); },
-      allocationRows, lotRows || [], remainingFromReplay, productId);
+      allocationRows, lotRows || [], remainingFromReplay, productId, replayContext);
     return {
       mode: "PRODUCT_REPLAY", replay_reason: plan.reason, movements_replayed: replay.movement_count,
       allocations_created: allocationRows.length, allocations_replaced: replaceResult.allocations_removed,
@@ -1070,7 +1083,20 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
       var remaining = {};
       candidateReplay.remaining_lots.forEach(function (lot) { remaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
       lotRows.forEach(function (row) { if (!Object.prototype.hasOwnProperty.call(remaining, String(row[0]))) remaining[String(row[0])] = Number(row[8]); });
-      var fullReplace = di3ReplaceFifoProjectionSafely_(function () { return true; }, fullRows, lotRows, remaining, null);
+      var fullReplayContext = {
+        replay_id: run.replay_id,
+        fifo_run_id: String(run.run_id),
+        operation_id: operationId,
+        scope_type: "FULL",
+        scope_json: "FULL",
+        input_fingerprint: di3BuildFifoReplayInputFingerprint_(null, ledgerRows, detailRows, lotRows),
+        reason: "FULL_REPLAY:" + String(reason || "MANUAL"),
+        archived_at: run.created_at,
+        target_rows: fullRows,
+        target_remaining: remaining,
+        lot_rows: lotRows
+      };
+      var fullReplace = di3ReplaceFifoProjectionSafely_(function () { return true; }, fullRows, lotRows, remaining, null, fullReplayContext);
       updatedLots = lotRows.filter(function (row) { return Object.prototype.hasOwnProperty.call(remaining, String(row[0])); }).length;
       created = fullRows.length;
       replaced = fullReplace.allocations_removed;
@@ -1104,7 +1130,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
             productLedgerRows.map(function (row) { return String(row[0]); }));
         }
         var result = di3ApplyIncrementalFifoForProduct_(productId, run.run_id, tailRows, productDetails,
-          productLots, productAllocations, productStateRows, productLedgerRows, operationId);
+          productLots, productAllocations, productStateRows, productLedgerRows, operationId, run.created_at);
         created += result.allocations_created;
         replaced += result.allocations_replaced;
         replayedMovements += result.movements_replayed;
@@ -1117,7 +1143,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
         }
       });
       if (stateRowsToWrite.length) di3UpsertFifoProductStateRows_(stateRowsToWrite);
-      if (productIds.length && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
+      if (runProductIds.length && typeof di3RefreshAllOrderFifoSnapshots_ === "function") {
         di3RefreshAllOrderFifoSnapshots_(reason || "FIFO_RECALCULATION", run.run_id, runProductIds);
       }
     }
