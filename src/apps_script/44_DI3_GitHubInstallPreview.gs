@@ -133,6 +133,7 @@ function di3PrepareGitHubInstallPreview() {
   });
   var preview = di3BuildGitHubInstallPreview_(releaseResult.manifest, project.content.files, downloaded);
   preview.release = releaseResult.release; preview.project_id = project.script_id; preview.downloaded_bytes = totalBytes;
+  preview.source_project_fingerprint = di3AppsScriptFilesFingerprint_(project.content.files);
   var lines = [
     "Релиз: " + preview.release_tag, "Commit: " + preview.commit,
     "Целевая схема релиза: v" + preview.target_schema_version, "Часовой пояс релиза: " + preview.target_time_zone,
