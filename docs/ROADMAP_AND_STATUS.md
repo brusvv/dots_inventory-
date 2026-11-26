@@ -370,3 +370,15 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - The v3→v4 schema appends only `V3_Orders.business_date` (AD); existing 29 columns remain in place. The proposed dispatch precision/window/uncertainty fields remain removed.
 - Source audit found implementation blockers: current order draft rejects quantities above today's stock; current `di3DispatchOrder_` rejects dispatch before `created_at`; the ordinary order form has no business-date or historical lifecycle controls; and the order register currently shows only `created_at`. These must be addressed in one coordinated F-02 source patch, with tests for historical vs ordinary behavior and idempotent recovery.
 - No source code, schema registry, workbook or runtime data changed in this documentation update. PR #1 remains Draft/unmerged; existing RC8 workbook remains untouched.
+
+
+## F-02 — source implementation pass — 26.11.2026
+
+- Added the v3→v4 `RC8_ORDER_BUSINESS_DATE_V4` migration. It appends `business_date` in AD, backfills from local `created_at` date, preserves the existing 29-column prefix, validates AD and source timestamps before writing, and is resumable through SchemaMigrations.
+- Updated schema compatibility and installation preflight. The setup path allows a validated v3 prefix to reach the journaled migration only after the existing backup + Dry Run flow; clean baseline adoption targets v4 directly.
+- Added a separate historical-sale workspace and menu entry. It captures date-only customer business date, actual dispatch date/time and actual completion date/time.
+- Implemented the historical lifecycle orchestration over existing `ORDER_CREATE` and `ORDER_DISPATCH`; historical mode bypasses only current-stock draft rejection and the dispatch-not-before-`created_at` guard. FIFO preflight/replay, PeriodGuard, returned-order guard and pending-operation checks remain.
+- Request hashing now binds the business date, dispatch/completion timestamps and commercial fields. Existing dispatch operation retries compare the immutable timestamp; changed input fails closed. Completion retries verify timestamps and refresh derived views.
+- Order register displays business_date separately. Finance Dashboard continues to recognize revenue/COGS on completed_at.
+- Added three F-02 source regression tests: request-hash timestamp/date binding, historical-only backdate permission, and immutable dispatch timestamp mismatch rejection.
+- **Runtime not accepted:** no Google Sheets migration, form submission, FIFO replay, PeriodGuard, commission settlement or Finance Dashboard runtime test has been executed. Run these only on a restored disposable workbook after backup and Dry Run. Production RC8 remains untouched; PR #1 remains Draft/unmerged.
