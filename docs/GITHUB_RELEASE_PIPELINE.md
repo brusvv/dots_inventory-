@@ -56,7 +56,8 @@ The Apps Script menu adds **Система → GitHub и обновления**:
 
 1. In the Google Cloud project associated with the Apps Script project, enable **Google Apps Script API**.
 2. Ensure the actual Apps Script project manifest contains the OAuth scopes:
-   - `https://www.googleapis.com/auth/script.projects.readonly`
+   - `https://www.googleapis.com/auth/script.projects.readonly` (read-only D-03/D-04)
+   - `https://www.googleapis.com/auth/script.projects` (required only for the separately confirmed D-05 installer)
    - `https://www.googleapis.com/auth/script.external_request`
    - Existing Drive scope must permit creating and reading files in the configured backup folder.
 3. Save the manifest in the actual Apps Script project. This repository deliberately does not contain a fabricated `appsscript.json`; do not replace the target manifest with a guessed one.
@@ -91,3 +92,20 @@ The first D-05 increment adds **Система → GitHub и обновлени�
 **Hard boundary:** preview only. It does not call projects.updateContent, save a pending install payload, migrate schema, run setup, rebuild FIFO or alter spreadsheet data. Confirmed install and post-write verification remain unimplemented and require separate review and runtime acceptance.
 
 Validation on PR #4: CI [45882939657](https://github.com/brusvv/dots_inventory-/actions/runs/45882939657) passed — 52/52 Apps Script syntax files, 151/151 existing regressions, 9/9 release-manifest tests and 16/16 deployment-manager tests (176/176 automated tests). This is source/Node CI, not Apps Script runtime acceptance.
+
+
+## D-05 confirmed install increment
+
+The menu adds **Система → GitHub и обновления → Установить релиз… (с подтверждением)**.
+
+1. Rebuilds a fresh preview from the latest stable release and records a fingerprint of the complete current Apps Script project.
+2. Reads the current project again and stops if its Script ID or complete file fingerprint changed since preview.
+3. Creates the D-04 source backup, reads the exact Drive file back, validates its envelope and every file checksum, then requires its Script ID and complete source fingerprint to match the pre-install project.
+4. Shows a separate YES/NO confirmation with release tag, commit, file counts, zero-deletion statement and the verified Drive backup link.
+5. After YES, reads the project one last time and aborts if any source changed while the dialog was open.
+6. Calls `projects.updateContent` with the complete prepared file set. This API replaces the project's complete content.
+7. Reads the project again and compares every file's name, type and exact source. Only an exact match reports `INSTALLED_AND_VERIFIED`.
+
+Cancel leaves the Apps Script project untouched (the verified source backup remains in Drive). A post-write verification mismatch reports the backup link and does not attempt an automatic rollback; code rollback is a separate D-06 operation. The installer never creates or updates a versioned deployment and never runs setup, schema migration, FIFO rebuild or spreadsheet-data operations.
+
+The actual target `appsscript.json` must already contain the write scope `https://www.googleapis.com/auth/script.projects` in addition to the read-only and external-request scopes. The repository does not fabricate or overwrite the target manifest. The live project must be tested separately before production use.
