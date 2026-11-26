@@ -458,6 +458,7 @@ function di3EnsureCoreFoundationSchemas_(allowPlannedSchemaMigrations) {
         headers.length === 30 && headers[29] === "business_date" &&
         headers.slice(0, 29).every(function (header, index) { return actual[index] === header; }) &&
         actual[29] === "") {
+      if (sheet.getMaxRows() > 1) sheet.getRange(2, 30, sheet.getMaxRows() - 1, 1).setNumberFormat("dd.mm.yyyy");
       di3CompactSheet_(sheet, Math.max(DI3_TABLE_MIN_ROWS[name] || 1, sheet.getLastRow() || 0), 30);
       return;
     }
@@ -471,6 +472,9 @@ function di3EnsureCoreFoundationSchemas_(allowPlannedSchemaMigrations) {
     // Keep its storage column in plain-text mode before any future append/update.
     if (name === "Products" && sheet.getMaxRows() > 1) {
       sheet.getRange(2, 5, sheet.getMaxRows() - 1, 1).setNumberFormat("@");
+    }
+    if (name === "V3_Orders" && headers.length === 30 && sheet.getMaxRows() > 1) {
+      sheet.getRange(2, 30, sheet.getMaxRows() - 1, 1).setNumberFormat("dd.mm.yyyy");
     }
     di3CompactSheet_(sheet, Math.max(DI3_TABLE_MIN_ROWS[name] || 1, sheet.getLastRow() || 0), headers.length);
   });
