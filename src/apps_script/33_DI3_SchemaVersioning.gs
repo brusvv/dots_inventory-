@@ -23,30 +23,37 @@ function di3ApplyOrderBusinessDateMigration_() {
   if (actual[29] && actual[29] !== targetHeader) {
     throw new Error("F-02 migration остановлена: V3_Orders!AD1 занята неизвестным заголовком.");
   }
+  var lastRow = sheet.getLastRow();
+  var rowCount = Math.max(0, lastRow - 1);
+  var createdValues = rowCount ? sheet.getRange(2, 3, rowCount, 1).getValues() : [];
+  var businessRange = rowCount ? sheet.getRange(2, 30, rowCount, 1) : null;
+  var businessDates = rowCount ? businessRange.getValues() : [];
+  var formulas = rowCount ? businessRange.getFormulas() : [];
   if (!actual[29] && di3PreflightHasBodyValues_(sheet, 30, 1)) {
     throw new Error("F-02 migration остановлена: V3_Orders!AD содержит данные при пустом заголовке.");
   }
-  if (!actual[29]) sheet.getRange(1, 30).setValue(targetHeader).setFontWeight("bold");
-  var lastRow = sheet.getLastRow();
-  var backfilled = 0;
-  if (lastRow >= 2) {
-    var createdValues = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
-    var businessDates = sheet.getRange(2, 30, lastRow - 1, 1).getValues();
-    var timezone = di3GetConfiguredTimeZone_();
-    var updates = businessDates.map(function (cell, index) {
-      if (cell[0] !== "" && cell[0] != null) return [cell[0]];
-      if (!createdValues[index][0]) throw new Error("F-02 migration остановлена: у заказа в строке " + (index + 2) + " отсутствует created_at.");
-      var createdAt = di3ToDate_(createdValues[index][0], "created_at заказа в строке " + (index + 2));
-      var dateText = Utilities.formatDate(createdAt, timezone, "yyyy-MM-dd");
-      backfilled++;
-      return [Utilities.parseDate(dateText, timezone, "yyyy-MM-dd")];
-    });
-    if (backfilled) sheet.getRange(2, 30, updates.length, 1).setValues(updates);
+  if (formulas.some(function (row) { return String(row[0] || "") !== ""; })) {
+    throw new Error("F-02 migration остановлена: V3_Orders!AD содержит формулы; автоматическая перезапись запрещена.");
   }
+  // Validate every source timestamp before changing the header or any business row.
+  createdValues.forEach(function (row, index) {
+    if (!row[0]) throw new Error("F-02 migration остановлена: у заказа в строке " + (index + 2) + " отсутствует created_at.");
+    di3ToDate_(row[0], "created_at заказа в строке " + (index + 2));
+  });
+  if (!actual[29]) sheet.getRange(1, 30).setValue(targetHeader).setFontWeight("bold");
+  var timezone = di3GetConfiguredTimeZone_();
+  var backfilled = 0;
+  var updates = businessDates.map(function (cell, index) {
+    if (cell[0] !== "" && cell[0] != null) return [cell[0]];
+    var createdAt = di3ToDate_(createdValues[index][0], "created_at заказа в строке " + (index + 2));
+    var dateText = Utilities.formatDate(createdAt, timezone, "yyyy-MM-dd");
+    backfilled++;
+    return [Utilities.parseDate(dateText, timezone, "yyyy-MM-dd")];
+  });
+  if (backfilled) sheet.getRange(2, 30, updates.length, 1).setValues(updates);
   di3CompactSheet_(sheet, Math.max(1, lastRow), 30);
-  return { status: "APPLIED", orders: Math.max(0, lastRow - 1), rows_backfilled: backfilled, header: targetHeader };
+  return { status: "APPLIED", orders: rowCount, rows_backfilled: backfilled, header: targetHeader };
 }
-
 function di3GetSchemaVersion_() {
   var raw = di3GetAppMetaValue_("schema_version");
   if (raw === null || raw === undefined || String(raw).trim() === "") return 0;
