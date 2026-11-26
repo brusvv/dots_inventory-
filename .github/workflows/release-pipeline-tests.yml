@@ -8,11 +8,15 @@ on:
       - feature/github-install-preview
       - feature/github-deployment-manager
       - feature/github-release-pipeline
+      - feature/github-preview-releases
     paths:
       - "src/apps_script/**"
       - "tools/build_release_manifest.js"
       - "tools/test_release_manifest.js"
       - "tools/run_github_deployment_manager_tests.js"
+      - "tools/validate_release_tag.sh"
+      - "tools/test_release_tag_policy.sh"
+      - ".github/workflows/release.yml"
       - ".github/workflows/release-pipeline-tests.yml"
       - "docs/GITHUB_RUNTIME_ACCEPTANCE.md"
       - "docs/ROADMAP_AND_STATUS.md"
@@ -41,6 +45,8 @@ jobs:
         run: node --check tools/build_release_manifest.js && node --check tools/test_release_manifest.js
       - name: Test release manifest contract
         run: node tools/test_release_manifest.js
+      - name: Test Stable and Preview Git tag policy
+        run: bash -n tools/validate_release_tag.sh && bash -n tools/test_release_tag_policy.sh && bash tools/test_release_tag_policy.sh
       - name: Validate all Apps Script modules
         run: bash tools/check_syntax.sh
       - name: Existing source regression suites
