@@ -1,3 +1,46 @@
+## Consolidated status — 26.11.2026 (supersedes older point-in-time notes below)
+
+Working branch: `feature/clean-final-baseline`; PR #1 remains Draft and unmerged. Target clean schema: v4. Existing RC8 workbook/deployment and `main` are not modified.
+
+### Latest verified source CI
+GitHub Actions run [45864704114](https://github.com/brusvv/dots_inventory-/actions/runs/45864704114), head `0257f3c9faef202bd8224e208e2adc1b5f83de9a`:
+- Apps Script syntax: 50/50 `.gs` files.
+- FIFO replay: 42/42.
+- Order Domain: 22/22.
+- Supply Workspace UX: 17/17.
+- Catalog/Order UX: 14/14.
+- System Safety UX: 39/39.
+- Warehouse Dashboard: 9/9.
+- Finance schema: 4/4.
+- Total: **147/147**.
+
+This is Node/source CI, not Google Apps Script runtime acceptance.
+
+### Source implementation status
+- **F-01:** fixed by selecting dispatch `CONSUME` allocations by original `dispatch_movement_id`; runtime return-after-later-FIFO-run scenario remains open.
+- **F-02:** historical-sale workflow, date-only `business_date`, explicit dispatch/completion date-time, v3→v4 migration and retry guards implemented in PR source; runtime migration and end-to-end historical sale remain open.
+- **F-03–F-07, F-09–F-10, F-13–F-16, F-18, F-20:** source hardening implemented as described in the dated sections below; runtime evidence remains outstanding. F-04 chunked payload storage is not included.
+- **F-08, F-17:** not closed. F-17 requires the user's real delivery-method catalogue; do not invent options.
+- **F-19:** pure-domain regression suite is executed by CI and passes 42/42. This does not replace Apps Script write-boundary fault injection.
+- **N-03:** clean v4 baseline, preflight, interrupted-start recovery and populated-workspace guard are implemented in source. Empty-workbook setup/rerun/interruption and v3→v4 migration remain runtime gates.
+- **N-02:** transient Sheets/service errors now leave FIFO replay `PREPARED` for retry; explicit immutable-input/integrity violations move it to `QUARANTINED`. CI covers both classifications. A distinct owner-controlled resolution path for a quarantined FIFO replay is **not implemented**; the existing manual release in OperationExecutor applies to `Operations`, not `FifoReplayEvents`. Keep this as an open safety item; do not clear FIFO quarantine by editing run/event rows manually.
+- **Warehouse Dashboard:** chart source and diagnostics are implemented, but the user-reported blank chart still needs read-only inspection of N1:O21 and actual chart ranges in Sheets.
+- **Commission/Finance:** buyer-vs-seller payer logic and Finance schema mapping are source-implemented; real migrated-order settlement and Finance Dashboard reconciliation remain open.
+
+### Remaining work that cannot be truthfully closed by source CI
+1. Restored-copy runtime acceptance: supply full edit/G6/G7/menu, F-01 return, historical sales, commission settlement, dashboard chart, PeriodGuard, same-day event order, manual IN/OUT, and all relevant UX confirmation-No paths.
+2. FIFO/OperationExecutor: N-02 quarantined replay resolution design and acceptance; F-06 write-boundary interruption and archive recovery; C-04/C-05 retries and lost acknowledgements; C-06 two-session ScriptLock.
+3. Runtime performance/finance: C-01 benchmarks, C-08 TextFinder, C-09 UNKNOWN/FREE, C-10 Money Core migration, C-15 commission reconciliation, C-16 Finance Dashboard.
+4. Setup/UX: C-11 preflight, C-12 settings/timezone, C-13 tab order, C-14 delivery methods, C-17 visual/protection review.
+5. Backup/release: BM-01 Restore-as-new and BM-02–BM-06 catalog/scheduling/retention/isolated restore/release runbooks.
+6. Decisions needed before implementation: actual delivery-method options for F-17/C-14; business policy for partial returns C-03; a role model before enabling sheet protections in C-17.
+7. Deferred beyond RC9 unless explicitly reprioritized: `SUPPLY_CORRECTION`, partial returns, duplicate historical-supply detection, cancelled-supply restoration, selective document/ledger import-export, expanded backup retention automation.
+
+### Release gate
+RC9 remains blocked until a restored disposable Google Sheets copy proves the end-to-end supply → receipt → FIFO → order → dispatch → return → finance flow, plus backup/restore, schema migration, recovery and concurrency. Do not merge PR #1 before those runtime gates pass.
+
+---
+
 # Roadmap and status — Dots Inventory v3 RC8
 
 Дата актуализации: 26.11.2026. Старые блоки UX ниже сохраняют исторические результаты на момент соответствующего патча; актуальные суммарные результаты приведены в последнем разделе. Статусы ниже отражают фактическое содержимое предоставленного `40.rar` и runtime-сведения пользователя в текущем чате.
