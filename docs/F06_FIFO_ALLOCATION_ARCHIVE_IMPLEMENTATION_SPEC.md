@@ -124,7 +124,7 @@ Append-only lifecycle log. Рекомендуемые поля:
 | replay_event_id | Уникальный event ID |
 | replay_id | Стабильная идентичность replay |
 | event_sequence | Монотонный порядковый номер события внутри replay |
-| event_type | PREPARED / COMMITTED / QUARANTINED (ABORTED reserved, not currently used) |
+| event_type | PREPARED / COMMITTED / QUARANTINED / MANUALLY_RESOLVED (owner-attested terminal resolution) |
 | fifo_run_id | Run, выполняющий replay |
 | operation_id | Исходная операция или пусто для ручного rebuild |
 | scope_type | PRODUCT или FULL |
@@ -253,7 +253,8 @@ Recovery должен запускаться до обработки новог�
 - **PREPARED + active projection fingerprint не равен ни source, ни target:** не пытаться угадать состояние; восстановить source projection из архива и lot cache, затем повторить только если input fingerprint всё ещё совпадает. Если безопасное восстановление не проходит — QUARANTINED.
 - **COMMITTED:** no-op.
 - **ABORTED:** no-op для автоматического recovery; новый replay требует новой явной операции.
-- **QUARANTINED:** блокирует новые stock mutations до ручной сверки.
+- **QUARANTINED:** блокирует новые stock mutations и не повторяется автоматически. После сверки владелец может выполнить отдельную команду, которая проверяет архивные source fingerprints и append-only записывает `MANUALLY_RESOLVED`; проекции команда не меняет.
+- **MANUALLY_RESOLVED:** терминальное owner-attested состояние. Оно означает, что владелец завершил внешнюю сверку; оно не утверждает, что код автоматически восстановил FIFO. Связанная операция, если она была в QUARANTINED, переводится в RETRYABLE отдельной новой эпохой и исполняется только через обычный recovery.
 
 При recovery сначала проверить, что входной ledger fingerprint не изменился относительно PREPARED. Новые складские операции должны оставаться заблокированными, пока существует незавершённый replay.
 
