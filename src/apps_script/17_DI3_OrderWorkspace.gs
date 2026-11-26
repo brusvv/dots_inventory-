@@ -626,10 +626,10 @@ function di3SaveHistoricalSaleForm() {
   var ui = SpreadsheetApp.getUi();
   var confirmation = ui.alert(
     "Подтвердить историческую продажу?",
-    "Дата оформления: " + command.business_date + "\\n" +
-    "Фактическая отправка: " + Utilities.formatDate(command.historical_dispatched_at, timezone, "dd.MM.yyyy HH:mm") + "\\n" +
-    "Фактическое завершение: " + Utilities.formatDate(command.historical_completed_at, timezone, "dd.MM.yyyy HH:mm") + "\\n" +
-    "Товарных строк: " + command.lines.length + "; количество единиц: " + units + "\\n\\n" +
+    "Дата оформления: " + command.business_date + "\n" +
+    "Фактическая отправка: " + Utilities.formatDate(command.historical_dispatched_at, timezone, "dd.MM.yyyy HH:mm") + "\n" +
+    "Фактическое завершение: " + Utilities.formatDate(command.historical_completed_at, timezone, "dd.MM.yyyy HH:mm") + "\n" +
+    "Товарных строк: " + command.lines.length + "; количество единиц: " + units + "\n\n" +
     "Будет создан заказ, выполнено FIFO-списание по указанному времени отправки и завершена продажа. Проверь даты и резервную копию перед подтверждением.",
     ui.ButtonSet.YES_NO
   );
