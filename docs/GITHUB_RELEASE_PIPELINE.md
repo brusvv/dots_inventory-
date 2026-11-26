@@ -129,3 +129,6 @@ The menu adds **Система → GitHub и обновления → Откат
 - Rechecks the current project fingerprint immediately before writing, calls `projects.updateContent` only after YES, then reads the project back and compares every file exactly.
 - Reports `ROLLED_BACK_AND_VERIFIED` only after exact verification. Ambiguous write/read-back outcomes include the backup of the pre-rollback state; no automatic retry or nested rollback occurs.
 - This restores Apps Script source files only. It does not restore spreadsheet data, triggers, Script Properties, versioned deployments or deployment pointers.
+
+
+D-06 source/Node CI: [run 45884074434](https://github.com/brusvv/dots_inventory-/actions/runs/45884074434) passed — 54 Apps Script syntax files, 151 existing regression tests, 9 release-manifest tests and 24 deployment-manager tests (184 automated tests total). Live Drive backup selection and Apps Script write/read-back still require acceptance in a disposable test project.
