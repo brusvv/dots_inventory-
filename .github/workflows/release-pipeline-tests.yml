@@ -3,6 +3,7 @@ name: Release pipeline checks
 on:
   push:
     branches:
+      - feature/github-code-rollback
       - feature/github-install-preview
       - feature/github-deployment-manager
       - feature/github-release-pipeline
