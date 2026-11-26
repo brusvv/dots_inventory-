@@ -38,6 +38,9 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     includes(di3ParseSupplyFullEditInput_.toString(), "di3ReadSupplyStageDateTime_");
     includes(di3GetSupplyFormStateHash_.toString(), 'times: sheet.getRange("H5:H7")');
     includes(di3HasSupplyFormUserData_.toString(), 'sheet.getRange("H5:H7")');
+    var layout = di3EnsureSupplyDatePanelLayout_.toString();
+    includes(layout, "previousKnownNote");
+    includes(layout, 'parts.time === "00:00" ? "" : parts.time');
   });
 
   test("discard confirmation is requested for dirty forms unless an internal caller explicitly bypasses it", function () {
