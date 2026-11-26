@@ -1,4 +1,7 @@
-# Dots Inventory v3 — RC8 source repository snapshot
+# Dots Inventory — source repository and v4 deployment work
+
+> **Browser-only first installation:** for a new disposable test spreadsheet, use [docs/BROWSER_ONLY_BOOTSTRAP.md](docs/BROWSER_ONLY_BOOTSTRAP.md). It installs pinned GitHub source without clasp, Git, Node.js or a local repository copy. A one-time copy of the Bootstrap file into Apps Script is still required. Do not use it on the production RC8 workbook.
+
 
 **Base source snapshot:** 2026-11-24  
 **Local patches:** 2026-11-25 (UX-01–UX-10, commission payer/schema v3, Dashboard diagnostics, F-01, source-only hardening F-03/F-04/F-05/F-09/F-11/F-13/F-15/F-16/F-18, and F-10 append-only period events)  
@@ -9,7 +12,7 @@ The base source package was assembled from the user's uploaded `40.rar`. The wor
 
 ## Repository contents
 
-- `src/apps_script/` — 43 Apps Script production and unit-test modules (`.gs`), including the local regression modules `39_DI3_SupplyWorkspaceUxTests.gs`, `40_DI3_CatalogOrderUxTests.gs`, `41_DI3_SystemSafetyUxTests.gs` and `42_DI3_FinanceSchemaTests.gs`. The patched source modules are listed in the patch logs; unmodified modules retain the base archive contents.
+- `src/apps_script/` — 47 Apps Script production and unit-test modules (`.gs`), including the local regression modules `39_DI3_SupplyWorkspaceUxTests.gs`, `40_DI3_CatalogOrderUxTests.gs`, `41_DI3_SystemSafetyUxTests.gs` and `42_DI3_FinanceSchemaTests.gs`. The patched source modules are listed in the patch logs; unmodified modules retain the base archive contents.
 - `runtime/probes/` — 7 temporary runtime probes. Some are mutating and must only be used on a disposable test copy.
 - `docs/PROJECT_CONTEXT_FOR_NEW_CHAT.md` — detailed handoff context for a new ChatGPT conversation.
 - `docs/ROADMAP_AND_STATUS.md` — current feature status and remaining work.
@@ -45,7 +48,7 @@ node tools/run_finance_schema_tests.js
 
 A GitHub Actions workflow `.github/workflows/quality-gates.yml` runs syntax checks and all local regression runners on source changes. FIFO sequence/replay, archive recovery, rollback and clean-install preflight regressions are included in the quality gates.
 
-The syntax command checks all **50** `.gs` files (43 app modules + 7 temporary probes). The seven local Node suites pass **118/118**: FIFO replay 41/41, Order Domain 17/17, Supply Workspace UX 15/15, Catalog/Order UX 12/12, System Safety UX 20/20, Warehouse Dashboard 9/9 and Finance schema 4/4. GitHub Actions run: https://github.com/brusvv/dots_inventory-/actions/runs/45721449653. These checks do not emulate Google Sheets rendering, Apps Script services, installed triggers, Drive, LockService or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or live stock operation was executed during local validation.
+The syntax command checks the Apps Script modules and temporary runtime probes; the browser-only Bootstrap is validated separately. The seven local Node suites pass **118/118**: FIFO replay 41/41, Order Domain 17/17, Supply Workspace UX 15/15, Catalog/Order UX 12/12, System Safety UX 20/20, Warehouse Dashboard 9/9 and Finance schema 4/4. GitHub Actions run: https://github.com/brusvv/dots_inventory-/actions/runs/45721449653. These checks do not emulate Google Sheets rendering, Apps Script services, installed triggers, Drive, LockService or the full application's regression harness. UX changes remain subject to runtime acceptance on a restored test spreadsheet. No migration, batch recovery, period reopening or live stock operation was executed during local validation.
 
 ## Safe operating rules
 
