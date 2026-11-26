@@ -78,6 +78,20 @@ function di3RunCatalogOrderUxUnitTests() {
     includes(source, "Принять возврат (из «Возвращается»)…");
     includes(source, "Отменить заказ (только «Новый»)…");
   });
+  test("order register uses adjacent date and HH:mm inputs for lifecycle transitions", function () {
+    equal(DI3_ORDER_REGISTER_HEADERS.length, 19);
+    equal(DI3_ORDER_REGISTER_HEADERS[15], "Дата следующего этапа");
+    equal(DI3_ORDER_REGISTER_HEADERS[16], "Время следующего этапа (HH:mm)");
+    var setup = di3SetupOrderRegister.toString();
+    includes(setup, "DI3_ORDER_REGISTER_PREVIOUS_CURRENT_HEADERS");
+    includes(setup, "di3SplitRegisterEffectiveInput_");
+    var selected = di3GetSelectedOrderRegisterRow_.toString();
+    includes(selected, "di3BuildEffectiveDateTime_");
+    includes(selected, "sheet.getRange(row, 17).getDisplayValue()");
+    var transition = di3TransitionSelectedOrder_.toString();
+    includes(transition, "getRange(selected.row_number, 16, 1, 2).clearContent()");
+  });
+
   test("order transitions require YES before domain transition executes", function () {
     var source = di3TransitionSelectedOrder_.toString();
     var prompt = source.indexOf("SpreadsheetApp.getUi().alert");
