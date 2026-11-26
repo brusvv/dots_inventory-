@@ -56,7 +56,7 @@ The Apps Script menu adds **Система → GitHub и обновления**:
 
 1. In the Google Cloud project associated with the Apps Script project, enable **Google Apps Script API**.
 2. Ensure the actual Apps Script project manifest contains the OAuth scopes:
-   - `https://www.googleapis.com/auth/script.projects`
+   - `https://www.googleapis.com/auth/script.projects.readonly`
    - `https://www.googleapis.com/auth/script.external_request`
    - Existing Drive scope must permit creating and reading files in the configured backup folder.
 3. Save the manifest in the actual Apps Script project. This repository deliberately does not contain a fabricated `appsscript.json`; do not replace the target manifest with a guessed one.
