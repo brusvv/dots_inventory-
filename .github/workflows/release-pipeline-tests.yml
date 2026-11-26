@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - feature/github-install-preview
-      - feature/github-install-preview
       - feature/github-deployment-manager
       - feature/github-release-pipeline
     paths:
