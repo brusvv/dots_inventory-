@@ -353,7 +353,7 @@ The following issues have source changes and local regression coverage. They are
 
 The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applies consistently to **orders, supplies and manual warehouse movements**, not only F-02 historical sales. New design contract: `docs/OPERATION_DATE_TIME_UX_DESIGN.md`.
 
-- Orders: separate next-transition date/time inputs; F-02 historical dispatch and completion each use separate mandatory date/time pairs. `business_date` remains date-only.
+- Orders: ordinary next-transition inputs use separate date/time controls; F-02 historical dispatch uses a required date plus an optional time window with the conservative interval-start rule, while completion retains a required date/time pair. `business_date` remains date-only.
 - Supplies: normal next-stage input becomes a date/time pair; historical supply actual events sent/awaiting/received (G5:G7) each use a date/time pair. Store order date and expected arrival date remain date-only.
 - Warehouse: manual IN/OUT operation date and time become adjacent required inputs.
 - Canonical event timestamps remain single timestamps; `recorded_at`/`created_at` remain system times. No supply/StockLedger schema migration is introduced solely for UI separation.
