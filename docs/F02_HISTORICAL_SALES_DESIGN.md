@@ -1,7 +1,7 @@
 # F-02 — historical sales: source audit and implementation design
 
 Date: 25 November 2026
-Status: SOURCE IMPLEMENTATION IN PROGRESS — coordinated F-02 source patch is on the PR branch; Google Sheets runtime acceptance is still pending.
+Status: SOURCE IMPLEMENTATION + CI PASSED — F-02 source patch and regression suite are on the PR branch; Google Sheets runtime acceptance is still pending.
 
 ## 1. Current source findings
 
@@ -159,4 +159,4 @@ Implemented on `feature/clean-final-baseline` / PR #1:
 - Added business date to the order register as a separate visible field. Finance Dashboard recognition remains based on `completed_at`; business_date does not move revenue or COGS between periods.
 - Added source regression tests for request-hash binding, the historical-only created_at bypass, and immutable dispatch retry timestamp checks.
 
-**Not yet accepted:** the latest CI run for the current source revision must pass; then the migration, historical form, FIFO chronology, PeriodGuard, commissions, Finance Dashboard and retry/fault-recovery flows must be exercised on a restored disposable workbook. No production workbook, live RC8 data, or deployed Apps Script was changed by this source patch. PR #1 remains Draft and unmerged.
+**Source CI passed:** GitHub Actions run `45847110942` (run #146) passed syntax for 50 `.gs` files and all 133/133 regression tests, including the three F-02 cases. Subsequent commits to the branch only updated documentation. **Not yet runtime-accepted:** the migration, historical form, FIFO chronology, PeriodGuard, commissions, Finance Dashboard and retry/fault-recovery flows must be exercised on a restored disposable workbook. No production workbook, live RC8 data, or deployed Apps Script was changed by this source patch. PR #1 remains Draft and unmerged.
