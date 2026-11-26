@@ -449,6 +449,9 @@ function di3EnsureCoreFoundationSchemas_(allowPlannedSchemaMigrations) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       di3SetFrozenRowsSafely_(sheet, 1);
       sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+      if (name === "V3_Orders" && headers.length === 30 && sheet.getMaxRows() > 1) {
+        sheet.getRange(2, 30, sheet.getMaxRows() - 1, 1).setNumberFormat("dd.mm.yyyy");
+      }
       di3CompactSheet_(sheet, DI3_TABLE_MIN_ROWS[name] || 1, headers.length);
       return;
     }
