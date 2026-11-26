@@ -8,6 +8,7 @@ on:
       - "src/apps_script/**"
       - "tools/build_release_manifest.js"
       - "tools/test_release_manifest.js"
+      - "tools/run_github_deployment_manager_tests.js"
       - ".github/workflows/release-pipeline-tests.yml"
   pull_request:
     branches:
