@@ -292,46 +292,48 @@ function di3ValidateSupplyPlanningDates_(orderCreatedInStoreDate, expectedReceiv
  * persisted timestamps, while only the next stage's cell is enabled for input.
  * When saving a draft, preserve the one pending next-stage value typed by the user.
  */
+function di3ReadSupplyStageDateTime_(sheet, dateCell, label, optional) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  var dateValue = sheet.getRange(dateCell).getValue();
+  var rowNumber = String(dateCell).replace(/^[A-Z]+/, "");
+  var timeValue = sheet.getRange("H" + rowNumber).getDisplayValue();
+  if ((dateValue === "" || dateValue == null) && !String(timeValue || "").trim() && optional === true) return null;
+  return di3BuildEffectiveDateTime_(dateValue, timeValue, label);
+}
+
+/** G4 is system time; G5:G7 are date-picker values and H5:H7 are mandatory HH:mm inputs. */
 function di3RefreshSupplyDatePanel_(supply, options) {
   options = options || {};
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
   if (!sheet) return { refreshed: false, reason: "SHEET_MISSING" };
-
   var historicalMode = String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") === "HISTORICAL_CREATE";
   var fullEditMode = String(sheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === "FULL_EDIT";
-  var previousStageInputs = (historicalMode || fullEditMode) ? sheet.getRange("G5:G7").getValues().map(function (row) { return row[0]; }) : [];
-  var pendingValue = "";
+  var previousDates = sheet.getRange("G5:G7").getValues().map(function (row) { return row[0]; });
+  var previousTimes = sheet.getRange("H5:H7").getDisplayValues().map(function (row) { return String(row[0] || ""); });
   var nextStage = supply && typeof di3GetNextSupplyStageConfig_ === "function"
     ? di3GetNextSupplyStageConfig_(supply.status) : null;
-  if (options.preservePendingInput === true && nextStage) {
-    pendingValue = sheet.getRange(nextStage.input_cell).getValue();
-  }
-
   var values = supply
     ? [supply.created_at || "", supply.sent_at || "", supply.awaiting_at || "", supply.received_at || ""]
     : ["", "", "", ""];
-  if (historicalMode || fullEditMode) {
-    // In historical-entry and full-edit modes all factual dates are explicit user inputs.
-    // Preserve them through form refreshes; persisted values take precedence on retry.
-    ["G5", "G6", "G7"].forEach(function (cell, index) {
-      var persistedIndex = index + 1;
-      var pending = previousStageInputs[index];
-      if ((!values[persistedIndex] || values[persistedIndex] === "") && pending !== "" && pending != null) {
-        values[persistedIndex] = pending;
-      }
-    });
-  } else if (options.preservePendingInput === true && nextStage && pendingValue !== "" && pendingValue != null) {
-    var pendingIndex = { G5: 1, G6: 2, G7: 3 }[nextStage.input_cell];
-    if (pendingIndex != null && !values[pendingIndex]) values[pendingIndex] = pendingValue;
+  var dateValues = ["", "", ""], timeValues = ["", "", ""];
+  for (var i = 0; i < 3; i++) {
+    if (values[i + 1]) {
+      var parts = di3SplitEffectiveDateTime_(values[i + 1], "Сохранённый этап поставки");
+      dateValues[i] = parts.date; timeValues[i] = parts.time;
+    } else if (historicalMode || fullEditMode ||
+        (options.preservePendingInput === true && nextStage && nextStage.input_cell === ("G" + (i + 5)))) {
+      dateValues[i] = previousDates[i] || "";
+      timeValues[i] = previousTimes[i] || "";
+    }
   }
-
-  sheet.getRange("G4:G7").setValues(values.map(function (value) { return [value]; }));
-  sheet.getRange("G4:G7").setNumberFormat("dd.mm.yyyy hh:mm");
+  sheet.getRange("G4").setValue(values[0] || "").setNumberFormat("dd.mm.yyyy hh:mm");
+  sheet.getRange("G5:G7").setValues(dateValues.map(function (value) { return [value]; })).setNumberFormat("dd.mm.yyyy");
+  sheet.getRange("H5:H7").setValues(timeValues.map(function (value) { return [value]; })).setNumberFormat("@");
   di3ApplySupplyStageInputState_(sheet, supply, nextStage);
   return {
     refreshed: true,
     supply_number: supply ? String(supply.supply_number || "") : "",
-    next_input_cell: (historicalMode || fullEditMode) ? "G5:G7" : (nextStage ? nextStage.input_cell : ""),
+    next_input_cell: (historicalMode || fullEditMode) ? "G5:H7" : (nextStage ? nextStage.input_cell + ":H" + nextStage.input_cell.substring(1) : ""),
     mode: historicalMode ? "HISTORICAL_CREATE" : (fullEditMode ? "FULL_EDIT" : "STANDARD")
   };
 }
@@ -347,29 +349,22 @@ function di3ApplySupplyStageInputState_(sheet, supply, nextStage) {
   var historicalMode = String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") === "HISTORICAL_CREATE";
   var fullEditMode = String(sheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === "FULL_EDIT";
   inputs.forEach(function (item) {
-    var cell = sheet.getRange(item.cell);
     var rowNumber = item.cell.substring(1);
-    if (historicalMode || fullEditMode) {
-      cell.setDataValidation(validation);
-      sheet.getRange(item.cell + ":J" + rowNumber).setBackground("#FFF7E6").setFontColor("#1F2937");
-      cell.setNote(historicalMode
-        ? "Режим «Внести старую поставку»: введи фактическую дату " + item.label + ". Все даты G5:G7 будут проверены вместе перед созданием складской приёмки."
-        : "Режим «Полное редактирование»: можно исправить фактическую дату " + item.label + ". Перед сохранением скрипт проверит хронологию. Для уже полученной поставки изменение G7 требует отдельной складской корректировки.");
-      return;
-    }
-    var active = !!(nextStage && nextStage.input_cell === item.cell);
-    if (active) {
-      cell.setDataValidation(validation);
-      sheet.getRange(item.cell + ":J" + rowNumber).setBackground("#FFF7E6").setFontColor("#1F2937");
-      cell.setNote("Поле ввода фактической даты " + item.label + ". Введи дату и время, затем выбери «Поставки» → «Применить следующий этап из формы». Переход проверит хронологию. Пустая дата не заменяется текущей.");
-    } else {
-      cell.setDataValidation(blockedValidation);
-      sheet.getRange(item.cell + ":J" + rowNumber).setBackground("#F1F5F9").setFontColor("#64748B");
-      var saved = supply && supply[item.field];
-      cell.setNote(saved
-        ? "Сохранённая фактическая дата. Поле доступно только для просмотра."
-        : "Поле пока недоступно. Сначала заверши предыдущий этап поставки.");
-    }
+    var dateCell = sheet.getRange(item.cell);
+    var timeCell = sheet.getRange("H" + rowNumber);
+    var editable = historicalMode || fullEditMode || !!(nextStage && nextStage.input_cell === item.cell);
+    dateCell.setDataValidation(editable ? validation : blockedValidation);
+    if (editable) timeCell.clearDataValidations(); else timeCell.setDataValidation(blockedValidation);
+    timeCell.setNumberFormat("@");
+    sheet.getRange("G" + rowNumber + ":H" + rowNumber)
+      .setBackground(editable ? "#FFF7E6" : "#F1F5F9")
+      .setFontColor(editable ? "#1F2937" : "#64748B");
+    dateCell.setNote(editable
+      ? "Введи календарную дату " + item.label + ". Время укажи отдельно в H" + rowNumber + " в формате HH:mm."
+      : (supply && supply[item.field] ? "Сохранённая дата этапа. Поле доступно только для просмотра." : "Поле пока недоступно. Сначала заверши предыдущий этап поставки."));
+    timeCell.setNote(editable
+      ? "Обязательное фактическое время " + item.label + " в формате HH:mm (24 часа)."
+      : "Время сохранённого этапа или заблокированное поле.");
   });
 }
 
