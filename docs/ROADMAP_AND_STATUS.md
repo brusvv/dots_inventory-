@@ -353,7 +353,7 @@ The following issues have source changes and local regression coverage. They are
 
 The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applies consistently to **orders, supplies and manual warehouse movements**, not only F-02 historical sales. New design contract: `docs/OPERATION_DATE_TIME_UX_DESIGN.md`.
 
-- Orders: ordinary lifecycle transitions use separate date/time controls. F-02 historical sales add a manually entered date-only customer-order `business_date`; actual `created_at`, dispatch and completion timestamps retain their independent meanings.
+- Orders: ordinary lifecycle transitions use separate date/time controls. F-02 historical sales add a manually entered date-only customer-order `business_date` and separately capture actual historical dispatch and completion date/time. Historical dispatch may precede `created_at` only in the explicit historical-sale path; FIFO still uses actual dispatch `effective_at`.
 - Supplies: normal next-stage input becomes a date/time pair; historical supply actual events sent/awaiting/received (G5:G7) each use a date/time pair. Store order date and expected arrival date remain date-only.
 - Warehouse: manual IN/OUT operation date and time become adjacent required inputs.
 - Canonical event timestamps remain single timestamps; `recorded_at`/`created_at` remain system times. No supply/StockLedger schema migration is introduced solely for UI separation.
@@ -361,12 +361,12 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - This is a design freeze only. Source implementation and regression tests remain pending; PR #1 remains Draft/unmerged and no workbook/runtime changes are authorized by this documentation update.
 
 
-## F-02 — customer-order business date clarification — 26.11.2026
+## F-02 — customer-order date and historical lifecycle clarification — 26.11.2026
 
-- Owner clarified the real scenario: a buyer may place an order at 23:00, while the user sees and records it the following morning.
-- F-02 therefore needs a manually entered, date-only `business_date` for the customer-order date, separate from the automatically recorded `created_at`. Example: buyer order on 25 November at 23:00, entered on 26 November at 08:00 → business_date = 25 November; created_at = 26 November 08:00.
-- This business date is reporting/business metadata, not a stock event timestamp. It must not be substituted for dispatch `effective_at`, and it must not change FIFO lot allocation or cost/profit linkage.
-- Physical dispatch and completion remain ordinary, separate lifecycle transitions with their actual event date/time. Existing FIFO preflight/replay continues to use actual dispatch chronology.
-- Simplified F-02 removes the previously proposed dispatch time window, uncertainty interval, same-product overlap guard and `dispatch_time_precision` field. The v3→v4 proposal appends only `business_date` (AD); existing 29 columns remain in place.
-- No source code, schema registry, workbook or runtime data changed in this clarification. The F-02 design and date/time UX documents were updated only.
-- This supersedes the 26.11.2026 “conservative historical dispatch timestamp” decision above. F-02 source implementation remains coordinated with the F-06 clean-baseline schema freeze; PR #1 remains Draft/unmerged and the existing RC8 workbook remains untouched.
+- The customer-order `business_date` is distinct from the actual workbook `created_at`. Example: customer order 25 November 23:00, entered 26 November 08:00 → business_date = 25 November; created_at = 26 November 08:00.
+- A historical sale still requires its actual dispatch date/time and completion date/time. These are independent lifecycle event timestamps; `business_date` is never used as StockLedger `effective_at`.
+- Historical mode must bypass current-stock availability rejection during draft creation and rely on scoped FIFO preflight/replay at the actual dispatch timestamp. It may bypass the ordinary dispatch-not-before-created_at guard only inside the explicit historical-sale workflow; all other FIFO, pending-operation, PeriodGuard and returned-order checks remain.
+- Completion chronology is checked against the actual dispatch timestamp. Finance Dashboard continues recognizing sales on `completed_at`; `business_date` does not move recognized revenue/COGS into another financial period.
+- The v3→v4 schema appends only `V3_Orders.business_date` (AD); existing 29 columns remain in place. The proposed dispatch precision/window/uncertainty fields remain removed.
+- Source audit found implementation blockers: current order draft rejects quantities above today's stock; current `di3DispatchOrder_` rejects dispatch before `created_at`; the ordinary order form has no business-date or historical lifecycle controls; and the order register currently shows only `created_at`. These must be addressed in one coordinated F-02 source patch, with tests for historical vs ordinary behavior and idempotent recovery.
+- No source code, schema registry, workbook or runtime data changed in this documentation update. PR #1 remains Draft/unmerged; existing RC8 workbook remains untouched.
