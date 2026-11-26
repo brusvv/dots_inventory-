@@ -1,7 +1,7 @@
 # Unified date/time input contract — orders, supplies and warehouse
 
 Date confirmed: 26 November 2026  
-Status: UX / domain contract frozen for implementation; source changes not yet applied.
+Status: PARTIALLY IMPLEMENTED — F-02 historical-sale inputs are present on the source branch; ordinary order, supply and warehouse date/time input work remains pending.
 
 ## 1. Decision
 
