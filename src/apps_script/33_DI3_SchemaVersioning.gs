@@ -1,13 +1,50 @@
 /** Dots Inventory v3 — explicit schema version and migration journal. */
-var DI3_SCHEMA_VERSION = 3;
+var DI3_SCHEMA_VERSION = 4;
 var DI3_SCHEMA_BASELINE_MIGRATION_KEY = "RC8_SCHEMA_BASELINE_ADOPTION";
 var DI3_CLEAN_BASELINE_MIGRATION_KEY = "CLEAN_FINAL_BASELINE_ADOPTION";
 var DI3_SCHEMA_MIGRATION_DEFINITIONS = Object.freeze([
   { key: "RC8_SUPPLY_PLANNING_DATES_V2", from: 1, to: 2,
     details: "Append supplier_order_date and expected_received_date to V3_Supplies; preserve all legacy columns and rows." },
   { key: "RC8_ORDER_COMMISSION_PAYER_V3", from: 2, to: 3,
-    details: "Append commission_payer to V3_Orders; backfill existing orders as BUYER to preserve the previous settlement policy." }
+    details: "Append commission_payer to V3_Orders; backfill existing orders as BUYER to preserve the previous settlement policy." },
+  { key: "RC8_ORDER_BUSINESS_DATE_V4", from: 3, to: 4,
+    details: "Append business_date to V3_Orders and backfill the local calendar date from created_at without changing historical timestamps." }
 ]);
+
+function di3ApplyOrderBusinessDateMigration_() {
+  var sheet = di3GetSheetOrThrow_("V3_Orders");
+  var expectedPrefix = DI3_TABLE_SCHEMAS.V3_Orders.slice(0, 29);
+  var targetHeader = "business_date";
+  if (sheet.getMaxColumns() < 30) sheet.insertColumnsAfter(sheet.getMaxColumns(), 30 - sheet.getMaxColumns());
+  var actual = sheet.getRange(1, 1, 1, 30).getDisplayValues()[0].map(di3NormalizeHeader_);
+  if (!expectedPrefix.every(function (header, index) { return actual[index] === header; })) {
+    throw new Error("F-02 migration остановлена: V3_Orders!A:AC не соответствует проверенной схеме v3.");
+  }
+  if (actual[29] && actual[29] !== targetHeader) {
+    throw new Error("F-02 migration остановлена: V3_Orders!AD1 занята неизвестным заголовком.");
+  }
+  if (!actual[29] && di3PreflightHasBodyValues_(sheet, 30, 1)) {
+    throw new Error("F-02 migration остановлена: V3_Orders!AD содержит данные при пустом заголовке.");
+  }
+  if (!actual[29]) sheet.getRange(1, 30).setValue(targetHeader).setFontWeight("bold");
+  var lastRow = sheet.getLastRow();
+  var backfilled = 0;
+  if (lastRow >= 2) {
+    var values = sheet.getRange(2, 1, lastRow - 1, 30).getValues();
+    var timezone = di3GetConfiguredTimeZone_();
+    values.forEach(function (row, index) {
+      if (row[29] !== "" && row[29] != null) return;
+      if (!row[2]) throw new Error("F-02 migration остановлена: у заказа в строке " + (index + 2) + " отсутствует created_at.");
+      var createdAt = di3ToDate_(row[2], "created_at заказа в строке " + (index + 2));
+      var dateText = Utilities.formatDate(createdAt, timezone, "yyyy-MM-dd");
+      row[29] = Utilities.parseDate(dateText, timezone, "yyyy-MM-dd");
+      backfilled++;
+    });
+    if (backfilled) sheet.getRange(2, 1, values.length, 30).setValues(values);
+  }
+  di3CompactSheet_(sheet, Math.max(1, lastRow), 30);
+  return { status: "APPLIED", orders: Math.max(0, lastRow - 1), rows_backfilled: backfilled, header: targetHeader };
+}
 
 function di3GetSchemaVersion_() {
   var raw = di3GetAppMetaValue_("schema_version");
@@ -312,6 +349,9 @@ function di3EnsureSchemaVersioning_(backup) {
       var orderSheet = di3GetSheetOrThrow_("V3_Orders");
       var payerHeader = di3NormalizeHeader_(orderSheet.getRange(1, 29).getDisplayValue());
       if (payerHeader !== "commission_payer") throw new Error("Миграция " + definition.key + " не завершена: заголовок V3_Orders!AC1 не готов.");
+    } else if (definition.key === "RC8_ORDER_BUSINESS_DATE_V4") {
+      var businessDateResult = di3ApplyOrderBusinessDateMigration_();
+      if (businessDateResult.status !== "APPLIED") throw new Error("Миграция " + definition.key + " не подтвердила применение.");
     } else {
       throw new Error("Неизвестная миграция схемы: " + definition.key);
     }
