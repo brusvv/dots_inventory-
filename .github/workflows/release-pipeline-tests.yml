@@ -13,6 +13,7 @@ on:
       - ".github/workflows/release-pipeline-tests.yml"
   pull_request:
     branches:
+      - feature/github-deployment-manager
       - feature/github-release-pipeline
 
 permissions:
