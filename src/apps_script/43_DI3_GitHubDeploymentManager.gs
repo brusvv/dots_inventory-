@@ -199,7 +199,7 @@ function di3GetAppsScriptProjectContent_() {
   var text = String(response.getContentText() || "");
   if (code !== 200) {
     var hint = code === 401 || code === 403 ?
-      " Нужны включённый Apps Script API и OAuth scopes https://www.googleapis.com/auth/script.projects и https://www.googleapis.com/auth/script.external_request." : "";
+      " Нужны включённый Apps Script API и OAuth scopes https://www.googleapis.com/auth/script.projects.readonly и https://www.googleapis.com/auth/script.external_request." : "";
     throw new Error("Apps Script API projects.getContent вернул HTTP " + code + "." + hint + " Ответ: " + text.slice(0, 500));
   }
   var content;
