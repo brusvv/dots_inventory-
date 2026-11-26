@@ -3,6 +3,7 @@ name: Release pipeline checks
 on:
   push:
     branches:
+      - feature/github-install-preview
       - feature/github-deployment-manager
       - feature/github-release-pipeline
     paths:
@@ -13,11 +14,15 @@ on:
       - ".github/workflows/release-pipeline-tests.yml"
   pull_request:
     branches:
+      - feature/github-code-rollback
+      - feature/github-install-preview
       - feature/github-deployment-manager
       - feature/github-release-pipeline
 
 permissions:
   contents: read
+
+# D-05 confirmed installer and post-write verification are included in this workflow.
 
 jobs:
   release-contract:
