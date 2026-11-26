@@ -514,6 +514,14 @@ function di3CreateHistoricalSale(command) {
     } else {
       throw new Error("Историческую продажу нельзя продолжить из статуса «" + order.status + "».");
     }
+    var dispatchOperation = di3GetOrderOperationByKey_("ORDER_DISPATCH:" + order.order_id);
+    if (!dispatchOperation) throw new Error("Для исторической продажи не найдена неизменяемая операция ORDER_DISPATCH.");
+    var persistedDispatchPayload = di3ReadVerifiedOperationPayload_(dispatchOperation);
+    if (String(dispatchOperation.values[5]) !== "COMMITTED" ||
+        String(persistedDispatchPayload.dispatched_at || "") !== dispatchAt.toISOString() ||
+        persistedDispatchPayload.historical_mode !== true) {
+      throw new Error("Историческое списание не подтверждено неизменяемой операцией с точной датой и историческим режимом.");
+    }
     var completionAlreadyApplied = String(order.status) === DI3_ORDER_STATUS.COMPLETED;
     if (String(order.status) === DI3_ORDER_STATUS.IN_TRANSIT) {
       di3ChangeOrderNonStockStatus_(order, DI3_ORDER_STATUS.COMPLETED, completionAt);
