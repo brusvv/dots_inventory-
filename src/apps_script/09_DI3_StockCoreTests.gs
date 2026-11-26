@@ -1019,7 +1019,7 @@ function di3RunStockCoreUnitTests() {
       allocationFingerprint: di3BuildFifoAllocationSnapshotFingerprint_,
       fingerprint: di3BuildFifoFingerprint_,
       append: di3AppendFifoReplayEvent_, updateRun: di3UpdateFifoRunStatus_,
-      actor: di3GetActorEmail_
+      actor: typeof di3GetActorEmail_ === "function" ? di3GetActorEmail_ : null
     };
     var event = ["event-2", "OP:op-1:PRODUCT:p1", 2, "QUARANTINED", "run-1", "",
       "PRODUCT", '["p1"]', "input-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
@@ -1083,7 +1083,8 @@ function di3RunStockCoreUnitTests() {
       di3BuildFifoFingerprint_ = originals.fingerprint;
       di3AppendFifoReplayEvent_ = originals.append;
       di3UpdateFifoRunStatus_ = originals.updateRun;
-      di3GetActorEmail_ = originals.actor;
+      if (originals.actor) di3GetActorEmail_ = originals.actor;
+      else delete di3GetActorEmail_;
     }
   });
 
