@@ -39,6 +39,9 @@ function di3ApplyOrderBusinessDateMigration_() {
   createdValues.forEach(function (row, index) {
     if (!row[0]) throw new Error("F-02 migration остановлена: у заказа в строке " + (index + 2) + " отсутствует created_at.");
     di3ToDate_(row[0], "created_at заказа в строке " + (index + 2));
+    if (businessDates[index][0] !== "" && businessDates[index][0] != null) {
+      di3FormatBusinessDate_(businessDates[index][0]);
+    }
   });
   if (!actual[29]) sheet.getRange(1, 30).setValue(targetHeader).setFontWeight("bold");
   var timezone = di3GetConfiguredTimeZone_();
