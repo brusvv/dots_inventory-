@@ -248,6 +248,35 @@ function di3RunOrderDomainUnitTests() {
     equal(plan.seller_revenue_estimate, 950);
     equal(plan.estimated_profit, 350);
   });
+  test("shared event date-time parser requires strict HH:mm and normalizes seconds", function () {
+    var originalUtilities = globalThis.Utilities;
+    var originalTimezone = di3GetConfiguredTimeZone_;
+    try {
+      di3GetConfiguredTimeZone_ = function () { return "Test/Zone"; };
+      globalThis.Utilities = {
+        formatDate: function (date, timezone, pattern) {
+          if (pattern === "yyyy-MM-dd") return date.getUTCFullYear() + "-" + String(date.getUTCMonth() + 1).padStart(2, "0") + "-" + String(date.getUTCDate()).padStart(2, "0");
+          if (pattern === "yyyy-MM-dd HH:mm") return date.getUTCFullYear() + "-" + String(date.getUTCMonth() + 1).padStart(2, "0") + "-" + String(date.getUTCDate()).padStart(2, "0") + " " + String(date.getUTCHours()).padStart(2, "0") + ":" + String(date.getUTCMinutes()).padStart(2, "0");
+          return "";
+        },
+        parseDate: function (value) {
+          var match = String(value).match(/^(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2})$/);
+          if (!match) return new Date(NaN);
+          return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), 0, 0));
+        }
+      };
+      var sourceDate = new Date(Date.UTC(2026, 10, 26, 18, 22, 43, 900));
+      var result = di3BuildEffectiveDateTime_(sourceDate, "09:45", "Тест");
+      equal(result.toISOString(), "2026-11-26T09:45:00.000Z");
+      throws(function () { di3BuildEffectiveDateTime_(sourceDate, "", "Тест"); }, /HH:mm/);
+      throws(function () { di3BuildEffectiveDateTime_(sourceDate, "9:45", "Тест"); }, /HH:mm/);
+      throws(function () { di3BuildEffectiveDateTime_(sourceDate, "24:00", "Тест"); }, /HH:mm/);
+    } finally {
+      globalThis.Utilities = originalUtilities;
+      di3GetConfiguredTimeZone_ = originalTimezone;
+    }
+  });
+
   test("historical sale request hash binds business date and both historical event timestamps", function () {
     var originalHash = di3BuildManualOperationPayloadHash_;
     var originalBusinessDate = di3FormatBusinessDate_;
