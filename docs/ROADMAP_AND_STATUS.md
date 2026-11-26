@@ -353,7 +353,7 @@ The following issues have source changes and local regression coverage. They are
 
 The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applies consistently to **orders, supplies and manual warehouse movements**, not only F-02 historical sales. New design contract: `docs/OPERATION_DATE_TIME_UX_DESIGN.md`.
 
-- Orders: ordinary next-transition inputs use separate date/time controls; F-02 historical dispatch uses a required date plus an optional time window with the conservative interval-start rule, while completion retains a required date/time pair. `business_date` remains date-only.
+- Orders: ordinary lifecycle transitions use separate date/time controls. F-02 historical sales add a manually entered date-only customer-order `business_date`; actual `created_at`, dispatch and completion timestamps retain their independent meanings.
 - Supplies: normal next-stage input becomes a date/time pair; historical supply actual events sent/awaiting/received (G5:G7) each use a date/time pair. Store order date and expected arrival date remain date-only.
 - Warehouse: manual IN/OUT operation date and time become adjacent required inputs.
 - Canonical event timestamps remain single timestamps; `recorded_at`/`created_at` remain system times. No supply/StockLedger schema migration is introduced solely for UI separation.
@@ -361,13 +361,12 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - This is a design freeze only. Source implementation and regression tests remain pending; PR #1 remains Draft/unmerged and no workbook/runtime changes are authorized by this documentation update.
 
 
-## F-02 — conservative historical dispatch timestamp decision — 26.11.2026
+## F-02 — customer-order business date clarification — 26.11.2026
 
-- Confirmed date-only dispatch fallback: use the beginning of the local dispatch date (`00:00:00`) in `DI3_APP_CONFIG.TIME_ZONE`; do not use noon, end-of-day or entry time.
-- If an optional time window is supplied, use its start as the conservative FIFO boundary. A zero-width window (`from = to`) represents one exact minute.
-- To prevent ambiguous same-product FIFO ordering, block dispatch when another StockLedger event for any sold product falls inside or on the boundary of the supplied uncertainty interval. The user must narrow the interval or supply a more precise time. For date-only input, any same-product event on that local date makes the date-only entry ambiguous.
-- Added `dispatch_time_precision` to the planned v4 order schema so the order register/audit does not present an approximation as an exact time. Values: `EXACT_MINUTE`, `WINDOW_START_APPROXIMATE`, `DATE_START_APPROXIMATE`, `LEGACY_UNKNOWN`. The v3→v4 compatibility migration backfills old rows as `LEGACY_UNKNOWN`.
-- The configured project timezone was source-verified as `Europe/Helsinki` in `src/apps_script/00_DI3_AppConfig.gs`; implementation must continue to read the config, not hardcode this value.
-- Updated `docs/F02_HISTORICAL_SALES_DESIGN.md` and `docs/OPERATION_DATE_TIME_UX_DESIGN.md` to remove the earlier contradiction. This is documentation/design only: no Apps Script source, schema registry, workbook, or runtime data changed.
-- **Still requires owner confirmation before implementation:** completion chronology must be validated against the latest possible dispatch instant (window end, or end of local dispatch date for date-only input). A date-only dispatch may therefore require completion on the following date. This user-visible consequence is not yet approved.
-- F-02 remains blocked from source implementation until the completion chronology rule is confirmed and the v4/F-06 clean-baseline schema contracts are frozen together.
+- Owner clarified the real scenario: a buyer may place an order at 23:00, while the user sees and records it the following morning.
+- F-02 therefore needs a manually entered, date-only `business_date` for the customer-order date, separate from the automatically recorded `created_at`. Example: buyer order on 25 November at 23:00, entered on 26 November at 08:00 → business_date = 25 November; created_at = 26 November 08:00.
+- This business date is reporting/business metadata, not a stock event timestamp. It must not be substituted for dispatch `effective_at`, and it must not change FIFO lot allocation or cost/profit linkage.
+- Physical dispatch and completion remain ordinary, separate lifecycle transitions with their actual event date/time. Existing FIFO preflight/replay continues to use actual dispatch chronology.
+- Simplified F-02 removes the previously proposed dispatch time window, uncertainty interval, same-product overlap guard and `dispatch_time_precision` field. The v3→v4 proposal appends only `business_date` (AD); existing 29 columns remain in place.
+- No source code, schema registry, workbook or runtime data changed in this clarification. The F-02 design and date/time UX documents were updated only.
+- This supersedes the 26.11.2026 “conservative historical dispatch timestamp” decision above. F-02 source implementation remains coordinated with the F-06 clean-baseline schema freeze; PR #1 remains Draft/unmerged and the existing RC8 workbook remains untouched.
