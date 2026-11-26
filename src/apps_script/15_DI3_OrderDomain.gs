@@ -453,7 +453,9 @@ function di3BuildOrderDraftPayload_(command) {
     item_rows: itemRows,
     created_at: createdAt.toISOString(),
     business_date: Utilities.formatDate(businessDate, di3GetConfiguredTimeZone_(), "yyyy-MM-dd"),
-    historical_mode: historicalMode
+    historical_mode: historicalMode,
+    historical_dispatched_at: historicalMode ? di3ToDate_(command.historical_dispatched_at, "Историческая дата отправки").toISOString() : "",
+    historical_completed_at: historicalMode ? di3ToDate_(command.historical_completed_at, "Историческая дата завершения").toISOString() : ""
   };
 }
 
