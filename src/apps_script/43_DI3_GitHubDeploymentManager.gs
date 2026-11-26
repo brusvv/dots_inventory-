@@ -174,7 +174,7 @@ function di3FetchGitHubAsset_(asset, expectedName) {
 
 function di3GetLatestGitHubReleaseManifest_() {
   var config = di3GetGitHubDeploymentConfig_();
-  if (!/^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$/.test(config.repository)) throw new Error("Некорректный DI3_APP_CONFIG.GITHUB_RELEASE.REPOSITORY.");
+  if (config.repository.split("/").length !== 2 || !/^[A-Za-z0-9_.-]+$/.test(config.repository.split("/")[0]) || !/^[A-Za-z0-9_.-]+$/.test(config.repository.split("/")[1])) throw new Error("Некорректный DI3_APP_CONFIG.GITHUB_RELEASE.REPOSITORY.");
   if (config.release_channel !== "stable" && config.release_channel !== "preview") throw new Error("GITHUB_RELEASE.RELEASE_CHANNEL должен быть stable или preview.");
   var apiBase = "https://api.github.com/repos/" + config.repository;
   var release;
