@@ -8,7 +8,7 @@ on:
       - "tools/**"
       - ".github/workflows/**"
   pull_request:
-    branches: [main, feature/clean-final-baseline]
+    branches: [main, feature/clean-final-baseline, feature/github-release-pipeline]
 permissions:
   contents: read
 jobs:
