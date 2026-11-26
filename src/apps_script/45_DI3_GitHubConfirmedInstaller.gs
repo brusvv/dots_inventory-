@@ -118,6 +118,7 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
   var ui = SpreadsheetApp.getUi();
   var changedNames = preview.diff.added.concat(preview.diff.changed);
   var message = [
+    "Канал: " + (preview.release_channel === "preview" ? "PREVIEW" : "STABLE") + (preview.source_branch ? " · ветка: " + preview.source_branch : ""),
     "Релиз: " + preview.release_tag,
     "Commit: " + preview.commit,
     "Проект: " + baseline.script_id,
