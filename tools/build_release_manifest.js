@@ -23,8 +23,18 @@ function listAppsScriptFiles(sourceDir) {
 function buildManifest({ repository, commit, tag, sourceDir, channel, sourceBranch }) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository || "")) throw new Error("GITHUB_REPOSITORY должен иметь формат owner/repository.");
   if (!/^[0-9a-f]{40}$/i.test(commit || "")) throw new Error("GITHUB_SHA должен содержать полный 40-символьный commit SHA.");
-  const version = String(tag || "").match(/^dots-inventory-v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/);
-  if (!version) throw new Error("Тег релиза должен иметь формат dots-inventory-vMAJOR.MINOR.PATCH[-prerelease].");
+  const version = String(tag || "").match(/^dots-inventory-v(\\d+\\.\\d+\\.\\d+(?:-preview\\.\\d+)?)$/);
+  if (!version) throw new Error("Тег релиза должен иметь формат dots-inventory-vMAJOR.MINOR.PATCH или dots-inventory-vMAJOR.MINOR.PATCH-preview.N.");
+  const inferredChannel = /-preview\\.\\d+$/.test(tag) ? "preview" : "stable";
+  const releaseChannel = String(channel || inferredChannel).toLowerCase();
+  if (releaseChannel !== inferredChannel) throw new Error("Канал релиза не соответствует суффиксу Git-тега.");
+  const branch = String(sourceBranch || "").trim();
+  if (releaseChannel === "preview" && (!branch || branch === "main" || branch === "master")) {
+    throw new Error("Для Preview требуется явно указать исходную feature/release ветку, отличную от main.");
+  }
+  if (releaseChannel === "stable" && branch && branch !== "main") {
+    throw new Error("Stable-релиз должен собираться из main.");
+  }
   const config = fs.readFileSync(path.join(sourceDir, "00_DI3_AppConfig.gs"), "utf8");
   const schema = fs.readFileSync(path.join(sourceDir, "33_DI3_SchemaVersioning.gs"), "utf8");
   const timeZone = match(config, /TIME_ZONE\s*:\s*"([^"]+)"/, "DI3_APP_CONFIG.TIME_ZONE");
