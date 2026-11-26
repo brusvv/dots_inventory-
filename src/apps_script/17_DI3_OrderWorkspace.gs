@@ -369,7 +369,8 @@ function di3SetupOrderRegister() {
     var lastColumn = Math.max(19, sheet.getLastColumn());
     var newHeader = sheet.getRange(3, 1, 1, 19).getDisplayValues()[0].map(di3NormalizeHeader_);
     var legacyHeader = sheet.getRange(3, 1, 1, 13).getDisplayValues()[0].map(di3NormalizeHeader_);
-    if (di3PreflightHasBodyValues_(sheet, 19, 1)) {
+    var isCurrentLayout = newHeader.join("|") === DI3_ORDER_REGISTER_HEADERS.join("|");
+    if (!isCurrentLayout && di3PreflightHasBodyValues_(sheet, 19, 1)) {
       throw new Error("Реестр заказов: колонка S содержит данные без заголовка. Добавление времени следующего этапа остановлено без перезаписи.");
     }
     if (legacyHeader.join("|") === DI3_ORDER_REGISTER_LEGACY_HEADERS.join("|")) {
