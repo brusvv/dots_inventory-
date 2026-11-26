@@ -74,6 +74,9 @@ function di3GetCleanBaselineState_() {
     var width = Math.min(expected.length, sheet.getMaxColumns());
     var actual = width ? sheet.getRange(1, 1, 1, width).getDisplayValues()[0].map(di3NormalizeHeader_) : [];
     while (actual.length < expected.length) actual.push("");
+    if (sheet.getLastColumn() > expected.length) {
+      issues.push(name + ": найдены данные за пределами целевой схемы.");
+    }
     var blank = actual.every(function (value) { return value === ""; });
     var exact = expected.every(function (header, index) { return actual[index] === header; });
     if (!blank && !exact) issues.push(name + ": обнаружена нецелостная или legacy-схема; clean baseline запрещён.");
