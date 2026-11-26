@@ -296,6 +296,7 @@ function di3RunSystemSafetyUxUnitTests() {
       var headers = DI3_TABLE_SCHEMAS.Products.slice();
       var productSheet = {
         getLastRow: function () { return 2; },
+        getLastColumn: function () { return headers.length; },
         getMaxColumns: function () { return headers.length; },
         getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
       };
@@ -345,6 +346,7 @@ function di3RunSystemSafetyUxUnitTests() {
       var headers = DI3_TABLE_SCHEMAS.Products.slice();
       var productSheet = {
         getLastRow: function () { return 2; },
+        getLastColumn: function () { return headers.length; },
         getMaxColumns: function () { return headers.length; },
         getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
       };
@@ -352,6 +354,7 @@ function di3RunSystemSafetyUxUnitTests() {
         var expected = DI3_TABLE_SCHEMAS[name];
         return {
           getLastRow: function () { return 1; },
+          getLastColumn: function () { return expected.length; },
           getMaxColumns: function () { return expected.length; },
           getRange: function () { return { getDisplayValues: function () { return [expected]; } }; }
         };
@@ -409,6 +412,7 @@ function di3RunSystemSafetyUxUnitTests() {
       var headers = DI3_TABLE_SCHEMAS.Products.slice();
       var productSheet = {
         getLastRow: function () { return 2; },
+        getLastColumn: function () { return headers.length; },
         getMaxColumns: function () { return headers.length; },
         getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
       };
@@ -436,6 +440,7 @@ function di3RunSystemSafetyUxUnitTests() {
       var headers = DI3_TABLE_SCHEMAS.Products.slice();
       var productSheet = {
         getLastRow: function () { return 2; },
+        getLastColumn: function () { return headers.length; },
         getMaxColumns: function () { return headers.length; },
         getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
       };
@@ -443,6 +448,7 @@ function di3RunSystemSafetyUxUnitTests() {
         var expected = DI3_TABLE_SCHEMAS[name];
         return {
           getLastRow: function () { return 1; },
+          getLastColumn: function () { return expected.length; },
           getMaxColumns: function () { return expected.length; },
           getRange: function () { return { getDisplayValues: function () { return [expected]; } }; }
         };
@@ -480,6 +486,7 @@ function di3RunSystemSafetyUxUnitTests() {
         var expected = DI3_TABLE_SCHEMAS[name];
         return {
           getLastRow: function () { return 1; },
+          getLastColumn: function () { return expected.length; },
           getMaxColumns: function () { return expected.length; },
           getRange: function () { return { getDisplayValues: function () { return [expected]; } }; }
         };
@@ -541,6 +548,7 @@ function di3RunSystemSafetyUxUnitTests() {
         var expected = DI3_TABLE_SCHEMAS[name];
         return {
           getLastRow: function () { return 1; },
+          getLastColumn: function () { return expected.length; },
           getMaxColumns: function () { return expected.length; },
           getRange: function () { return { getDisplayValues: function () { return [expected]; } }; }
         };
