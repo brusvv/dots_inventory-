@@ -13,7 +13,7 @@ var DI3_GITHUB_BOOTSTRAP_CONFIG = Object.freeze({
   REPOSITORY: "brusvv/dots_inventory-",
   COMMIT: "2631969aa256fbf077e9f5356f35d45a9f647a76",
   EXPECTED_FILE_COUNT: 47,
-  BACKUP_PREFIX: "DotsInventory_FirstInstall_Source_",
+  BACKUP_PREFIX: "DotsInventory_AppsScript_Source_",
   MAX_BACKUP_BYTES: 10000000,
   TIME_ZONE: "Europe/Helsinki",
   REQUIRED_SCOPES: [
@@ -305,50 +305,77 @@ function di3BootstrapGetProjectContent_() {
 }
 
 function di3BootstrapCreateVerifiedBackup_(scriptId, files) {
+  var spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
   var payloadFiles = files.map(function (file) {
-    return { name: String(file.name), type: String(file.type), source: String(file.source) };
-  });
-  var checksums = {};
-  payloadFiles.forEach(function (file) {
-    checksums[file.type + ":" + file.name] = di3BootstrapSha256_(file.source);
+    var source = String(file.source);
+    return {
+      name: String(file.name),
+      type: String(file.type),
+      source: source,
+      sha256: di3BootstrapSha256_(source),
+      size_bytes: Utilities.newBlob(source).getBytes().length
+    };
   });
   var payload = {
-    format: "dots-inventory-bootstrap-source-backup/v1",
+    format: "dots-inventory-appsscript-source-backup/v1",
     script_id: scriptId,
-    spreadsheet_id: SpreadsheetApp.getActiveSpreadsheet().getId(),
-    source_commit: DI3_GITHUB_BOOTSTRAP_CONFIG.COMMIT,
-    created_at: new Date().toISOString(),
-    files: payloadFiles,
-    sha256: checksums
+    spreadsheet_id: spreadsheetId,
+    created_at_utc: new Date().toISOString(),
+    file_count: payloadFiles.length,
+    files: payloadFiles
   };
-  var text = JSON.stringify(payload);
-  var size = Utilities.newBlob(text).getBytes().length;
+  var envelope = {
+    format: "dots-inventory-appsscript-source-backup/v1",
+    payload_sha256: di3BootstrapSha256_(JSON.stringify(payload)),
+    payload: payload
+  };
+  var serialized = JSON.stringify(envelope, null, 2);
+  var size = Utilities.newBlob(serialized).getBytes().length;
   if (size > DI3_GITHUB_BOOTSTRAP_CONFIG.MAX_BACKUP_BYTES) {
     throw new Error("Исходная резервная копия превышает безопасный лимит " +
       DI3_GITHUB_BOOTSTRAP_CONFIG.MAX_BACKUP_BYTES + " байт.");
   }
-  var file = DriveApp.createFile(
-    DI3_GITHUB_BOOTSTRAP_CONFIG.BACKUP_PREFIX + scriptId + "_" + Date.now() + ".json",
-    text,
-    MimeType.PLAIN_TEXT
-  );
+  var stamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  var fileName = DI3_GITHUB_BOOTSTRAP_CONFIG.BACKUP_PREFIX + stamp + "_BOOTSTRAP.json";
+  var file = DriveApp.createFile(fileName, serialized, "application/json");
   var reopened = DriveApp.getFileById(file.getId());
   var readBack = reopened.getBlob().getDataAsString("UTF-8");
-  if (di3BootstrapSha256_(readBack) !== di3BootstrapSha256_(text)) {
+  if (di3BootstrapSha256_(readBack) !== di3BootstrapSha256_(serialized)) {
     throw new Error("Проверка read-after-write резервной копии не пройдена. Apps Script проект не изменён.");
   }
-  var parsed = JSON.parse(readBack);
-  if (parsed.script_id !== scriptId || !Array.isArray(parsed.files) ||
-      parsed.files.length !== files.length) {
-    throw new Error("Содержимое резервной копии не прошло структурную проверку. Apps Script проект не изменён.");
+  var saved;
+  try { saved = JSON.parse(readBack); }
+  catch (error) { throw new Error("Резервная копия создана, но JSON не читается. Apps Script проект не изменён."); }
+  if (saved.format !== "dots-inventory-appsscript-source-backup/v1" ||
+      saved.payload_sha256 !== di3BootstrapSha256_(JSON.stringify(saved.payload)) ||
+      saved.payload.script_id !== scriptId ||
+      saved.payload.file_count !== files.length ||
+      saved.payload.files.length !== files.length) {
+    throw new Error("Структурная проверка резервной копии не пройдена. Apps Script проект не изменён.");
   }
-  parsed.files.forEach(function (item) {
-    var key = item.type + ":" + item.name;
-    if (parsed.sha256[key] !== di3BootstrapSha256_(item.source)) {
-      throw new Error("SHA-256 резервной копии не совпал для " + key + ". Apps Script проект не изменён.");
+  saved.payload.files.forEach(function (item) {
+    if (item.sha256 !== di3BootstrapSha256_(item.source) ||
+        item.size_bytes !== Utilities.newBlob(item.source).getBytes().length) {
+      throw new Error("SHA-256/размер резервной копии не совпал для " + item.name + ". Apps Script проект не изменён.");
     }
   });
-  return { id: file.getId(), name: file.getName(), url: file.getUrl(), size_bytes: size, status: "VERIFIED" };
+  file.setDescription("DI3_APPS_SCRIPT_SOURCE_BACKUP_V1:" + JSON.stringify({
+    status: "VERIFIED",
+    script_id: scriptId,
+    file_count: files.length,
+    payload_sha256: saved.payload_sha256,
+    created_at_utc: saved.payload.created_at_utc
+  }));
+  return {
+    id: file.getId(),
+    file_id: file.getId(),
+    name: file.getName(),
+    file_name: file.getName(),
+    url: file.getUrl(),
+    size_bytes: size,
+    payload_sha256: saved.payload_sha256,
+    status: "VERIFIED"
+  };
 }
 
 function di3BootstrapUpdateProject_(scriptId, files) {
