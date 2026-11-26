@@ -30,17 +30,18 @@ function di3ApplyOrderBusinessDateMigration_() {
   var lastRow = sheet.getLastRow();
   var backfilled = 0;
   if (lastRow >= 2) {
-    var values = sheet.getRange(2, 1, lastRow - 1, 30).getValues();
+    var createdValues = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+    var businessDates = sheet.getRange(2, 30, lastRow - 1, 1).getValues();
     var timezone = di3GetConfiguredTimeZone_();
-    values.forEach(function (row, index) {
-      if (row[29] !== "" && row[29] != null) return;
-      if (!row[2]) throw new Error("F-02 migration остановлена: у заказа в строке " + (index + 2) + " отсутствует created_at.");
-      var createdAt = di3ToDate_(row[2], "created_at заказа в строке " + (index + 2));
+    var updates = businessDates.map(function (cell, index) {
+      if (cell[0] !== "" && cell[0] != null) return [cell[0]];
+      if (!createdValues[index][0]) throw new Error("F-02 migration остановлена: у заказа в строке " + (index + 2) + " отсутствует created_at.");
+      var createdAt = di3ToDate_(createdValues[index][0], "created_at заказа в строке " + (index + 2));
       var dateText = Utilities.formatDate(createdAt, timezone, "yyyy-MM-dd");
-      row[29] = Utilities.parseDate(dateText, timezone, "yyyy-MM-dd");
       backfilled++;
+      return [Utilities.parseDate(dateText, timezone, "yyyy-MM-dd")];
     });
-    if (backfilled) sheet.getRange(2, 1, values.length, 30).setValues(values);
+    if (backfilled) sheet.getRange(2, 30, updates.length, 1).setValues(updates);
   }
   di3CompactSheet_(sheet, Math.max(1, lastRow), 30);
   return { status: "APPLIED", orders: Math.max(0, lastRow - 1), rows_backfilled: backfilled, header: targetHeader };
