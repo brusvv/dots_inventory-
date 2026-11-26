@@ -322,6 +322,7 @@ function di3RunSystemSafetyUxUnitTests() {
       headers[0] = "legacy_product_id";
       var productSheet = {
         getLastRow: function () { return 1; },
+        getLastColumn: function () { return headers.length; },
         getMaxColumns: function () { return headers.length; },
         getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
       };
@@ -366,8 +367,7 @@ function di3RunSystemSafetyUxUnitTests() {
       di3GetSpreadsheet_ = function () {
         return { getSheetByName: function (name) {
           if (name === "Products") return productSheet;
-          if (name === "_AppMeta") return metaSheet;
-          if (name === "SchemaMigrations") return migrationSheet;
+          if (DI3_TABLE_SCHEMAS[name]) return headerOnlySheet(name);
           return null;
         } };
       };
@@ -458,7 +458,7 @@ function di3RunSystemSafetyUxUnitTests() {
       di3GetSpreadsheet_ = function () {
         return { getSheetByName: function (name) {
           if (name === "Products") return productSheet;
-          if (name === "_AppMeta" || name === "SchemaMigrations") return headerOnlySheet(name);
+          if (DI3_TABLE_SCHEMAS[name]) return headerOnlySheet(name);
           return null;
         } };
       };
