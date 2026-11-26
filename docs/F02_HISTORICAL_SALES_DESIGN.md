@@ -1,7 +1,7 @@
 # F-02 — historical sales: source audit and implementation design
 
 Date: 25 November 2026
-Status: SOURCE IMPLEMENTATION + CI PASSED — F-02 source patch and regression suite are on the PR branch; Google Sheets runtime acceptance is still pending.
+Status: SOURCE IMPLEMENTATION + CI PASSED — F-02 source patch, form preview/confirmation and regression suite are on the PR branch; Google Sheets runtime acceptance is still pending.
 
 ## 1. Current source findings
 
@@ -152,14 +152,14 @@ Implemented on `feature/clean-final-baseline` / PR #1:
 - Added `RC8_ORDER_BUSINESS_DATE_V4` (3 → 4). The migration validates the A:AC prefix, rejects unknown AD headers, occupied AD data without a header, formulas in AD, and missing/invalid `created_at` values before backfill. It appends the header and backfills only AD using the configured timezone; it does not rewrite existing order rows or formulas.
 - Updated schema compatibility, setup's explicit migration path and installation preflight so v3 workbooks can reach the journaled v3→v4 migration after backup/Dry Run. Clean baseline adoption targets v4 directly.
 - Normal orders receive a date-only `business_date` derived from the local calendar date of actual `created_at`; historical sales require an explicit business date.
-- Added the dedicated `Историческая продажа` sheet and menu commands. It requires business date, actual dispatch date + HH:mm, actual completion date + HH:mm, product lines and normal commercial inputs. It is separate from the ordinary new-order form.
+- Added the dedicated `Историческая продажа` sheet and menu commands. It requires business date, actual dispatch date + HH:mm, actual completion date + HH:mm, product lines and normal commercial inputs. It is separate from the ordinary new-order form; a financial preview is available without current-stock gating, and a YES/NO confirmation is required before the historical stock mutation.
 - Added `di3CreateHistoricalSale()`: create/recover via `ORDER_CREATE`, dispatch via the existing `ORDER_DISPATCH` at the supplied historical timestamp, then complete/settle at the supplied completion timestamp. Only the explicit historical path bypasses the ordinary dispatch-not-before-`created_at` guard.
 - Historical draft creation bypasses only current-stock quantity rejection. Product, quantity, price and chronology validation remain; scoped FIFO preflight/replay at actual dispatch time decides historical availability and actual COGS.
 - The immutable create-request hash includes business date, historical dispatch/completion timestamps and commercial inputs. Dispatch retry compares the persisted operation timestamp and historical-mode marker; a changed timestamp fails closed. Completed retries verify exact timestamps and refresh derived snapshots/register.
 - Added business date to the order register as a separate visible field. Finance Dashboard recognition remains based on `completed_at`; business_date does not move revenue or COGS between periods.
 - Added source regression tests for request-hash binding, the historical-only created_at bypass, and immutable dispatch retry timestamp checks.
 
-**Source CI passed:** GitHub Actions run `45847110942` (run #146) passed syntax for 50 `.gs` files and all 133/133 regression tests, including the three F-02 cases. Subsequent commits to the branch only updated documentation. **Not yet runtime-accepted:** the migration, historical form, FIFO chronology, PeriodGuard, commissions, Finance Dashboard and retry/fault-recovery flows must be exercised on a restored disposable workbook. No production workbook, live RC8 data, or deployed Apps Script was changed by this source patch. PR #1 remains Draft and unmerged.
+**Source CI passed:** GitHub Actions run `45847938650` (run #160) passed syntax for 50 `.gs` files and all 134/134 regression tests, including the F-02 cases. The Order Domain suite is now 21/21. Subsequent commits to the branch after this run are documentation-only. **Not yet runtime-accepted:** the migration, historical form, FIFO chronology, PeriodGuard, commissions, Finance Dashboard and retry/fault-recovery flows must be exercised on a restored disposable workbook. No production workbook, live RC8 data, or deployed Apps Script was changed by this source patch. PR #1 remains Draft and unmerged.
 ## 10. Recovery hardening — 26.11.2026
 
 - Hardened the IN_TRANSIT retry boundary: the order status alone is no longer treated as proof that ORDER_DISPATCH reached COMMITTED. When a dispatch operation exists, retry verifies the persisted timestamp and historical-mode marker; a PREPARED operation is resumed from its immutable payload.
