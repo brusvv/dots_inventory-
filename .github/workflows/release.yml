@@ -38,6 +38,8 @@ jobs:
           fi
       - name: Test release manifest builder
         run: node tools/test_release_manifest.js
+      - name: Test GitHub deployment manager
+        run: node tools/run_github_deployment_manager_tests.js
       - name: Build pinned release manifest
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
