@@ -543,4 +543,5 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - The preview fails closed for incomplete project files, duplicate identities, missing manifest, missing/extra downloaded sources, hash/size mismatches and collisions with non-server file names.
 - Menu: Система → GitHub и обновления → Предварительно собрать обновление (без установки).
 - The candidate file set exists only in memory and is shown as a summary. No Apps Script project content, Drive file, deployment, spreadsheet, schema, FIFO or stock data is written or changed.
+- CI [45882939657](https://github.com/brusvv/dots_inventory-/actions/runs/45882939657) passed: 52/52 syntax files, 151/151 existing regressions, 9/9 release-manifest tests, 16/16 deployment-manager tests (176/176 total).
 - Still pending: separately confirmed projects.updateContent, post-write full-file comparison, code rollback (D-06), and live runtime acceptance (D-07). No install has been performed.
