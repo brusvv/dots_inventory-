@@ -325,6 +325,56 @@ function di3RunOrderDomainUnitTests() {
     }
   });
 
+  test("in-transit order resumes a prepared dispatch operation before historical completion", function () {
+    var originals = {
+      millis: di3ToMillis_,
+      getOperation: di3GetOrderOperationByKey_,
+      readPayload: typeof globalThis.di3ReadVerifiedOperationPayload_ === "function" ? globalThis.di3ReadVerifiedOperationPayload_ : null,
+      pending: typeof globalThis.di3AssertNoOtherPendingStockOperations_ === "function" ? globalThis.di3AssertNoOtherPendingStockOperations_ : null,
+      complete: di3CompleteOrderDispatch_
+    };
+    var savedAt = "2026-01-02T10:00:00.000Z";
+    var completed = 0;
+    var order = {
+      order_id: "HIST-RECOVERY",
+      order_number: "H-R1",
+      status: DI3_ORDER_STATUS.IN_TRANSIT,
+      dispatched_at: new Date(savedAt),
+      created_at: new Date("2026-01-03T10:00:00.000Z")
+    };
+    try {
+      di3ToMillis_ = function (value) { return new Date(value).getTime(); };
+      globalThis.di3AssertNoOtherPendingStockOperations_ = function () { return true; };
+      di3GetOrderOperationByKey_ = function () {
+        return { values: ["OP-HIST", "ORDER_DISPATCH:HIST-RECOVERY", "ORDER_DISPATCH", "ORDER", "HIST-RECOVERY", "PREPARED"] };
+      };
+      globalThis.di3ReadVerifiedOperationPayload_ = function () {
+        return { dispatched_at: savedAt, historical_mode: true };
+      };
+      di3CompleteOrderDispatch_ = function () { completed++; return { status: "COMMITTED" }; };
+
+      var result = di3DispatchOrder_(order, new Date(savedAt), { allowHistoricalBackdate: true });
+      equal(result.status, "COMMITTED");
+      equal(completed, 1);
+
+      globalThis.di3ReadVerifiedOperationPayload_ = function () {
+        return { dispatched_at: savedAt, historical_mode: false };
+      };
+      throws(function () {
+        di3DispatchOrder_(order, new Date(savedAt), { allowHistoricalBackdate: true });
+      }, /Режим повторной отправки не совпадает/);
+      equal(completed, 1);
+    } finally {
+      di3ToMillis_ = originals.millis;
+      di3GetOrderOperationByKey_ = originals.getOperation;
+      if (originals.readPayload) globalThis.di3ReadVerifiedOperationPayload_ = originals.readPayload;
+      else delete globalThis.di3ReadVerifiedOperationPayload_;
+      if (originals.pending) globalThis.di3AssertNoOtherPendingStockOperations_ = originals.pending;
+      else delete globalThis.di3AssertNoOtherPendingStockOperations_;
+      di3CompleteOrderDispatch_ = originals.complete;
+    }
+  });
+
   var report = { passed: passed, failed: failures.length, failures: failures };
   if (failures.length) throw new Error("Order-domain tests failed: " + JSON.stringify(failures));
   return report;
