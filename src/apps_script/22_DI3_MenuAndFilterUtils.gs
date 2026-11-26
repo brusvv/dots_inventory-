@@ -196,6 +196,7 @@ function di3BuildMenus_() {
   addMenu("Склад", function (menu) {
     menu.addItem("Открыть Dashboard", "di3OpenWarehouseDashboard")
       .addItem("Обновить Dashboard", "di3RefreshWarehouseDashboard")
+      .addItem("Диагностика диаграммы Dashboard (без изменений)", "di3LogWarehouseDashboardChartDiagnostics")
       .addSeparator()
       .addItem("Открыть «Управление складом»", "di3OpenWarehouseManagement")
       .addItem("Провести приход / расход", "di3SubmitWarehouseManagementForm")
