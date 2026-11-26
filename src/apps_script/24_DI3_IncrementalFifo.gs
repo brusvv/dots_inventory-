@@ -510,7 +510,7 @@ function di3ResolveQuarantinedFifoReplay(replayId, confirmation, reason) {
     }
 
     var actor = "";
-    try { actor = di3GetActorEmail_(); } catch (ignoreActor) {}
+    try { actor = typeof di3GetActorEmail_ === "function" ? di3GetActorEmail_() : ""; } catch (ignoreActor) {}
     var fingerprints = {
       source_allocations: String(event[9]), target_allocations: String(event[10]),
       source_lots: String(event[11]), target_lots: String(event[12])
