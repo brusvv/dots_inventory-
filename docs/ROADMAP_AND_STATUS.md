@@ -558,3 +558,15 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - A post-write mismatch is reported with the backup location; automatic rollback is deliberately not attempted. D-06 handles code rollback separately.
 - Required additional target manifest scope: https://www.googleapis.com/auth/script.projects. This repository does not alter or synthesize the real appsscript.json.
 - No deployment version is created or advanced. No setup, migration, FIFO rebuild or spreadsheet-data operation is invoked. No live installation has been performed.
+
+
+## 26.11.2026 — D-06 verified code rollback
+
+- Added an explicit menu rollback path that requires a Drive source-backup file ID.
+- The selected backup must have the expected filename prefix, VERIFIED metadata, matching payload checksum, matching Script ID and membership in the configured Dots Inventory backup folder.
+- The complete backup envelope and per-file checksums are revalidated before rollback preparation.
+- The current target appsscript.json is preserved intentionally; rollback restores the other project files from the selected snapshot.
+- A verified backup of the current project is created before the YES/NO confirmation. A final fingerprint check prevents overwriting edits made while the dialog is open.
+- After explicit YES, the full project file set is restored with projects.updateContent and then read back for exact verification. No automatic rollback/retry is attempted on uncertain outcomes.
+- Spreadsheet data, triggers, Script Properties, versioned deployments and deployment pointers are outside the source rollback.
+- No live Apps Script project was accessed or modified.
