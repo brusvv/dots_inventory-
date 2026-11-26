@@ -6,5 +6,5 @@ count=0
 while IFS= read -r -d '' file; do
   node --check < "$file" >/dev/null
   count=$((count + 1))
-done < <(find "$ROOT/src/apps_script" "$ROOT/runtime/probes" -type f -name '*.gs' -print0 | sort -z)
+done < <(find "$ROOT/src/apps_script" "$ROOT/runtime/probes" "$ROOT/bootstrap" -type f -name '*.gs' -print0 | sort -z)
 echo "PASS: JavaScript syntax check completed for $count .gs files."
