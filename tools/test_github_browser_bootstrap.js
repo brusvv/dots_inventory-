@@ -24,17 +24,19 @@ test("bootstrap is pinned to the reviewed immutable commit", () => {
   assert.doesNotMatch(source, /raw\.githubusercontent\.com\/.+\/main\//);
 });
 
-test("GitHub API uses an operator-supplied token without persisting or leaking it", () => {
-  assert.match(source, /function di3BootstrapPromptGitHubToken_/);
-  assert.match(source, /ui\.prompt\(/);
-  assert.match(source, /github_pat_/);
+test("GitHub API token is read from Script Properties and cleared after verified source download", () => {
+  assert.match(source, /GITHUB_TOKEN_PROPERTY:\\s*"DI3_GITHUB_TOKEN"/);
+  assert.match(source, /function di3BootstrapGetGitHubToken_/);
+  assert.match(source, /PropertiesService\\.getScriptProperties\\(\\)\\.getProperty/);
+  assert.match(source, /deleteProperty\\(DI3_GITHUB_BOOTSTRAP_CONFIG\\.GITHUB_TOKEN_PROPERTY\\)/);
   assert.match(source, /Contents: Read-only/);
   assert.match(source, /Bearer /);
-  assert.match(source, /api\\\.github\\\.com/);
-  assert.ok(source.includes("replace(token, \"[REDACTED]\")"));
-  assert.match(source, /function di3BootstrapDownloadPinnedSources_\(githubToken\)/);
-  assert.match(source, /rawUrl, "text\/plain"\);/);
-  assert.doesNotMatch(source, /PropertiesService|ScriptProperties|UserProperties|DocumentProperties/);
+  assert.match(source, /api\\\\\\.github\\\\\\.com/);
+  assert.ok(source.includes('replace(token, "[REDACTED]")'));
+  assert.match(source, /function di3BootstrapDownloadPinnedSources_\\(githubToken\\)/);
+  assert.match(source, /rawUrl, "text\\/plain"\\);/);
+  assert.doesNotMatch(source, /ui\\.prompt\\(/);
+  assert.doesNotMatch(source, /ScriptProperties\\)\\.setProperty/);
 });
 
 test("GitHub fetch safely follows same-host redirects and exposes real HTTP diagnostics", () => {
