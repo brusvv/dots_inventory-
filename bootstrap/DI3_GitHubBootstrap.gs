@@ -213,7 +213,7 @@ function di3BootstrapDownloadPinnedSources_() {
 
   var entries = tree.tree.filter(function (item) {
     return item && item.type === "blob" &&
-      /^src\\/apps_script\\/[A-Za-z0-9_.-]+\\.gs$/.test(String(item.path || ""));
+      /^src\/apps_script\/[A-Za-z0-9_.-]+\.gs$/.test(String(item.path || ""));
   }).sort(function (a, b) { return a.path.localeCompare(b.path); });
 
   if (entries.length !== config.EXPECTED_FILE_COUNT) {
@@ -237,7 +237,7 @@ function di3BootstrapDownloadPinnedSources_() {
     if (gitBlobSha.toLowerCase() !== String(entry.sha).toLowerCase()) {
       throw new Error("Git blob SHA-1 не совпал: " + fileName + ". Исходник не будет установлен.");
     }
-    return { name: fileName.replace(/\\.gs$/i, ""), type: "SERVER_JS", source: source };
+    return { name: fileName.replace(/\.gs$/i, ""), type: "SERVER_JS", source: source };
   });
 }
 
