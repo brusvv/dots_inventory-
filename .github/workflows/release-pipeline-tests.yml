@@ -9,8 +9,13 @@ on:
       - feature/github-deployment-manager
       - feature/github-release-pipeline
       - feature/github-preview-releases
+      - feature/github-browser-bootstrap
     paths:
       - "src/apps_script/**"
+      - "bootstrap/**"
+      - "tools/check_syntax.sh"
+      - "tools/test_github_browser_bootstrap.js"
+      - "docs/BROWSER_ONLY_BOOTSTRAP.md"
       - "tools/build_release_manifest.js"
       - "tools/test_release_manifest.js"
       - "tools/run_github_deployment_manager_tests.js"
@@ -47,8 +52,10 @@ jobs:
         run: node tools/test_release_manifest.js
       - name: Test Stable and Preview Git tag policy
         run: bash -n tools/validate_release_tag.sh && bash -n tools/test_release_tag_policy.sh && bash tools/test_release_tag_policy.sh
-      - name: Validate all Apps Script modules
+      - name: Validate all Apps Script modules and bootstrap
         run: bash tools/check_syntax.sh
+      - name: Test browser-only bootstrap safety policy
+        run: node tools/test_github_browser_bootstrap.js
       - name: Existing source regression suites
         run: |
           node tools/run_fifo_replay_tests.js
