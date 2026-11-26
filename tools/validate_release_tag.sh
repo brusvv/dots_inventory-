@@ -28,7 +28,12 @@ if [[ "$CHANNEL" == "stable" ]]; then
   SOURCE_BRANCH="main"
 else
   TAG_MESSAGE="$(git for-each-ref --format='%(contents)' "refs/tags/$TAG")"
-  SOURCE_BRANCH="$(printf '%s\n' "$TAG_MESSAGE" | sed -n 's/^source-branch: //p' | head -n 1)"
+  mapfile -t SOURCE_BRANCHES < <(printf '%s\n' "$TAG_MESSAGE" | sed -n 's/^source-branch: //p')
+  if [[ "${#SOURCE_BRANCHES[@]}" -ne 1 ]]; then
+    echo "::error::Preview tag annotation must contain exactly one source-branch declaration."
+    exit 1
+  fi
+  SOURCE_BRANCH="${SOURCE_BRANCHES[0]}"
   if [[ ! "$SOURCE_BRANCH" =~ ^(feature|release|hotfix)/[A-Za-z0-9._/-]+$ ]]; then
     echo "::error::Preview annotated tag message must include source-branch: feature/your-branch (or release/hotfix)."
     exit 1
