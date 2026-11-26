@@ -353,6 +353,9 @@ function di3SetupOrderRegister() {
     var oldHeader = sheet.getRange(3, 1, 1, 13).getDisplayValues()[0].map(di3NormalizeHeader_);
     var newHeader = sheet.getRange(3, 1, 1, 18).getDisplayValues()[0].map(di3NormalizeHeader_);
     var previousCurrentHeader = DI3_ORDER_REGISTER_HEADERS.slice(0, 17);
+    if (di3PreflightHasBodyValues_(sheet, 18, 1)) {
+      throw new Error("Реестр заказов: колонка R содержит данные без заголовка. Добавление даты оформления остановлено без перезаписи.");
+    }
     if (oldHeader.join("|") === DI3_ORDER_REGISTER_LEGACY_HEADERS.join("|")) {
       var legacyRows = sheet.getLastRow() >= 4 ? sheet.getRange(4, 1, sheet.getLastRow() - 3, 13).getValues() : [];
       legacyRows.forEach(function (row) { if (row[12]) preservedDates[String(row[12])] = row[11] || ""; });
