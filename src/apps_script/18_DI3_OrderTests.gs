@@ -250,7 +250,7 @@ function di3RunOrderDomainUnitTests() {
   });
   test("shared event date-time parser requires strict HH:mm and normalizes seconds", function () {
     var originalUtilities = globalThis.Utilities;
-    var originalTimezone = di3GetConfiguredTimeZone_;
+    var originalTimezone = typeof globalThis.di3GetConfiguredTimeZone_ === "function" ? globalThis.di3GetConfiguredTimeZone_ : null;
     try {
       di3GetConfiguredTimeZone_ = function () { return "Test/Zone"; };
       globalThis.Utilities = {
@@ -273,7 +273,8 @@ function di3RunOrderDomainUnitTests() {
       throws(function () { di3BuildEffectiveDateTime_(sourceDate, "24:00", "Тест"); }, /HH:mm/);
     } finally {
       globalThis.Utilities = originalUtilities;
-      di3GetConfiguredTimeZone_ = originalTimezone;
+      if (originalTimezone) globalThis.di3GetConfiguredTimeZone_ = originalTimezone;
+      else delete globalThis.di3GetConfiguredTimeZone_;
     }
   });
 
