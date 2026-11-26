@@ -509,6 +509,7 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Fixed `di3SaveHistoricalSaleForm()` to clear `C5:C6` after successful creation and retained cleanup of legacy `D5:D6`.
 - Added a structural regression proving current date/time inputs are cleared only after `di3CreateHistoricalSale(command)`; cancellation returns before creation.
 - Added Order Domain regressions for business date not being later than dispatch date and completion not preceding dispatch.
-- CI [45885667109](https://github.com/brusvv/dots_inventory-/actions/runs/45885667109): syntax 50/50; FIFO 46/46; Order Domain 23/23; Supply UX 17/17; Catalog/Order UX 15/15; System Safety 39/39; Warehouse Dashboard 9/9; Finance schema 4/4. **153/153 tests passed.**
+- Added a menu command `Склад → Диагностика диаграммы Dashboard (без изменений)` that runs the existing read-only chart diagnostics and writes the full report to the Apps Script execution log.
+- CI [45885839074](https://github.com/brusvv/dots_inventory-/actions/runs/45885839074): syntax 50/50; FIFO 46/46; Order Domain 23/23; Supply UX 17/17; Catalog/Order UX 16/16; System Safety 39/39; Warehouse Dashboard 9/9; Finance schema 4/4. **154/154 tests passed.**
 - N-02 and F-01 remain source-implemented with regression coverage; their runtime acceptance is still pending. F-02 source implementation is complete, but v3→v4 migration and the full historical-sale/FIFO/finance cycle have not been accepted in Apps Script.
 - This correction does not alter schema, ledger, stock, FIFO, operation payloads or production data.
