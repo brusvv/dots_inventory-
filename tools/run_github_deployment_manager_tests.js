@@ -159,4 +159,13 @@ test("rejects release module name collision with a non-server file", () => {
   assert.throws(() => vm.runInContext("di3BuildGitHubInstallPreview_(" + JSON.stringify(m) + ", " + JSON.stringify(files) + ", " + JSON.stringify(downloaded) + ")", context), /имя 01_Module уже занято/);
 });
 
+
+test("refuses redirects while downloading a pinned release source", () => {
+  const code = "function alpha() {}\\n";
+  const m = installManifest(code);
+  context.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 302, getContentText: () => "" }) };
+  assert.throws(() => vm.runInContext("di3FetchPinnedGitHubSource_(" + JSON.stringify(m.files[0]) + ")", context), /Перенаправления не принимаются/);
+  delete context.UrlFetchApp;
+});
+
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
