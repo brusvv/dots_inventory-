@@ -24,6 +24,19 @@ test("bootstrap is pinned to the reviewed immutable commit", () => {
   assert.doesNotMatch(source, /raw\.githubusercontent\.com\/.+\/main\//);
 });
 
+test("GitHub API uses an operator-supplied token without persisting or leaking it", () => {
+  assert.match(source, /function di3BootstrapPromptGitHubToken_/);
+  assert.match(source, /ui\.prompt\(/);
+  assert.match(source, /github_pat_/);
+  assert.match(source, /Contents: Read-only/);
+  assert.match(source, /Bearer /);
+  assert.match(source, /api\\\.github\\\.com/);
+  assert.match(source, /replace\(token, "\\[REDACTED\\]"\)/);
+  assert.match(source, /function di3BootstrapDownloadPinnedSources_\(githubToken\)/);
+  assert.match(source, /rawUrl, "text\/plain"\);/);
+  assert.doesNotMatch(source, /PropertiesService|ScriptProperties|UserProperties|DocumentProperties/);
+});
+
 test("GitHub fetch safely follows same-host redirects and exposes real HTTP diagnostics", () => {
   assert.match(source, /"User-Agent": "DotsInventoryBrowserBootstrap\/1\.0"/);
   assert.match(source, /followRedirects: false/);
