@@ -1011,6 +1011,82 @@ function di3RunStockCoreUnitTests() {
     equal(threw, true);
   });
 
+  test("N-02 FIFO quarantine resolution requires owner attestation and appends audit without projection writes", function () {
+    var originals = {
+      withLock: di3WithLock_, normalize: di3NormalizeText_,
+      latest: di3GetLatestFifoReplayEvent_, readRows: di3ReadRowsByColumnValue_,
+      archive: di3ReadFifoReplayArchiveSnapshots_,
+      allocationFingerprint: di3BuildFifoAllocationSnapshotFingerprint_,
+      fingerprint: di3BuildFifoFingerprint_,
+      append: di3AppendFifoReplayEvent_, updateRun: di3UpdateFifoRunStatus_,
+      actor: di3GetActorEmail_
+    };
+    var event = ["event-2", "OP:op-1:PRODUCT:p1", 2, "QUARANTINED", "run-1", "",
+      "PRODUCT", '["p1"]', "input-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
+    var run = ["run-1", 1, "FAILED", "TEST", new Date(), "", 1, 0, 1, "integrity failure", "", "OP:op-1", "PRODUCT", '["p1"]', "input-fp"];
+    var appendedType = "", updatedStatus = "", appendDetails = null, projectionWrites = 0;
+    try {
+      di3WithLock_ = function (callback) { return callback(); };
+      di3NormalizeText_ = function (value) { return String(value || "").trim(); };
+      di3GetLatestFifoReplayEvent_ = function (replayId) {
+        equal(replayId, "OP:op-1:PRODUCT:p1");
+        return { row_number: 3, values: event };
+      };
+      di3ReadRowsByColumnValue_ = function (table, column, value) {
+        equal(table, "FifoAllocationRuns");
+        equal(column, 0);
+        equal(value, "run-1");
+        return [{ row_number: 2, values: run }];
+      };
+      di3ReadFifoReplayArchiveSnapshots_ = function () {
+        return { allocation_rows: [], lot_archive_rows: [] };
+      };
+      di3BuildFifoAllocationSnapshotFingerprint_ = function () { return "source-a"; };
+      di3BuildFifoFingerprint_ = function () { return "source-l"; };
+      di3AppendFifoReplayEvent_ = function (context, type, fingerprints, details) {
+        appendedType = type; appendDetails = details;
+        equal(context.replay_id, "OP:op-1:PRODUCT:p1");
+        equal(fingerprints.source_allocations, "source-a");
+        return {};
+      };
+      di3UpdateFifoRunStatus_ = function (rowNumber, status) {
+        equal(rowNumber, 2); updatedStatus = status;
+      };
+      di3GetActorEmail_ = function () { return "owner@example.test"; };
+
+      var rejected = false;
+      try { di3ResolveQuarantinedFifoReplay("OP:op-1:PRODUCT:p1", "WRONG", "Reviewed ledger, lots and allocations in detail."); }
+      catch (error) { rejected = /RESOLVE_AFTER_MANUAL_RECONCILIATION/.test(error.message); }
+      equal(rejected, true);
+      equal(appendedType, "");
+      equal(updatedStatus, "");
+
+      var result = di3ResolveQuarantinedFifoReplay(
+        "OP:op-1:PRODUCT:p1",
+        "RESOLVE_AFTER_MANUAL_RECONCILIATION",
+        "Сверены Ledger, Details, Lots, Allocations, состояния товаров, курсор и snapshots заказа."
+      );
+      equal(result.status, "MANUALLY_RESOLVED");
+      equal(result.fifo_run_id, "run-1");
+      equal(appendedType, "MANUALLY_RESOLVED");
+      equal(updatedStatus, "MANUALLY_RESOLVED");
+      equal(appendDetails.resolution, "OWNER_ATTESTED_MANUAL_RECONCILIATION");
+      equal(appendDetails.actor, "owner@example.test");
+      equal(projectionWrites, 0);
+    } finally {
+      di3WithLock_ = originals.withLock;
+      di3NormalizeText_ = originals.normalize;
+      di3GetLatestFifoReplayEvent_ = originals.latest;
+      di3ReadRowsByColumnValue_ = originals.readRows;
+      di3ReadFifoReplayArchiveSnapshots_ = originals.archive;
+      di3BuildFifoAllocationSnapshotFingerprint_ = originals.allocationFingerprint;
+      di3BuildFifoFingerprint_ = originals.fingerprint;
+      di3AppendFifoReplayEvent_ = originals.append;
+      di3UpdateFifoRunStatus_ = originals.updateRun;
+      di3GetActorEmail_ = originals.actor;
+    }
+  });
+
   var report = { passed: passed, failed: failures.length, failures: failures };
   if (failures.length) throw new Error("Stock Core tests failed: " + JSON.stringify(failures));
   return report;
