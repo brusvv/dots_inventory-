@@ -478,6 +478,7 @@ function di3CreateHistoricalSale(command) {
     } else {
       throw new Error("Историческую продажу нельзя продолжить из статуса «" + order.status + "».");
     }
+    var completionAlreadyApplied = String(order.status) === DI3_ORDER_STATUS.COMPLETED;
     if (String(order.status) === DI3_ORDER_STATUS.IN_TRANSIT) {
       di3ChangeOrderNonStockStatus_(order, DI3_ORDER_STATUS.COMPLETED, completionAt);
       order = di3GetOrderById_(order.order_id);
@@ -491,10 +492,12 @@ function di3CreateHistoricalSale(command) {
         di3ToMillis_(order.completed_at) !== completionAt.getTime()) {
       throw new Error("Не удалось подтвердить полный исторический цикл продажи.");
     }
-    // Idempotent retry also repairs derived snapshots/register if the prior execution
-    // stopped after the immutable completion timestamp was written.
-    di3RefreshAllOrderFifoSnapshots_();
-    di3RefreshOrderRegister();
+    if (completionAlreadyApplied) {
+      di3RefreshAllOrderFifoSnapshots_();
+      di3RefreshOrderRegister();
+    }
+    // A retry that finds the immutable completion timestamp already written repairs
+    // derived snapshots/register. The first completion path already refreshes them.
     return { status: "HISTORICAL_SALE_COMPLETED", order_id: order.order_id,
       order_number: order.order_number, business_date: di3FormatBusinessDate_(order.business_date),
       created_at: order.created_at, dispatched_at: order.dispatched_at, completed_at: order.completed_at };
