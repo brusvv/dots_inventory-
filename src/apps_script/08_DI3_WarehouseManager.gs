@@ -60,6 +60,7 @@ function di3RefreshWarehouseManagerValidations() {
     .setNote("Выбери календарную дату операции. Время вводится отдельно в C4.");
   sheet.getRange(DI3_WAREHOUSE_MANAGER_CELLS.effective_time).setNumberFormat("@")
     .setNote("Обязательное местное время операции в формате HH:mm (24 часа). Изменение даты не должно менять это значение.");
+  sheet.getRange(DI3_WAREHOUSE_MANAGER_CELLS.effective_time).setHorizontalAlignment("center");
   sheet.getRange(DI3_WAREHOUSE_MANAGER_CELLS.quantity).setDataValidation(quantityRule)
     .setNumberFormat("#,##0")
     .setNote("Укажи положительное целое количество. Дробные значения не допускаются.");
