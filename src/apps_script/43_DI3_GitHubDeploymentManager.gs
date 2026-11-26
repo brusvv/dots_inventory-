@@ -16,7 +16,8 @@ var DI3_GITHUB_API_VERSION = "2022-11-28";
 function di3GetGitHubDeploymentConfig_() {
   var config = DI3_APP_CONFIG && DI3_APP_CONFIG.GITHUB_RELEASE ? DI3_APP_CONFIG.GITHUB_RELEASE : {};
   return {
-    repository: String(config.REPOSITORY || "brusvv/dots_inventory-").trim(),\n    release_channel: String(config.RELEASE_CHANNEL || "stable").trim().toLowerCase(),
+    repository: String(config.REPOSITORY || "brusvv/dots_inventory-").trim(),
+    release_channel: String(config.RELEASE_CHANNEL || "stable").trim().toLowerCase(),
     token_property: String(config.TOKEN_PROPERTY || "DI3_GITHUB_READ_TOKEN").trim(),
     source_backup_prefix: String(config.SOURCE_BACKUP_PREFIX || "DotsInventory_AppsScript_Source_"),
     max_source_backup_bytes: Math.max(100000, Number(config.MAX_SOURCE_BACKUP_BYTES) || 10000000)
