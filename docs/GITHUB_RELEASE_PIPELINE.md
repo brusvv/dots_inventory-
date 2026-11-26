@@ -89,3 +89,5 @@ The first D-05 increment adds **Система → GitHub и обновлени�
 - Reports zero deletions and performs no Drive writes or Apps Script project writes.
 
 **Hard boundary:** preview only. It does not call projects.updateContent, save a pending install payload, migrate schema, run setup, rebuild FIFO or alter spreadsheet data. Confirmed install and post-write verification remain unimplemented and require separate review and runtime acceptance.
+
+Validation on PR #4: CI [45882939657](https://github.com/brusvv/dots_inventory-/actions/runs/45882939657) passed — 52/52 Apps Script syntax files, 151/151 existing regressions, 9/9 release-manifest tests and 16/16 deployment-manager tests (176/176 automated tests). This is source/Node CI, not Apps Script runtime acceptance.
