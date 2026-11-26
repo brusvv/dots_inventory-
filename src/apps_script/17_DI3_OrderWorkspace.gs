@@ -345,7 +345,11 @@ function di3SaveOrderForm() {
 
 function di3SplitRegisterEffectiveInput_(value) {
   if (value === "" || value == null) return { date: "", time: "" };
-  if (value instanceof Date && !isNaN(value.getTime())) return di3SplitEffectiveDateTime_(value, "Сохранённая дата следующего этапа");
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    var parts = di3SplitEffectiveDateTime_(value, "Сохранённая дата следующего этапа");
+    if (parts.time === "00:00") parts.time = ""; // Legacy date-only input has no trustworthy time.
+    return parts;
+  }
   throw new Error("Реестр заказов содержит некорректную дату следующего этапа. Исправь её вручную до обновления формы.");
 }
 
