@@ -1,7 +1,7 @@
 # Unified date/time input contract — orders, supplies and warehouse
 
 Date confirmed: 26 November 2026  
-Status: PARTIALLY IMPLEMENTED — F-02 historical-sale inputs are present on the source branch; ordinary order, supply and warehouse date/time input work remains pending.
+Status: SOURCE IMPLEMENTED + CI PASSED — separate date/time inputs are implemented across ordinary orders, supply lifecycle, historical supply, historical sales and manual warehouse movements; Google Sheets runtime acceptance remains pending.
 
 ## 1. Decision
 
@@ -43,7 +43,7 @@ The order register may continue displaying stored event timestamps as one readab
 
 ### Normal supply lifecycle
 
-The supply register currently has one optional next-stage effective-date input (column M). Add a separate adjacent time input (column N or equivalent). Use the pair for the effective time of the next lifecycle transition: sent, awaiting receipt, or received. The stored `sent_at`, `awaiting_at`, and `received_at` fields remain single timestamps.
+The supply register now uses adjacent date/time inputs M/N for the next lifecycle transition: sent, awaiting receipt or received. Both are required; N is strict `HH:mm`. The generated register is now 14 columns; the prior 13-column layout is upgraded while preserving values by `supply_id`. Stored `sent_at`, `awaiting_at` and `received_at` remain single timestamps.
 
 ### Historical supply entry
 
@@ -60,7 +60,7 @@ The existing immutable `SUPPLY_RECEIVE` payload, StockLedger movement and FIFO l
 
 ## 5. Manual warehouse movements
 
-The `Управление складом` form currently captures the operation date/time in one cell (B4). Replace that input with adjacent date and time controls on the same row. The pair is mandatory for both manual IN and OUT and is combined into `effective_at` before calling `di3PostManualStockMovement()`.
+The `Управление складом` form now uses adjacent date and time controls B4/C4. The pair is mandatory for both manual IN and OUT and is combined into `effective_at` before calling `di3PostManualStockMovement()`. Existing combined B4 values are split on setup; an old midnight value leaves C4 blank for explicit time entry.
 
 The StockLedger row, StockLots row for IN, FIFO allocations for OUT, immutable operation payload and request hash retain the single combined timestamp. `recorded_at` remains the actual registration time captured by the operation workflow.
 
@@ -77,7 +77,7 @@ Do not invent midnight as an event time from these date-only fields. F-02 `busin
 
 ## 7. Shared validation and tests
 
-Implement one shared date+time parser/validator used by orders, supplies, historical supply entry and warehouse movement entry. It must:
+One shared date+time parser/validator, `di3BuildEffectiveDateTime_`, is now used by orders, supplies, historical supply entry and warehouse movement entry. It:
 
 1. require a valid calendar date and strict 24-hour `HH:mm` time;
 2. reject impossible dates, malformed values, and nonexistent local times in the configured timezone;
@@ -106,6 +106,23 @@ Regression coverage must include:
 
 This contract does not by itself add columns to `V3_Supplies`, `StockLedger`, `StockLots`, or `V3_OrderItems`. Existing timestamp fields are retained.
 
-F-02 requires its separately designed v3→v4 migration appending only `V3_Orders.business_date`. Do not increment the target schema version until the F-02 field contract and F-06 archive table contract are frozen together.
+F-02 requires its separately designed v3→v4 migration appending only `V3_Orders.business_date`. The clean-final schema target is v4, with F-02 `business_date` and F-06 archive tables represented. This date/time UI contract adds no schema columns to supplies, StockLedger, StockLots or OrderItems.
 
 Implement the date/time controls and shared parser as one coordinated source patch across the order, supply, historical-supply and warehouse workspaces. Add source/Node regression tests and CI. Keep PR #1 Draft and unmerged; runtime acceptance must occur on a restored disposable workbook after backup and Dry Run. Never modify the production RC8 workbook during implementation or acceptance.
+
+
+## 9. Source implementation record — 26 November 2026
+
+Implemented on `feature/clean-final-baseline`:
+
+- Shared `di3BuildEffectiveDateTime_()` combines a date-picker value and strict `HH:mm` text using `DI3_APP_CONFIG.TIME_ZONE`, rejects missing/malformed values and nonexistent local times (DST gaps), and normalizes seconds/milliseconds to zero.
+- `di3SplitEffectiveDateTime_()` presents stored timestamps as a date-only picker value plus a separate visible time value.
+- Orders: register P/Q date/time pair; hidden order ID moved to R; `business_date` is S. Legacy register layouts migrate by order ID. A date-only legacy input does not silently become midnight; the time must be re-entered.
+- Supplies: register M/N date/time pair; historical/ordinary/full-edit form uses G5:G7 date cells and H5:H7 time cells. Dirty-form fingerprints include the time inputs. The previous 13-column supply register migrates to 14 columns by `supply_id`.
+- Manual warehouse IN/OUT: B4/C4 date/time pair; legacy combined B4 timestamp is split during setup.
+- Historical sales: B4 is the date-only customer business date; dispatch B5/C5 and completion B6/C6 are adjacent date/time pairs.
+- Canonical schema fields remain single timestamps. No event-time split columns were added to `V3_Supplies`, `StockLedger`, `StockLots` or `V3_OrderItems`.
+- Source regressions cover strict time format, seconds normalization, nonexistent DST local time, supply date/time pairs and dirty-state fingerprints, order register migration, historical sale input cells and manual warehouse date/time.
+- **Source CI:** GitHub Actions run [#212](https://github.com/brusvv/dots_inventory-/actions/runs/45852013073) passed syntax for 50 Apps Script files and **142/142** Node regression tests (FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 35, Warehouse Dashboard 9, Finance Schema 4).
+
+**Runtime acceptance is still pending:** test the old-to-new form migrations, date-picker behavior, text input validation, DST handling in the configured spreadsheet timezone, order/supply lifecycle transitions, FIFO effective_at versus recorded_at, and retry behavior on a restored disposable workbook. No production RC8 workbook or deployed Apps Script was changed.
