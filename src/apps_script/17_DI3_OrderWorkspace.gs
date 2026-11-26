@@ -607,12 +607,20 @@ function di3SetupHistoricalSaleForm() {
       throw new Error("Лист «Историческая продажа» имеет несовместимые заголовки.");
     }
   }
+  [["D5", "C5", "Время отправки"], ["D6", "C6", "Время завершения"]].forEach(function (item) {
+    var oldValue = sheet.getRange(item[0]).getDisplayValue();
+    var newValue = sheet.getRange(item[1]).getDisplayValue();
+    if (/^Время /.test(newValue)) newValue = "";
+    if (!newValue && oldValue) sheet.getRange(item[1]).setValue(oldValue);
+    sheet.getRange(item[0]).clearContent();
+    sheet.getRange(item[1]).setNumberFormat("@")
+      .setNote(item[2] + ": обязательное местное время в формате HH:mm (24 часа).");
+  });
   sheet.getRange("B4:B6").setNumberFormat("dd.mm.yyyy");
-  sheet.getRange("D5:D6").setNumberFormat("@");
+  sheet.getRange("C5:C6").setNumberFormat("@");
   sheet.getRange("B8").setNumberFormat('0.00"%"');
   sheet.getRange("B10").setNumberFormat('0.00"%"');
   sheet.getRange("B4:B6").setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build());
-  sheet.getRange("D5:D6").setNote("Укажи точное местное время в формате HH:mm.");
   if (created) di3GetFormRequestToken_("HISTORICAL_ORDER");
   else di3GetFormRequestToken_("HISTORICAL_ORDER");
   di3RefreshHistoricalSaleFormValidations();
