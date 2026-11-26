@@ -836,3 +836,42 @@ function di3WithLock_(callback) {
   if (releaseError) throw releaseError;
   return result;
 }
+
+
+/**
+ * Combine a calendar-date cell and a mandatory HH:mm text input into one
+ * canonical event timestamp in the configured spreadsheet timezone.
+ * Date and time remain separate in the UI; the returned Date is the only
+ * timestamp passed into immutable operation payloads and FIFO effective_at.
+ */
+function di3BuildEffectiveDateTime_(dateValue, timeValue, label) {
+  label = String(label || "Дата и время операции");
+  if (!(dateValue instanceof Date) || !Number.isFinite(dateValue.getTime())) {
+    throw new Error(label + ": укажи корректную календарную дату.");
+  }
+  var time = String(timeValue == null ? "" : timeValue).trim();
+  if (!/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(time)) {
+    throw new Error(label + ": обязательное время должно быть в формате HH:mm (24 часа).");
+  }
+  var timezone = di3GetConfiguredTimeZone_();
+  var dateText = Utilities.formatDate(dateValue, timezone, "yyyy-MM-dd");
+  var canonicalText = dateText + " " + time;
+  var parsed = Utilities.parseDate(canonicalText, timezone, "yyyy-MM-dd HH:mm");
+  if (!(parsed instanceof Date) || !Number.isFinite(parsed.getTime()) ||
+      Utilities.formatDate(parsed, timezone, "yyyy-MM-dd HH:mm") !== canonicalText) {
+    throw new Error(label + ": дата или локальное время не существует в часовом поясе " + timezone + ".");
+  }
+  parsed.setSeconds(0, 0);
+  return parsed;
+}
+
+/** Split a stored event instant into a date-picker value and a visible HH:mm input. */
+function di3SplitEffectiveDateTime_(value, label) {
+  var date = di3ToDate_(value, label || "Дата события");
+  var timezone = di3GetConfiguredTimeZone_();
+  var dateText = Utilities.formatDate(date, timezone, "yyyy-MM-dd");
+  return {
+    date: Utilities.parseDate(dateText + " 12:00", timezone, "yyyy-MM-dd HH:mm"),
+    time: Utilities.formatDate(date, timezone, "HH:mm")
+  };
+}
