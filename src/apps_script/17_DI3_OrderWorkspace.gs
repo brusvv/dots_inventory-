@@ -4,6 +4,13 @@ var DI3_ORDER_REGISTER_HEADERS = [
   "Скидка продавца, ₽", "Сумма покупателю (расчёт), ₽", "Оценка FIFO, ₽",
   "Фактический FIFO, ₽", "Выручка продавца, ₽", "Комиссия площадки (факт), ₽",
   "Оплачено покупателем, ₽", "Прибыль продавца, ₽", "Статус расчёта",
+  "Метод доставки", "Дата следующего этапа", "Время следующего этапа (HH:mm)", "order_id", "Дата оформления"
+];
+var DI3_ORDER_REGISTER_PREVIOUS_CURRENT_HEADERS = [
+  "Номер заказа", "Создан", "Статус", "Товары, ₽", "Доплата площадке (расчёт), ₽",
+  "Скидка продавца, ₽", "Сумма покупателю (расчёт), ₽", "Оценка FIFO, ₽",
+  "Фактический FIFO, ₽", "Выручка продавца, ₽", "Комиссия площадки (факт), ₽",
+  "Оплачено покупателем, ₽", "Прибыль продавца, ₽", "Статус расчёта",
   "Метод доставки", "Дата следующего этапа", "order_id", "Дата оформления"
 ];
 var DI3_ORDER_REGISTER_LEGACY_HEADERS = [
@@ -336,85 +343,109 @@ function di3SaveOrderForm() {
   return result;
 }
 
+function di3SplitRegisterEffectiveInput_(value) {
+  if (value === "" || value == null) return { date: "", time: "" };
+  if (value instanceof Date && !isNaN(value.getTime())) return di3SplitEffectiveDateTime_(value, "Сохранённая дата следующего этапа");
+  throw new Error("Реестр заказов содержит некорректную дату следующего этапа. Исправь её вручную до обновления формы.");
+}
+
 function di3SetupOrderRegister() {
   var ss = di3GetSpreadsheet_();
   var sheet = ss.getSheetByName(DI3_ORDER_REGISTER_SHEET);
   var created = false;
-  var preservedDates = {};
-  if (!sheet) { sheet = ss.insertSheet(DI3_ORDER_REGISTER_SHEET); di3PrepareNewSheet_(sheet, 3, 18); created = true; }
+  var preservedDateTimes = {};
+  if (!sheet) { sheet = ss.insertSheet(DI3_ORDER_REGISTER_SHEET); di3PrepareNewSheet_(sheet, 3, 19); created = true; }
   if (created || sheet.getLastRow() === 0) {
-    sheet.getRange("A1:R1").merge();
+    sheet.getRange("A1:S1").merge();
     sheet.getRange("A1").setValue("РЕЕСТР ЗАКАЗОВ");
-    sheet.getRange("A2:R2").merge();
-    sheet.getRange("A2").setValue("Комиссия — доплата покупателя площадке. Выручка и прибыль продавца учитываются отдельно. Выбери строку заказа для смены статуса; дату укажи в колонке P.");
+    sheet.getRange("A2:S2").merge();
+    sheet.getRange("A2").setValue("Комиссия — доплата покупателя площадке. Выручка и прибыль продавца учитываются отдельно. Для перехода заполни дату в P и время HH:mm в Q.");
   } else {
-    var currentWidth = Math.max(17, sheet.getLastColumn());
-    di3EnsureSheetCapacity_(sheet, Math.max(3, sheet.getLastRow()), 18);
-    var oldHeader = sheet.getRange(3, 1, 1, 13).getDisplayValues()[0].map(di3NormalizeHeader_);
-    var newHeader = sheet.getRange(3, 1, 1, 18).getDisplayValues()[0].map(di3NormalizeHeader_);
-    var previousCurrentHeader = DI3_ORDER_REGISTER_HEADERS.slice(0, 17);
-    if (di3PreflightHasBodyValues_(sheet, 18, 1)) {
-      throw new Error("Реестр заказов: колонка R содержит данные без заголовка. Добавление даты оформления остановлено без перезаписи.");
+    di3EnsureSheetCapacity_(sheet, Math.max(3, sheet.getLastRow()), 19);
+    var lastColumn = Math.max(19, sheet.getLastColumn());
+    var newHeader = sheet.getRange(3, 1, 1, 19).getDisplayValues()[0].map(di3NormalizeHeader_);
+    var legacyHeader = sheet.getRange(3, 1, 1, 13).getDisplayValues()[0].map(di3NormalizeHeader_);
+    if (di3PreflightHasBodyValues_(sheet, 19, 1)) {
+      throw new Error("Реестр заказов: колонка S содержит данные без заголовка. Добавление времени следующего этапа остановлено без перезаписи.");
     }
-    if (oldHeader.join("|") === DI3_ORDER_REGISTER_LEGACY_HEADERS.join("|")) {
+    if (legacyHeader.join("|") === DI3_ORDER_REGISTER_LEGACY_HEADERS.join("|")) {
       var legacyRows = sheet.getLastRow() >= 4 ? sheet.getRange(4, 1, sheet.getLastRow() - 3, 13).getValues() : [];
-      legacyRows.forEach(function (row) { if (row[12]) preservedDates[String(row[12])] = row[11] || ""; });
+      legacyRows.forEach(function (row) {
+        if (!row[12]) return;
+        preservedDateTimes[String(row[12])] = di3SplitRegisterEffectiveInput_(row[11] || "");
+      });
       if (typeof sheet.getFilter === "function" && sheet.getFilter()) sheet.getFilter().remove();
       if (typeof sheet.getRange("A1:M1").breakApart === "function") sheet.getRange("A1:M1").breakApart();
       if (typeof sheet.getRange("A2:M2").breakApart === "function") sheet.getRange("A2:M2").breakApart();
-      if (sheet.getLastRow() >= 4) sheet.getRange(4, 1, sheet.getLastRow() - 3, 18).clearContent();
-      sheet.getRange("A1:R1").merge();
-      sheet.getRange("A2:R2").merge();
-    } else if (newHeader.slice(0, 17).join("|") !== previousCurrentHeader.join("|") ||
-        (newHeader[17] && newHeader[17] !== DI3_ORDER_REGISTER_HEADERS[17])) {
+      if (sheet.getLastRow() >= 4) sheet.getRange(4, 1, sheet.getLastRow() - 3, 19).clearContent();
+      sheet.getRange("A1:S1").merge();
+      sheet.getRange("A2:S2").merge();
+    } else if (newHeader.slice(0, 18).join("|") === DI3_ORDER_REGISTER_PREVIOUS_CURRENT_HEADERS.join("|")) {
+      var previousRows = sheet.getLastRow() >= 4 ? sheet.getRange(4, 1, sheet.getLastRow() - 3, 18).getValues() : [];
+      previousRows.forEach(function (row) {
+        if (!row[16]) return;
+        preservedDateTimes[String(row[16])] = di3SplitRegisterEffectiveInput_(row[15] || "");
+      });
+      if (typeof sheet.getFilter === "function" && sheet.getFilter()) sheet.getFilter().remove();
+      if (typeof sheet.getRange("A1:R1").breakApart === "function") sheet.getRange("A1:R1").breakApart();
+      if (typeof sheet.getRange("A2:R2").breakApart === "function") sheet.getRange("A2:R2").breakApart();
+      if (sheet.getLastRow() >= 4) sheet.getRange(4, 1, sheet.getLastRow() - 3, 19).clearContent();
+      sheet.getRange("A1:S1").merge();
+      sheet.getRange("A2:S2").merge();
+    } else if (newHeader.join("|") !== DI3_ORDER_REGISTER_HEADERS.join("|")) {
       throw new Error("Лист «Реестр заказов v3» имеет несовместимые заголовки.");
     }
   }
-  if (sheet.getRange("A1:R1").isPartOfMerge()) sheet.getRange("A1:R1").breakApart();
-  if (sheet.getRange("A2:R2").isPartOfMerge()) sheet.getRange("A2:R2").breakApart();
-  sheet.getRange("A1:R1").merge();
-  sheet.getRange("A2:R2").merge();
-  sheet.getRange(3, 1, 1, 18).setValues([DI3_ORDER_REGISTER_HEADERS]);
-  sheet.getRange("A1:R1").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold").setFontSize(14);
-  sheet.getRange("A2:R2").setBackground("#EAF0F7").setFontColor("#40516A");
-  sheet.getRange("A3:R3").setBackground("#253B59").setFontColor("#FFFFFF").setFontWeight("bold");
+  if (sheet.getRange("A1:S1").isPartOfMerge()) sheet.getRange("A1:S1").breakApart();
+  if (sheet.getRange("A2:S2").isPartOfMerge()) sheet.getRange("A2:S2").breakApart();
+  sheet.getRange("A1:S1").merge();
+  sheet.getRange("A2:S2").merge();
+  sheet.getRange(3, 1, 1, 19).setValues([DI3_ORDER_REGISTER_HEADERS]);
+  sheet.getRange("A1:S1").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold").setFontSize(14);
+  sheet.getRange("A2:S2").setBackground("#EAF0F7").setFontColor("#40516A");
+  sheet.getRange("A3:S3").setBackground("#253B59").setFontColor("#FFFFFF").setFontWeight("bold");
   di3SetFrozenRowsSafely_(sheet, 3);
-  [145, 145, 130, 120, 155, 125, 155, 135, 135, 140, 160, 155, 140, 130, 190, 190, 180, 125].forEach(function (width, index) { sheet.setColumnWidth(index + 1, width); });
+  [145, 145, 130, 120, 155, 125, 155, 135, 135, 140, 160, 155, 140, 130, 190, 135, 110, 180, 125].forEach(function (width, index) { sheet.setColumnWidth(index + 1, width); });
   if (typeof sheet.showColumns === "function") sheet.showColumns(13);
-  sheet.hideColumns(17);
-  di3CompactSheet_(sheet, Math.max(3, sheet.getLastRow()), 18);
+  sheet.hideColumns(18);
+  di3CompactSheet_(sheet, Math.max(3, sheet.getLastRow()), 19);
   sheet.setHiddenGridlines(true);
-  di3RefreshOrderRegister(preservedDates);
-  return { status: "READY", sheet: DI3_ORDER_REGISTER_SHEET, columns: 18, migrated_legacy_layout: Object.keys(preservedDates).length > 0 };
+  di3RefreshOrderRegister(preservedDateTimes);
+  return { status: "READY", sheet: DI3_ORDER_REGISTER_SHEET, columns: 19, migrated_legacy_layout: Object.keys(preservedDateTimes).length > 0 };
 }
 
-function di3RefreshOrderRegister(preservedDatesOverride) {
+function di3RefreshOrderRegister(preservedDateTimesOverride) {
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_ORDER_REGISTER_SHEET);
   if (!sheet) return { refreshed: false, reason: "SHEET_MISSING" };
   di3RefreshAllOrderFifoSnapshots_();
-  var oldRows = sheet.getLastRow() >= 4 ? sheet.getRange(4, 1, sheet.getLastRow() - 3, 18).getValues() : [];
-  var datesById = preservedDatesOverride || {};
-  oldRows.forEach(function (row) { if (row[16] && datesById[String(row[16])] == null) datesById[String(row[16])] = row[15]; });
+  var oldRows = sheet.getLastRow() >= 4 ? sheet.getRange(4, 1, sheet.getLastRow() - 3, 19).getValues() : [];
+  var dateTimesById = preservedDateTimesOverride || {};
+  oldRows.forEach(function (row) {
+    if (!row[17] || dateTimesById[String(row[17])] != null) return;
+    dateTimesById[String(row[17])] = { date: row[15] || "", time: String(row[16] || "") };
+  });
   var rows = di3ReadTableValues_("V3_Orders").map(function (row) {
     var orderId = String(row[0] || "");
+    var input = dateTimesById[orderId] || { date: "", time: "" };
     return [
       row[1], row[2], row[3], row[4], row[6], row[8], row[9], row[10], row[12],
-      row[23], row[24], row[25], row[14], row[26], row[16], datesById[orderId] || "", orderId, row[29] || ""
+      row[23], row[24], row[25], row[14], row[26], row[16], input.date || "", input.time || "", orderId, row[29] || ""
     ];
   }).sort(function (a, b) { return di3ToMillis_(b[1]) - di3ToMillis_(a[1]); });
   var oldCount = Math.max(0, sheet.getLastRow() - 3);
-  di3EnsureSheetCapacity_(sheet, Math.max(3, 3 + rows.length), 18);
-  if (oldCount) sheet.getRange(4, 1, oldCount, 18).clearContent();
+  di3EnsureSheetCapacity_(sheet, Math.max(3, 3 + rows.length), 19);
+  if (oldCount) sheet.getRange(4, 1, oldCount, 19).clearContent();
   if (rows.length) {
-    sheet.getRange(4, 1, rows.length, 18).setValues(rows);
+    sheet.getRange(4, 1, rows.length, 19).setValues(rows);
     sheet.getRange(4, 2, rows.length, 1).setNumberFormat("dd.mm.yyyy hh:mm");
     sheet.getRange(4, 4, rows.length, 10).setNumberFormat("#,##0.00 ₽");
-    sheet.getRange(4, 16, rows.length, 1).setNumberFormat("dd.mm.yyyy hh:mm");
-    sheet.getRange(4, 18, rows.length, 1).setNumberFormat("dd.mm.yyyy");
+    sheet.getRange(4, 16, rows.length, 1).setNumberFormat("dd.mm.yyyy");
+    sheet.getRange(4, 17, rows.length, 1).setNumberFormat("@");
+    sheet.getRange(4, 19, rows.length, 1).setNumberFormat("dd.mm.yyyy");
     sheet.getBandings().forEach(function (banding) { banding.remove(); });
-    di3ApplyLightBandingWithDarkText_(sheet.getRange(4, 1, rows.length, 18));
+    di3ApplyLightBandingWithDarkText_(sheet.getRange(4, 1, rows.length, 19));
     var filter = sheet.getFilter();
-    var filterRange = sheet.getRange(3, 1, rows.length + 1, 18);
+    var filterRange = sheet.getRange(3, 1, rows.length + 1, 19);
     if (filter) di3SetFilterRangePreservingCriteria_(sheet, filterRange); else filterRange.createFilter();
   } else {
     sheet.getBandings().forEach(function (banding) { banding.remove(); });
@@ -423,8 +454,8 @@ function di3RefreshOrderRegister(preservedDatesOverride) {
   }
   di3SetFrozenRowsSafely_(sheet, 3);
   if (typeof sheet.showColumns === "function") sheet.showColumns(13);
-  sheet.hideColumns(17);
-  di3CompactSheet_(sheet, Math.max(3, 3 + rows.length), 18);
+  sheet.hideColumns(18);
+  di3CompactSheet_(sheet, Math.max(3, 3 + rows.length), 19);
   return { refreshed: true, orders: rows.length, max_rows: sheet.getMaxRows(), max_columns: sheet.getMaxColumns() };
 }
 
