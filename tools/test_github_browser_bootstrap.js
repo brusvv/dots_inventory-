@@ -17,7 +17,8 @@ test("bootstrap is pinned to the reviewed immutable commit", () => {
   assert.match(source, /COMMIT:\s*"2631969aa256fbf077e9f5356f35d45a9f647a76"/);
   assert.match(source, /EXPECTED_FILE_COUNT:\s*47/);
   assert.match(source, /\/git\/commits\/.*config\.COMMIT/);
-  assert.match(source, /\/git\/trees\/.*commit\.tree\.sha/);\n  assert.match(source, /tree\.sha !== commit\.tree\.sha/);
+  assert.match(source, /\/git\/trees\/.*commit\.tree\.sha/);
+  assert.match(source, /tree\.sha !== commit\.tree\.sha/);
   assert.match(source, /raw\.githubusercontent\.com\/.*config\.COMMIT/);
   assert.doesNotMatch(source, /raw\.githubusercontent\.com\/.+\/main\//);
 });
