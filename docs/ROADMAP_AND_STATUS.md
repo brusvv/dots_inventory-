@@ -417,8 +417,8 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 
 - Backup now fails closed if `SpreadsheetApp.flush()` is unavailable; it no longer silently skips the flush step.
 - The required flush is executed before source snapshot reads and Drive `makeCopy()`.
-- Manifest timing now distinguishes backup start from actual copy creation time and records flush, source snapshot, Drive copy, verification, manifest write and total elapsed milliseconds.
+- Manifest timing now distinguishes backup start from actual copy creation time and records flush, source snapshot, Drive copy, verification, manifest write and total elapsed milliseconds. The returned result reports full elapsed time; manifest labels the pre-final-update interval explicitly to avoid overstating precision.
 - The manual backup wrapper measures lock wait and lock-held duration. Toast/UI notification now occurs after `di3WithLock_()` returns, so UI latency does not extend the global mutation lock.
 - Added System Safety regressions for flush → snapshot → copy → verify ordering, timing fields, and lock metrics/toast placement.
-- **Source CI:** run #218 ([45852574534](https://github.com/brusvv/dots_inventory-/actions/runs/45852574534)) passed syntax for 50 `.gs` files and 144/144 tests: FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 37, Warehouse Dashboard 9, Finance Schema 4.
+- **Source CI:** run #221 ([45852754294](https://github.com/brusvv/dots_inventory-/actions/runs/45852754294)) passed syntax for 50 `.gs` files and 144/144 tests: FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 37, Warehouse Dashboard 9, Finance Schema 4.
 - **Runtime acceptance pending:** run a verified backup on a restored disposable workbook, inspect manifest timestamps and phase timings, compare source/copy snapshots, and capture lock wait/hold duration. Setup/schema-migration backups use the same phase instrumentation but are still subject to the outer setup lock. Do not change backup retention or restore behavior as part of this task.
