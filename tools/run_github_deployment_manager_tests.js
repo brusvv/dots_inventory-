@@ -32,6 +32,12 @@ function validManifest() {
       size_bytes: Buffer.byteLength(code), sha256: hash }]
   };
 }
+test("allows only GitHub-owned asset redirect hosts", () => {
+  assert.equal(vm.runInContext("di3IsSafeGitHubAssetRedirect_('https://release-assets.githubusercontent.com/file')", context), true);
+  assert.equal(vm.runInContext("di3IsSafeGitHubAssetRedirect_('https://objects.githubusercontent.com/file')", context), true);
+  assert.equal(vm.runInContext("di3IsSafeGitHubAssetRedirect_('https://evil.example/file')", context), false);
+  assert.equal(vm.runInContext("di3IsSafeGitHubAssetRedirect_('http://release-assets.githubusercontent.com/file')", context), false);
+});
 test("accepts valid pinned release manifest", () => {
   const m = validManifest();
   const r = vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.0.0')", context);
