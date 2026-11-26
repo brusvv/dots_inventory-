@@ -16,7 +16,7 @@ This repository snapshot is a source export, not a fully bound clasp project. Th
 8. Run the applicable Apps Script unit test functions listed in README / context.
 9. Run runtime acceptance only on the test copy and record the complete Execution log JSON.
 
-Do not run Clean Start, imports, schema migration, restore, or any stock mutation just because code was replaced. The current schema source declares version 3. The new v2→v3 migration appends `commission_payer` to `V3_Orders`; use Dry Run and a verified backup before setup applies it. Existing orders are defaulted to `BUYER` to preserve previous settlement semantics.
+Do not run Clean Start, imports, schema migration, restore, or any stock mutation just because code was replaced. The current clean-final schema source declares version 4. The legacy upgrade chain includes v2→v3 `commission_payer` and v3→v4 `business_date`; a schema-v3 workbook requires `RC8_ORDER_BUSINESS_DATE_V4` after read-only Dry Run and verified backup. A clean workbook uses one direct 0→4 `CLEAN_FINAL_BASELINE_ADOPTION` record. Important: the new F-07 clean baseline uses a 13-column sequence-based StockLedger; the existing RC8 12-column StockLedger is intentionally not compatible without a separately designed and approved migration. Do not run the v4 setup against the production RC8 workbook.
 
 ## Apps Script unit-test entry points in this source
 
@@ -29,7 +29,7 @@ Do not run Clean Start, imports, schema migration, restore, or any stock mutatio
 - `di3RunSupplyFullEditUnitTests()`
 - `di3RunWarehouseDashboardUnitTests()`
 
-These are Apps Script code functions and some depend on the Sheets runtime / project mocks. The local Node helpers execute only the explicitly listed suites: Warehouse Dashboard (7 tests), Order Domain (16 tests), Supply Workspace UX (9 tests), Catalog/Order UX (12 tests) and System Safety UX (11 tests). Do not infer that all Apps Script unit-test entry points were executed locally.
+These are Apps Script code functions and some depend on the Sheets runtime / project mocks. The current local Node quality-gates execute seven suites: FIFO replay (41), Order Domain (22), Supply Workspace UX (17), Catalog/Order UX (14), System Safety UX (38), Warehouse Dashboard (9), and Finance Schema (4), for 145/145 tests. Syntax validation covers 50 `.gs` files. These are source/Node checks, not Apps Script runtime acceptance. Do not infer that every GAS-specific unit-test entry point was executed locally.
 
 ## Probe safety
 
@@ -85,7 +85,7 @@ Local checks: `bash tools/check_syntax.sh`, `node tools/run_catalog_order_ux_tes
 
 ### Order-transition confirmation UX
 
-The current order workspace asks for confirmation before **each** selected-order status transition. The dialog names the order and target status, states whether the transition writes stock movements (dispatch / accepted return) or only changes the order status (complete / returning / cancel), and shows the effective date from column P or the current timestamp fallback. On **No**, the domain transition is not called. Validate the dialog's No path on a restored copy. Do not choose Yes for dispatch or accepted return unless you have a disposable order and explicitly authorized stock effects.
+The current order workspace asks for confirmation before **each** selected-order status transition. The dialog names the order and target status, states whether the transition writes stock movements (dispatch / accepted return) or only changes the order status (complete / returning / cancel), and shows the effective date/time from adjacent P/Q inputs. Both fields are mandatory; there is no current-time fallback. On **No**, the domain transition is not called. Validate the dialog's No path on a restored copy. Do not choose Yes for dispatch or accepted return unless you have a disposable order and explicitly authorized stock effects.
 
 
 ## Local UX patch UX-07–UX-09 (25.11.2026)
@@ -121,7 +121,7 @@ The local runner `tools/run_system_safety_ux_tests.js` also changed to load the 
 Runtime acceptance (restored test copy only):
 
 1. Fill the Warehouse Manager form with a test inbound or outbound movement, open `Склад → Провести приход / расход`, and choose **No**. Confirm the form values remain, no operation appears in `Operations`, `StockLedger`, `StockMovementDetails` or `StockLots`, and FIFO projections are unchanged.
-2. Review the dialog's direction, product, reason, date, quantity and cost/price fields. For inbound movements confirm the text describes creation of a FIFO lot; for outbound movements confirm it describes FIFO expense allocation. For `OFFLINE_SALE`, confirm unit sale price and total revenue are shown.
+2. Review the dialog's direction, product, reason, date (B4), time (C4), quantity and cost/price fields. For inbound movements confirm the text describes creation of a FIFO lot; for outbound movements confirm it describes FIFO expense allocation. For `OFFLINE_SALE`, confirm unit sale price and total revenue are shown.
 3. Do not choose **Yes** solely for UX acceptance. A confirmed movement has real stock effects and must be a separately approved test operation on a disposable copy.
 
 Local check: `node tools/run_system_safety_ux_tests.js` (11/11 PASS). This does not emulate Apps Script UI or prove the No path in a real workbook.
@@ -214,3 +214,47 @@ node tools/run_finance_schema_tests.js
 ```
 
 Latest local results: syntax 50/50; Order Domain 17/17; Supply UX 15/15; System Safety UX 13/13; Catalog/Order UX 12/12; Warehouse Dashboard 9/9; Finance schema 4/4 (70/70 Node checks). TypeScript AST: 570 functions / 88 top-level variables, no parse errors or duplicate declarations. Menu reference audit: 68 actions / 0 missing handlers. These are local-only results and do not replace any scenario above.
+
+## Current v4 source branch — consolidated runtime acceptance baseline (26.11.2026)
+
+This section supersedes older schema-version and local-test counts above. The current branch is feature/clean-final-baseline, PR #1 remains Draft/unmerged, and no production Apps Script deployment or RC8 workbook was changed.
+
+### Schema and migration boundaries
+
+- Clean workbook: Dry Run must identify the clean-final path and the setup journal must contain one CLEAN_FINAL_BASELINE_ADOPTION record (0→4), not synthetic intermediate migrations.
+- Legacy v3 workbook: backup + Dry Run, then additive RC8_ORDER_BUSINESS_DATE_V4 (3→4) appending business_date to V3_Orders!AD. Existing 29-column prefix and all order rows must remain unchanged.
+- Legacy v2 workbook: if explicitly supported by the tested copy, apply the existing v2→v3 commission_payer migration first, then v3→v4 business date. Do not infer this is safe for a workbook whose StockLedger remains the old 12-column layout.
+- F-07 clean baseline: StockLedger is 13 columns and includes immutable ledger_sequence. Existing 12-column RC8 StockLedger is intentionally incompatible; no automatic conversion is included in this branch.
+- Do not use production RC8 for any migration or acceptance step.
+
+### Unified date/time controls
+
+- Orders: next transition date P + required HH:mm time Q; hidden order_id is R; date-only business_date is S.
+- Supply register: next-stage date M + required time N.
+- Supply form: actual event dates G5:G7 + times H5:H7, including ordinary transitions, historical supply entry and full edit.
+- Manual warehouse movement: date B4 + time C4.
+- Historical sale: business date B4 is date-only; dispatch B5/C5 and completion B6/C6 are adjacent date/time pairs.
+- Legacy combined values are split non-destructively. If the old value does not prove a time, the new time cell stays blank and must be explicitly filled. The shared parser uses the configured timezone, strict HH:mm, rejects nonexistent local times and normalizes seconds/milliseconds.
+
+### Core runtime acceptance still pending
+
+1. UX-07–10: exercise real confirmation dialogs and every No path; do not confirm stock mutations merely for a UI check.
+2. F-01: dispatch A → unrelated stock operation creates a newer FIFO run → return A; verify original dispatch movement, source lots, quantities and exact cost.
+3. F-02: v3→v4 Dry Run/backup/migration on a restored copy; enter a previous-day business date the next morning; verify independent created_at, dispatched_at, completed_at, FIFO effective time, commission and Finance Dashboard periods. Test sufficient and insufficient historical FIFO.
+4. F-03/F-05/F-15: real historical-supply confirmation with a second execution changing the form/state before YES; verify revalidation stops before writes. Test full-edit retry fingerprint and historical/full-edit mutual exclusion.
+5. F-04: payload below/above 45,000 characters; oversized input must fail before any Operations or OperationPayloads write.
+6. F-06: fault injection at every archive write boundary; verify PREPARED/COMMITTED/QUARANTINED lifecycle, idempotent replay, active projection restoration, archive integrity and backup/restore.
+7. F-07: on a new empty disposable workbook, verify monotonically increasing ledger_sequence, same-timestamp deterministic order, global/per-product watermarks, and concurrent sequence allocation. Do not run on the old 12-column RC8 ledger.
+8. F-09/C-01: benchmark 500/1,000/2,000 movements in real Apps Script; record runtime, reads/writes, TextFinder and quota. Do not optimize O(N) reads without measurements.
+9. F-10: close → reopen with reason → re-close; verify append-only audit events and PeriodGuard state.
+10. F-13: create and verify a backup; inspect start/copy/completion timestamps, flush/snapshot/copy/verify/manifest timings, and lock wait/held duration.
+11. F-14/C-06: on the restored copy, start Session A with di3TmpC06HoldScriptLock(25000, "C06-TEST-001", "TEST_COPY_ONLY"); start Session B while A is sleeping with di3TmpC06ProbeContendedLock("C06-TEST-001", "TEST_COPY_ONLY"). Expected: CONTENDED, callback_entered=false. Repeat with a 5–15 second hold; expected ACQUIRED_AFTER_RELEASE. OVERLAP_DETECTED is a failure. Running B only after A ends does not prove contention.
+12. F-18: test 10.075, 1.005, 1234.565 and negative half values through calculator, save/settlement and finance reporting.
+13. F-20: separate initiating user from recovery executor; verify persisted actor on operation, supply/order/manual stock audit and attempts.
+14. Dashboard / Finance / BM-01: chart diagnostics N1:O21 and actual source range; buyer/seller commission cases; Finance Dashboard reconciliation; backup restore-as-new, folder rebind, bound script and trigger repair.
+
+### Current source verification
+
+- GitHub Actions run #225 (45853092868): 50/50 .gs syntax and 145/145 Node tests (FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 38, Warehouse Dashboard 9, Finance Schema 4).
+- This does not prove Google Apps Script runtime behavior, Google Sheets migration, Drive backup consistency, real concurrent execution or visual Dashboard rendering.
+- PR #1 remains Draft and unmerged. Do not deploy or merge until the consolidated disposable-workbook acceptance evidence is recorded.
