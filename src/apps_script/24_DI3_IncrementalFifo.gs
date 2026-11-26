@@ -371,7 +371,7 @@ function di3AppendFifoArchiveRowsIdempotently_(tableName, rows) {
   var existingById = Object.create(null);
   existing.forEach(function (match) {
     var id = String(match.values[0]);
-    if (existingById[id]) throw new Error(tableName + ": duplicate archive_row_id " + id + ".");
+    if (existingById[id]) throw di3FifoReplayIntegrityError_(tableName + ": duplicate archive_row_id " + id + ".");
     existingById[id] = match.values;
   });
   var missing = [];
@@ -379,11 +379,17 @@ function di3AppendFifoArchiveRowsIdempotently_(tableName, rows) {
     var id = String(row[0]), saved = existingById[id];
     if (!saved) { missing.push(row); return; }
     if (di3BuildFifoFingerprint_(saved) !== di3BuildFifoFingerprint_(row)) {
-      throw new Error(tableName + ": archive row content mismatch for " + id + ".");
+      throw di3FifoReplayIntegrityError_(tableName + ": archive row content mismatch for " + id + ".");
     }
   });
   di3AppendTableRows_(tableName, missing);
   return missing.length;
+}
+
+function di3FifoReplayIntegrityError_(message) {
+  var error = new Error(message);
+  error.di3FifoReplayIntegrity = true;
+  return error;
 }
 
 function di3GetLatestFifoReplayEvent_(replayId) {
@@ -392,13 +398,13 @@ function di3GetLatestFifoReplayEvent_(replayId) {
   matches.forEach(function (match) {
     var sequence = Number(match.values[2]);
     if (!Number.isSafeInteger(sequence) || sequence <= 0) {
-      throw new Error("FifoReplayEvents: invalid event_sequence for replay " + replayId + ".");
+      throw di3FifoReplayIntegrityError_("FifoReplayEvents: invalid event_sequence for replay " + replayId + ".");
     }
   });
   matches.sort(function (a, b) { return Number(a.values[2]) - Number(b.values[2]); });
   for (var i = 1; i < matches.length; i++) {
     if (Number(matches[i - 1].values[2]) === Number(matches[i].values[2])) {
-      throw new Error("FifoReplayEvents: duplicate event_sequence for replay " + replayId + ".");
+      throw di3FifoReplayIntegrityError_("FifoReplayEvents: duplicate event_sequence for replay " + replayId + ".");
     }
   }
   return matches[matches.length - 1];
@@ -413,11 +419,11 @@ function di3AppendFifoReplayEvent_(context, eventType, fingerprints, details) {
         String(latestRow[10]) !== String(fingerprints.target_allocations) ||
         String(latestRow[11]) !== String(fingerprints.source_lots) ||
         String(latestRow[12]) !== String(fingerprints.target_lots)) {
-      throw new Error("FIFO replay " + context.replay_id + " уже существует с другими fingerprint-значениями.");
+      throw di3FifoReplayIntegrityError_("FIFO replay " + context.replay_id + " уже существует с другими fingerprint-значениями.");
     }
     if (String(latestRow[3]) === eventType || String(latestRow[3]) === "COMMITTED") return latest;
     if (String(latestRow[3]) !== "PREPARED") {
-      throw new Error("FIFO replay " + context.replay_id + " находится в терминальном состоянии " + latestRow[3] + ".");
+      throw di3FifoReplayIntegrityError_("FIFO replay " + context.replay_id + " находится в терминальном состоянии " + latestRow[3] + ".");
     }
   }
   var eventSequence = latest ? Number(latest.values[2]) + 1 : 1;
@@ -439,12 +445,12 @@ function di3ReadFifoReplayArchiveSnapshots_(replayId) {
   var allocationIds = Object.create(null), lotIds = Object.create(null);
   allocationMatches.forEach(function (match) {
     var id = String(match.values[0]);
-    if (allocationIds[id]) throw new Error("FifoAllocationArchive: duplicate archive row " + id + ".");
+    if (allocationIds[id]) throw di3FifoReplayIntegrityError_("FifoAllocationArchive: duplicate archive row " + id + ".");
     allocationIds[id] = true;
   });
   lotMatches.forEach(function (match) {
     var id = String(match.values[0]);
-    if (lotIds[id]) throw new Error("FifoLotCacheArchive: duplicate archive row " + id + ".");
+    if (lotIds[id]) throw di3FifoReplayIntegrityError_("FifoLotCacheArchive: duplicate archive row " + id + ".");
     lotIds[id] = true;
   });
   allocationMatches.sort(function (a, b) { return String(a.values[4]).localeCompare(String(b.values[4])); });
@@ -493,7 +499,7 @@ function di3PrepareFifoReplay_(context, predicate, productId, currentRows) {
         String(event[8]) !== String(context.input_fingerprint) ||
         String(event[10]) !== targetAllocationFingerprint ||
         String(event[12]) !== targetLotFingerprint) {
-      throw new Error("FIFO replay identity/fingerprint mismatch for " + context.replay_id + ".");
+      throw di3FifoReplayIntegrityError_("FIFO replay identity/fingerprint mismatch for " + context.replay_id + ".");
     }
     var archive = di3ReadFifoReplayArchiveSnapshots_(context.replay_id);
     sourceRows = archive.allocation_rows;
@@ -502,16 +508,16 @@ function di3PrepareFifoReplay_(context, predicate, productId, currentRows) {
     var sourceLotSnapshot = lotArchiveRows.map(function (row) { return [String(row[2]), String(row[3]), row[4]]; });
     sourceLotFingerprint = di3BuildFifoFingerprint_(sourceLotSnapshot);
     if (sourceAllocationFingerprint !== String(event[9]) || sourceLotFingerprint !== String(event[11])) {
-      throw new Error("FIFO replay archive is incomplete or inconsistent for " + context.replay_id + ".");
+      throw di3FifoReplayIntegrityError_("FIFO replay archive is incomplete or inconsistent for " + context.replay_id + ".");
     }
     if (String(event[3]) === "COMMITTED") {
       if (currentAllocationFingerprint !== targetAllocationFingerprint || currentLotFingerprint !== targetLotFingerprint) {
-        throw new Error("COMMITTED FIFO replay projection no longer matches its target fingerprint: " + context.replay_id + ".");
+        throw di3FifoReplayIntegrityError_("COMMITTED FIFO replay projection no longer matches its target fingerprint: " + context.replay_id + ".");
       }
       return { already_target: true, already_committed: true, source_rows: sourceRows, lot_archive_rows: lotArchiveRows, fingerprints: fingerprints };
     }
     if (String(event[3]) !== "PREPARED") {
-      throw new Error("FIFO replay cannot resume from state " + event[3] + ".");
+      throw di3FifoReplayIntegrityError_("FIFO replay cannot resume from state " + event[3] + ".");
     }
     fingerprints.source_allocations = sourceAllocationFingerprint;
     fingerprints.source_lots = sourceLotFingerprint;
@@ -602,11 +608,13 @@ function di3RecoverPendingFifoReplaysForRun_(run, reason) {
     try {
       if (context.scope_type === "PRODUCT") {
         var scope = JSON.parse(context.scope_json);
-        if (!Array.isArray(scope) || scope.length !== 1 || !scope[0]) throw new Error("Некорректный PRODUCT replay scope.");
+        if (!Array.isArray(scope) || scope.length !== 1 || !scope[0]) throw di3FifoReplayIntegrityError_("Некорректный PRODUCT replay scope.");
         var productId = String(scope[0]);
         var actualInputFingerprint = di3BuildFifoReplayInputFingerprint_(productId, ledgerRows, detailRows, lotRows);
-        if (actualInputFingerprint !== context.input_fingerprint) throw new Error("Изменился immutable input fingerprint товара " + productId + ".");
-        var replay = di3BuildProductFifoReplayPlan_(productId, ledgerRows, detailRows, lotRows);
+        if (actualInputFingerprint !== context.input_fingerprint) throw di3FifoReplayIntegrityError_("Изменился immutable input fingerprint товара " + productId + ".");
+        var replay;
+        try { replay = di3BuildProductFifoReplayPlan_(productId, ledgerRows, detailRows, lotRows); }
+        catch (planError) { throw di3FifoReplayIntegrityError_("Невозможно пересобрать FIFO товара " + productId + ": " + (planError && planError.message ? planError.message : String(planError))); }
         var targetRows = di3BuildFifoAllocationRows_(run.run_id, replay.allocations, context.replay_id);
         var remaining = {};
         replay.remaining_lots.forEach(function (lot) { remaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
@@ -625,10 +633,12 @@ function di3RecoverPendingFifoReplaysForRun_(run, reason) {
         recoveredProducts[productId] = true;
         replayedMovements += replay.movement_count;
       } else if (context.scope_type === "FULL") {
-        if (context.scope_json !== "FULL") throw new Error("Некорректный FULL replay scope.");
+        if (context.scope_json !== "FULL") throw di3FifoReplayIntegrityError_("Некорректный FULL replay scope.");
         var fullInputFingerprint = di3BuildFifoReplayInputFingerprint_(null, ledgerRows, detailRows, lotRows);
-        if (fullInputFingerprint !== context.input_fingerprint) throw new Error("Изменился immutable input fingerprint полного FIFO replay.");
-        var fullReplay = di3BuildFifoReplayPlan_(ledgerRows, detailRows, lotRows, null);
+        if (fullInputFingerprint !== context.input_fingerprint) throw di3FifoReplayIntegrityError_("Изменился immutable input fingerprint полного FIFO replay.");
+        var fullReplay;
+        try { fullReplay = di3BuildFifoReplayPlan_(ledgerRows, detailRows, lotRows, null); }
+        catch (planError) { throw di3FifoReplayIntegrityError_("Невозможно пересобрать полный FIFO replay: " + (planError && planError.message ? planError.message : String(planError))); }
         var fullTargetRows = di3BuildFifoAllocationRows_(run.run_id, fullReplay.allocations, context.replay_id);
         var fullRemaining = {};
         fullReplay.remaining_lots.forEach(function (lot) { fullRemaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
@@ -649,13 +659,17 @@ function di3RecoverPendingFifoReplaysForRun_(run, reason) {
         throw new Error("Unsupported FIFO replay scope type: " + context.scope_type);
       }
     } catch (recoveryError) {
-      try {
-        di3AppendFifoReplayEvent_(context, "QUARANTINED", fingerprints, {
-          recovery_error: recoveryError && recoveryError.message ? recoveryError.message : String(recoveryError)
-        });
-      } catch (ignoreQuarantineWrite) {}
-      throw new Error("FIFO replay " + context.replay_id + " помещён в quarantine: " +
-        (recoveryError && recoveryError.message ? recoveryError.message : String(recoveryError)));
+      var recoveryMessage = recoveryError && recoveryError.message ? recoveryError.message : String(recoveryError);
+      if (recoveryError && recoveryError.di3FifoReplayIntegrity === true) {
+        try {
+          di3AppendFifoReplayEvent_(context, "QUARANTINED", fingerprints, { recovery_error: recoveryMessage });
+        } catch (ignoreQuarantineWrite) {}
+        throw new Error("FIFO replay " + context.replay_id + " помещён в quarantine: " + recoveryMessage);
+      }
+      // Unexpected execution/service failures are not proof of corrupted data.
+      // Keep the immutable replay PREPARED so the same operation can be retried.
+      throw new Error("FIFO replay " + context.replay_id +
+        " не завершён; состояние оставлено PREPARED для безопасного повтора: " + recoveryMessage);
     }
   });
   return {
