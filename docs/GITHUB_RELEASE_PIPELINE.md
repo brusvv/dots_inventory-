@@ -38,7 +38,9 @@ Preview can be published without merging the feature branch into `main`. First p
 git fetch origin
 git switch feature/my-change
 git pull --ff-only
-git tag -a dots-inventory-v4.1.0-preview.1 \\\n  -m "Dots Inventory v4.1.0 Preview 1" \\\n  -m "source-branch: feature/my-change"
+git tag -a dots-inventory-v4.1.0-preview.1 \\
+  -m "Dots Inventory v4.1.0 Preview 1" \\
+  -m "source-branch: feature/my-change"
 git push origin dots-inventory-v4.1.0-preview.1
 ```
 
