@@ -4,6 +4,9 @@ ROOT="$(mktemp -d)"
 trap 'rm -rf "$ROOT"' EXIT
 REMOTE="$ROOT/remote.git"
 WORK="$ROOT/work"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export RELEASE_VALIDATOR="$SCRIPT_DIR/validate_release_tag.sh"
+
 git init --bare --initial-branch=main "$REMOTE" >/dev/null
 git clone "$REMOTE" "$WORK" >/dev/null 2>&1
 git -C "$WORK" config user.name "Release Policy Tests"
@@ -29,24 +32,19 @@ run_ok() {
   local tag="$1" sha="$2" expected_channel="$3" expected_branch="$4"
   local env_file="$ROOT/github-env"
   : > "$env_file"
-  (cd "$WORK" && GITHUB_REF_NAME="$tag" GITHUB_SHA="$sha" GITHUB_ENV="$env_file" bash "$OLDPWD/tools/validate_release_tag.sh") >/dev/null
+  (cd "$WORK" && GITHUB_REF_NAME="$tag" GITHUB_SHA="$sha" GITHUB_ENV="$env_file" bash "$RELEASE_VALIDATOR") >/dev/null
   grep -Fx "RELEASE_CHANNEL=$expected_channel" "$env_file" >/dev/null
   grep -Fx "RELEASE_SOURCE_BRANCH=$expected_branch" "$env_file" >/dev/null
   echo "PASS accepts $expected_channel tag from $expected_branch"
 }
 run_fail() {
   local tag="$1" sha="$2" label="$3"
-  if (cd "$WORK" && GITHUB_REF_NAME="$tag" GITHUB_SHA="$sha" bash "$OLDPWD/tools/validate_release_tag.sh") >/dev/null 2>&1; then
+  if (cd "$WORK" && GITHUB_REF_NAME="$tag" GITHUB_SHA="$sha" bash "$RELEASE_VALIDATOR") >/dev/null 2>&1; then
     echo "FAIL unexpectedly accepted $label" >&2
     exit 1
   fi
   echo "PASS rejects $label"
 }
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Resolve script path before changing directory in the test subshells.
-export RELEASE_VALIDATOR="$SCRIPT_DIR/validate_release_tag.sh"
-# run_ok/run_fail use this absolute path so the test is independent of cwd.
-sed -i 's#"$OLDPWD/tools/validate_release_tag.sh"#"$RELEASE_VALIDATOR"#g' "$SCRIPT_DIR/test_release_tag_policy.sh"
 
 run_ok dots-inventory-v1.0.0 "$MAIN_SHA" stable main
 run_ok dots-inventory-v1.1.0-preview.1 "$PREVIEW_SHA" preview feature/preview
