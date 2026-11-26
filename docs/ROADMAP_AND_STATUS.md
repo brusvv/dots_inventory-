@@ -326,3 +326,13 @@ The following issues have source changes and local regression coverage. They are
 - Updated F-06 identity design after reviewing the live control flow: one stock operation may process multiple products, and only some may require a full product replay. Therefore each replaced product receives its own stable child replay identity; incremental-only products do not create archive events.
 - Implemented append-only allocation/lot snapshots, deterministic replay allocation IDs, PREPARED/COMMITTED/QUARANTINED lifecycle events, per-product replay identity, pending run reuse, source restoration, recovery before tail processing, and a gate blocking new stock events while runs are unresolved.
 - GitHub Actions run `45710935351` passed syntax checks for 50 `.gs` files and all seven source suites (99/99). Runtime fault-injection and backup/restore acceptance remain open. F-06 remains open.
+## N-03 — clean final baseline implementation — 26.11.2026
+
+- Implemented a separate `CLEAN_FINAL_BASELINE_ADOPTION` path in `33_DI3_SchemaVersioning.gs`: a new workbook with the exact final target headers records one 0 → current-version baseline instead of fabricating RC8 baseline-v1 and v1→v2→v3 migration history.
+- Kept the explicit RC8/legacy migration path separate. An unversioned workbook without recognized legacy migration identity is blocked rather than auto-adopted.
+- Added fail-closed checks for duplicate/mismatched clean-baseline journal records, legacy or partial headers, out-of-schema populated columns, and missing system tables after baseline adoption.
+- A `STARTED` baseline may resume only after revalidating the target headers; an adopted baseline remains recognizable after normal business rows have been created.
+- Added 10 focused System Safety UX regression cases and updated `docs/CLEAN_BASELINE_SCHEMA_VERSIONING_DESIGN.md`.
+- Branch: `feature/clean-final-baseline`; draft PR: https://github.com/brusvv/dots_inventory-/pull/1.
+- GitHub Actions at commit `e695bf9` passed syntax for 50 `.gs` files and 124/124 Node tests. A later run exposed missing `getLastColumn()` methods in the new test mocks (not a production-source failure); mocks were corrected. The latest CI rerun is in progress.
+- **Still not runtime-accepted:** actual Google Sheets Dry Run, empty-workbook setup, setup rerun, interruption injection at both journal boundaries, backup/restore-as-new, and end-to-end supply/dispatch/return/finance flows. Existing RC8 remains untouched.
