@@ -78,7 +78,7 @@ The physical dispatch date is required; the time window is optional. The user ma
 
 Do not combine date and time in one date-picker-controlled cell: a Sheets date picker can replace the time portion with midnight. Keep date and optional time-window values in separate controls/columns, and combine them only in the workflow layer using the configured spreadsheet timezone.
 
-**Still to decide before implementation:** what deterministic `effective_at` value should be assigned when the user supplies only a dispatch date and no time window. FIFO needs a single timestamp, and any date-only convention is necessarily an approximation of within-day ordering. Do not silently choose midnight, noon, end-of-day or current time. The same issue must be resolved for completion if its time is optional.
+The conservative dispatch timestamp rule is defined in Section 5 below. The remaining completion-chronology question is also recorded there; it does not change the requirement to supply a completion date and exact completion time.
 
 Recommended orchestration reuses the existing idempotent lifecycle rather than introducing a second stock engine:
 
