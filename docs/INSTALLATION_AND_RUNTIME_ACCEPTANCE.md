@@ -33,7 +33,7 @@ Do not run Clean Start, imports, schema migration, restore, or any stock mutatio
 - `di3RunSupplyFullEditUnitTests()`
 - `di3RunWarehouseDashboardUnitTests()`
 
-These are Apps Script code functions and some depend on the Sheets runtime / project mocks. The current local Node quality-gates execute seven suites: FIFO replay (41), Order Domain (22), Supply Workspace UX (17), Catalog/Order UX (14), System Safety UX (38), Warehouse Dashboard (9), and Finance Schema (4), for 145/145 tests. Syntax validation covers 54 `.gs` files in the application source and runtime probes; the browser-only Bootstrap is checked separately. These are source/Node checks, not Apps Script runtime acceptance. Do not infer that every GAS-specific unit-test entry point was executed locally.
+These are Apps Script code functions and some depend on the Sheets runtime / project mocks. The current local Node quality-gates execute seven suites: FIFO replay (41), Order Domain (22), Supply Workspace UX (17), Catalog/Order UX (14), System Safety UX (38), Warehouse Dashboard (9), and Finance Schema (4), for 145/145 tests. Syntax validation covers 55 `.gs` files: 47 application modules, 7 runtime probes and 1 browser-only Bootstrap. The Bootstrap also has a separate 7-case static safety-policy test. These are source/Node checks, not Apps Script runtime acceptance. Do not infer that every GAS-specific unit-test entry point was executed locally.
 
 ## Probe safety
 
