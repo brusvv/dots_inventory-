@@ -696,6 +696,50 @@ function di3RunStockCoreUnitTests() {
     }
   });
 
+  test("transient projection failure leaves a FIFO replay PREPARED for retry", function () {
+    var originals = {
+      pending: di3GetPendingFifoReplayEventsForRun_, readTable: di3ReadTableValues_,
+      inputFingerprint: di3BuildFifoReplayInputFingerprint_, replayPlan: di3BuildProductFifoReplayPlan_,
+      allocationRows: di3BuildFifoAllocationRows_, replace: di3ReplaceFifoProjectionSafely_,
+      stateRows: di3BuildFifoProductStateRows_, upsert: di3UpsertFifoProductStateRows_,
+      appendEvent: di3AppendFifoReplayEvent_
+    };
+    var quarantineType = "";
+    var event = ["evt-1", "OP:op-1:PRODUCT:p1", 1, "PREPARED", "run-1", "op-1",
+      "PRODUCT", '["p1"]', "input-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
+    try {
+      di3GetPendingFifoReplayEventsForRun_ = function () { return [{ row_number: 2, values: event }]; };
+      di3ReadTableValues_ = function (name) {
+        if (name === "StockLedger") return [["m1", "op", "evt", "p1", "T", "d", -1, new Date("2026-01-01"), new Date("2026-01-01"), "", "", "", 8]];
+        if (name === "StockMovementDetails") return [["m1", "code", "OUT", "SALE", "", "", "KNOWN", "", "", "", "TEST"]];
+        if (name === "StockLots") return [["l1", "p1", "m0", "SUPPLY", "s1", "pv1", new Date("2026-01-01"), new Date("2026-01-01"), 2, 5, "KNOWN", "EUR", "", 0, 1000]];
+        throw new Error("Unexpected table " + name);
+      };
+      di3BuildFifoReplayInputFingerprint_ = function () { return "input-fp"; };
+      di3BuildProductFifoReplayPlan_ = function () { return { allocations: [], remaining_lots: [{ lot_id: "l1", remaining_quantity: 1 }], movement_count: 1 }; };
+      di3BuildFifoAllocationRows_ = function () { return []; };
+      di3ReplaceFifoProjectionSafely_ = function () { return { allocations_written: 0, allocations_removed: 0 }; };
+      di3BuildFifoProductStateRows_ = function () { return [["p1-state"]]; };
+      di3UpsertFifoProductStateRows_ = function () { throw new Error("Temporary Sheets API write failure"); };
+      di3AppendFifoReplayEvent_ = function (context, type) { if (type === "QUARANTINED") quarantineType = type; return {}; };
+      var retryable = false;
+      try { di3RecoverPendingFifoReplaysForRun_({ run_id: "run-1", created_at: new Date() }, "TEST"); }
+      catch (error) { retryable = /оставлено PREPARED для безопасного повтора/.test(error.message); }
+      equal(retryable, true);
+      equal(quarantineType, "");
+    } finally {
+      di3GetPendingFifoReplayEventsForRun_ = originals.pending;
+      di3ReadTableValues_ = originals.readTable;
+      di3BuildFifoReplayInputFingerprint_ = originals.inputFingerprint;
+      di3BuildProductFifoReplayPlan_ = originals.replayPlan;
+      di3BuildFifoAllocationRows_ = originals.allocationRows;
+      di3ReplaceFifoProjectionSafely_ = originals.replace;
+      di3BuildFifoProductStateRows_ = originals.stateRows;
+      di3UpsertFifoProductStateRows_ = originals.upsert;
+      di3AppendFifoReplayEvent_ = originals.appendEvent;
+    }
+  });
+
   test("a second FIFO replay cannot start while another run is unresolved", function () {
     var originalGetSheet = di3GetSheetOrThrow_;
     try {
