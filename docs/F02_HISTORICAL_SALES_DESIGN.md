@@ -171,3 +171,10 @@ Implemented on `feature/clean-final-baseline` / PR #1:
 - Added a Catalog/Order UX regression proving the historical-sale confirmation and create path share one form snapshot.
 - **Latest source CI:** GitHub Actions PR run #163 (45848104778) passed syntax for 50 .gs files and **135/135** tests: FIFO 41, Order Domain 21, Supply Workspace UX 15, Catalog/Order UX 13, System Safety UX 32, Warehouse Dashboard 9, Finance Schema 4. Later commits changed documentation only.
 - This remains source/Node validation. Apps Script runtime, actual OperationExecutor fault injection, migration Dry Run/apply, and backup/restore acceptance remain pending on a restored disposable workbook.
+
+
+## 11. Shared date/time controls — source implementation — 26.11.2026
+
+The shared exact date + required `HH:mm` contract is now implemented across ordinary order transitions, supply lifecycle transitions, historical supply entry/full edit, historical sales and manual warehouse IN/OUT. The common `di3BuildEffectiveDateTime_()` parser uses the configured spreadsheet timezone, rejects missing/malformed time and nonexistent local times, and normalizes seconds/milliseconds. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md` for the final cell mapping and legacy form/register migration behavior.
+
+**Source CI:** run #212 passed syntax for 50 `.gs` files and 142/142 Node regression tests. This does not constitute Google Sheets runtime acceptance. Form migrations, date picker/time entry, DST, FIFO chronology, PeriodGuard, commission settlement, dashboard totals and retry/fault recovery remain pending on a restored disposable workbook. Production RC8 remains untouched; PR #1 remains Draft and unmerged.
