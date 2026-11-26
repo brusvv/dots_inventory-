@@ -292,55 +292,46 @@ function di3ValidateSupplyPlanningDates_(orderCreatedInStoreDate, expectedReceiv
  * persisted timestamps, while only the next stage's cell is enabled for input.
  * When saving a draft, preserve the one pending next-stage value typed by the user.
  */
-function di3ReadSupplyStageDateTime_(sheet, dateCell, label, optional) {
-  sheet = sheet || di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
-  var dateValue = sheet.getRange(dateCell).getValue();
-  var rowNumber = String(dateCell).replace(/^[A-Z]+/, "");
-  var timeValue = sheet.getRange("H" + rowNumber).getDisplayValue();
-  if ((dateValue === "" || dateValue == null) && !String(timeValue || "").trim() && optional === true) return null;
-  return di3BuildEffectiveDateTime_(dateValue, timeValue, label);
-}
-
-/**
- * Refreshes the factual date panel. G4 is system-generated. G5:G7 are
- * date-picker values and H5:H7 are separate mandatory HH:mm inputs.
- */
 function di3RefreshSupplyDatePanel_(supply, options) {
   options = options || {};
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
   if (!sheet) return { refreshed: false, reason: "SHEET_MISSING" };
+
   var historicalMode = String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") === "HISTORICAL_CREATE";
   var fullEditMode = String(sheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === "FULL_EDIT";
-  var previousDates = sheet.getRange("G5:G7").getValues().map(function (row) { return row[0]; });
-  var previousTimes = sheet.getRange("H5:H7").getDisplayValues().map(function (row) { return String(row[0] || ""); });
+  var previousStageInputs = (historicalMode || fullEditMode) ? sheet.getRange("G5:G7").getValues().map(function (row) { return row[0]; }) : [];
+  var pendingValue = "";
   var nextStage = supply && typeof di3GetNextSupplyStageConfig_ === "function"
     ? di3GetNextSupplyStageConfig_(supply.status) : null;
+  if (options.preservePendingInput === true && nextStage) {
+    pendingValue = sheet.getRange(nextStage.input_cell).getValue();
+  }
+
   var values = supply
     ? [supply.created_at || "", supply.sent_at || "", supply.awaiting_at || "", supply.received_at || ""]
     : ["", "", "", ""];
-  var dateValues = ["", "", ""];
-  var timeValues = ["", "", ""];
-  for (var i = 0; i < 3; i++) {
-    if (values[i + 1]) {
-      var parts = di3SplitEffectiveDateTime_(values[i + 1], "Сохранённый этап поставки");
-      dateValues[i] = parts.date;
-      timeValues[i] = parts.time;
-    } else if (historicalMode || fullEditMode) {
-      dateValues[i] = previousDates[i] || "";
-      timeValues[i] = previousTimes[i] || "";
-    } else if (options.preservePendingInput === true && nextStage && nextStage.input_cell === ("G" + (i + 5))) {
-      dateValues[i] = previousDates[i] || "";
-      timeValues[i] = previousTimes[i] || "";
-    }
+  if (historicalMode || fullEditMode) {
+    // In historical-entry and full-edit modes all factual dates are explicit user inputs.
+    // Preserve them through form refreshes; persisted values take precedence on retry.
+    ["G5", "G6", "G7"].forEach(function (cell, index) {
+      var persistedIndex = index + 1;
+      var pending = previousStageInputs[index];
+      if ((!values[persistedIndex] || values[persistedIndex] === "") && pending !== "" && pending != null) {
+        values[persistedIndex] = pending;
+      }
+    });
+  } else if (options.preservePendingInput === true && nextStage && pendingValue !== "" && pendingValue != null) {
+    var pendingIndex = { G5: 1, G6: 2, G7: 3 }[nextStage.input_cell];
+    if (pendingIndex != null && !values[pendingIndex]) values[pendingIndex] = pendingValue;
   }
-  sheet.getRange("G4").setValue(values[0] || "").setNumberFormat("dd.mm.yyyy hh:mm");
-  sheet.getRange("G5:G7").setValues(dateValues.map(function (value) { return [value]; })).setNumberFormat("dd.mm.yyyy");
-  sheet.getRange("H5:H7").setValues(timeValues.map(function (value) { return [value]; })).setNumberFormat("@");
+
+  sheet.getRange("G4:G7").setValues(values.map(function (value) { return [value]; }));
+  sheet.getRange("G4:G7").setNumberFormat("dd.mm.yyyy hh:mm");
   di3ApplySupplyStageInputState_(sheet, supply, nextStage);
   return {
     refreshed: true,
     supply_number: supply ? String(supply.supply_number || "") : "",
-    next_input_cell: (historicalMode || fullEditMode) ? "G5:H7" : (nextStage ? nextStage.input_cell + ":H" + nextStage.input_cell.substring(1) : ""),
+    next_input_cell: (historicalMode || fullEditMode) ? "G5:G7" : (nextStage ? nextStage.input_cell : ""),
     mode: historicalMode ? "HISTORICAL_CREATE" : (fullEditMode ? "FULL_EDIT" : "STANDARD")
   };
 }
@@ -356,22 +347,29 @@ function di3ApplySupplyStageInputState_(sheet, supply, nextStage) {
   var historicalMode = String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") === "HISTORICAL_CREATE";
   var fullEditMode = String(sheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === "FULL_EDIT";
   inputs.forEach(function (item) {
-    var dateCell = sheet.getRange(item.cell);
+    var cell = sheet.getRange(item.cell);
     var rowNumber = item.cell.substring(1);
-    var timeCell = sheet.getRange("H" + rowNumber);
-    var editable = historicalMode || fullEditMode || !!(nextStage && nextStage.input_cell === item.cell);
-    dateCell.setDataValidation(editable ? validation : blockedValidation);
-    timeCell.setDataValidation(editable ? null : blockedValidation);
-    timeCell.setNumberFormat("@");
-    sheet.getRange("G" + rowNumber + ":H" + rowNumber)
-      .setBackground(editable ? "#FFF7E6" : "#F1F5F9")
-      .setFontColor(editable ? "#1F2937" : "#64748B");
-    dateCell.setNote(editable
-      ? "Введи календарную дату " + item.label + ". Время укажи отдельно в H" + rowNumber + " в формате HH:mm."
-      : (supply && supply[item.field] ? "Сохранённая дата этапа. Поле доступно только для просмотра." : "Поле пока недоступно. Сначала заверши предыдущий этап поставки."));
-    timeCell.setNote(editable
-      ? "Обязательное фактическое время " + item.label + " в формате HH:mm (24 часа)."
-      : "Время сохранённого этапа или заблокированное поле.");
+    if (historicalMode || fullEditMode) {
+      cell.setDataValidation(validation);
+      sheet.getRange(item.cell + ":J" + rowNumber).setBackground("#FFF7E6").setFontColor("#1F2937");
+      cell.setNote(historicalMode
+        ? "Режим «Внести старую поставку»: введи фактическую дату " + item.label + ". Все даты G5:G7 будут проверены вместе перед созданием складской приёмки."
+        : "Режим «Полное редактирование»: можно исправить фактическую дату " + item.label + ". Перед сохранением скрипт проверит хронологию. Для уже полученной поставки изменение G7 требует отдельной складской корректировки.");
+      return;
+    }
+    var active = !!(nextStage && nextStage.input_cell === item.cell);
+    if (active) {
+      cell.setDataValidation(validation);
+      sheet.getRange(item.cell + ":J" + rowNumber).setBackground("#FFF7E6").setFontColor("#1F2937");
+      cell.setNote("Поле ввода фактической даты " + item.label + ". Введи дату и время, затем выбери «Поставки» → «Применить следующий этап из формы». Переход проверит хронологию. Пустая дата не заменяется текущей.");
+    } else {
+      cell.setDataValidation(blockedValidation);
+      sheet.getRange(item.cell + ":J" + rowNumber).setBackground("#F1F5F9").setFontColor("#64748B");
+      var saved = supply && supply[item.field];
+      cell.setNote(saved
+        ? "Сохранённая фактическая дата. Поле доступно только для просмотра."
+        : "Поле пока недоступно. Сначала заверши предыдущий этап поставки.");
+    }
   });
 }
 
@@ -385,16 +383,29 @@ function di3EnsureSupplyDatePanelLayout_(sheet) {
     "Получена"
   ];
   var previousLabels = [
-    "Дата заказа у продавца", "Ожидаемая дата получения", "Создана в системе",
-    "Отправлена", "Готова к получению", "Фактически получена"
+    "Дата заказа у продавца",
+    "Ожидаемая дата получения",
+    "Создана в системе",
+    "Отправлена",
+    "Готова к получению",
+    "Фактически получена"
   ];
   var existingLabels = sheet.getRange("D2:D7").getDisplayValues().map(function (row) { return String(row[0] || "").trim(); });
-  var knownNote = "G2 — дата заказа в магазине; G3 — плановая дата прибытия; G4 — системное время записи. Для фактических этапов укажи дату в G5:G7 и отдельное время HH:mm в H5:H7. G7 запускает фактическую приёмку и создание складских движений.";
+  var knownNote = "G2 — дата заказа в магазине; G3 — плановая дата прибытия; G4 — системная дата записи. Вводи фактические даты по очереди в доступное поле G5, G6 или G7 и выполняй «Поставки» → «Применить следующий этап из формы». G7 запускает фактическую приёмку и создание складских движений.";
   var previousNote = "Плановые даты можно менять в черновике; фактические даты фиксируются при смене статуса.";
   var previousOrderDateSemanticsNote = "Дата создания заказа в магазине определяет сортировку. Запись в системе и фактические этапы фиксируются автоматически; ожидаемая дата — плановая.";
   var existingNote = String(sheet.getRange("D8").getDisplayValue() || "").trim();
+  var previousOrderDateSemanticsLabels = [
+    "Дата создания заказа в магазине",
+    "Ожидаемая дата получения",
+    "Запись создана в системе",
+    "Отправлена",
+    "Готова к получению",
+    "Фактически получена"
+  ];
   var labelsCompatible = existingLabels.every(function (value, index) {
-    return !value || value === labels[index] || value === previousLabels[index];
+    return !value || value === labels[index] || value === previousLabels[index] ||
+      value === previousOrderDateSemanticsLabels[index];
   });
   var panelValues = sheet.getRange("D2:J8").getValues();
   var unexpectedContent = false;
@@ -403,46 +414,617 @@ function di3EnsureSupplyDatePanelLayout_(sheet) {
       if (value === "" || value == null) return;
       var isLabel = columnIndex === 0 && rowIndex < 6;
       var isNote = columnIndex === 0 && rowIndex === 6;
-      var isDateValue = columnIndex === 3 && rowIndex < 6;
-      var isTimeValue = columnIndex === 4 && rowIndex >= 3 && rowIndex <= 5;
-      if (!isLabel && !isNote && !isDateValue && !isTimeValue) unexpectedContent = true;
+      var isDateValue = columnIndex === 3 && rowIndex < 6; // G2:G7 are the planned/factual date cells.
+      if (!isLabel && !isNote && !isDateValue) unexpectedContent = true;
     });
   });
   if (!labelsCompatible || (existingNote && existingNote !== knownNote && existingNote !== previousNote &&
-      existingNote !== previousOrderDateSemanticsNote && existingNote.indexOf("Вводи фактические даты по очереди") !== 0) || unexpectedContent) {
+      existingNote !== previousOrderDateSemanticsNote &&
+      existingNote.indexOf("Вводи фактические даты по очереди") !== 0) || unexpectedContent) {
     throw new Error("Область D2:J8 листа «Поставка v3» содержит неизвестную структуру или данные. Размещение панели дат остановлено без перезаписи.");
   }
   [["D2:F2", "G2:J2"], ["D3:F3", "G3:J3"], ["D4:F4", "G4:J4"],
     ["D5:F5", "G5:J5"], ["D6:F6", "G6:J6"], ["D7:F7", "G7:J7"]].forEach(function (pair) {
     sheet.getRange(pair[0]).breakApart().merge();
-    sheet.getRange(pair[1]).breakApart();
+    sheet.getRange(pair[1]).breakApart().merge();
   });
   sheet.getRange("D2:D7").setValues(labels.map(function (label) { return [label]; }));
   sheet.getRange("D8:J8").breakApart().merge();
   sheet.getRange("D8").setValue(knownNote);
   sheet.getRange("D2:F7").setBackground("#EEF2F7").setFontWeight("bold");
   sheet.getRange("G2:J3").setBackground("#FFFFFF");
-  sheet.getRange("G4:J4").setBackground("#F1F5F9").setFontColor("#475569");
-  sheet.getRange("G5:H7").setBackground("#F1F5F9").setFontColor("#64748B");
+  sheet.getRange("G4:J7").setBackground("#F1F5F9").setFontColor("#475569");
   sheet.getRange("D8:J8").setBackground("#F8FAFC").setFontColor("#64748B");
   var dateValidation = SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build();
   sheet.getRange("G2:G3").setDataValidation(dateValidation).setNumberFormat("dd.mm.yyyy");
-  sheet.getRange("G4").setNumberFormat("dd.mm.yyyy hh:mm");
-  sheet.getRange("G5:G7").setDataValidation(dateValidation).setNumberFormat("dd.mm.yyyy");
-  sheet.getRange("H5:H7").setNumberFormat("@");
-  sheet.getRange("G5").setNote("Календарная дата фактической отправки. Время обязательно укажи отдельно в H5.");
-  sheet.getRange("G6").setNote("Календарная дата фактического этапа «Ожидает получения». Время обязательно укажи отдельно в H6.");
-  sheet.getRange("G7").setNote("Календарная дата фактического получения. Время обязательно укажи отдельно в H7.");
-  ["H5", "H6", "H7"].forEach(function (cell) {
-    sheet.getRange(cell).setNote("Обязательное местное время в формате HH:mm (24 часа).");
-  });
-  sheet.setColumnWidth(8, 110);
+  sheet.getRange("G2").setNote("Дата, когда сам заказ был создан в магазине. По умолчанию — сегодня; можно выбрать прошлую дату. При первом сохранении по этой дате формируется номер поставки. Обычное «Сохранить поставку» сохраняет уже присвоенный номер; команда «Обновить черновик» пересчитывает его по исправленной G2. supply_id и системная дата создания при этом сохраняются. По G2 сортируются реестр и список поставок. Это не дата регистрации записи в Dots Inventory (она фиксируется автоматически в G4). Будущие даты не допускаются.");
+  sheet.getRange("G3").setNote("Плановая дата прибытия поставки в пункт назначения. Поле необязательное; она не меняет фактический статус и не увеличивает остаток. Не может быть раньше даты заказа в G2.");
+  sheet.getRange("G4:G7").setNumberFormat("dd.mm.yyyy hh:mm");
+  sheet.getRange("G4").setNote("Только просмотр. Системная дата и время первого сохранения записи в Dots Inventory; не является датой заказа в магазине и не задаёт начало хронологии логистики.");
+  sheet.getRange("G5:G7").clearDataValidations();
+  sheet.getRange("G5:J7").setBackground("#F1F5F9").setFontColor("#64748B");
+  sheet.getRange("G5").setNote("Фактическая дата отправки. Поле становится доступным после сохранения поставки.");
+  sheet.getRange("G6").setNote("Фактическая дата этапа «Ожидает получения». Поле становится доступным после отметки отправки.");
+  sheet.getRange("G7").setNote("Фактическая дата получения. После ввода и применения запускается отдельная операция приёмки и создания складских движений.");
   sheet.setRowHeights(2, 6, 28);
   sheet.setRowHeight(8, 28);
   if (!sheet.getRange("G2").getValue() && !sheet.getRange("B3").getValue()) {
     sheet.getRange("G2").setValue(di3ParseSupplyCalendarDate_(new Date(), "Дата создания заказа в магазине"));
   }
-  return { status: "READY", planned_date_cells: ["G2", "G3"], system_date_cell: "G4", stage_input_pairs: [["G5", "H5"], ["G6", "H6"], ["G7", "H7"]] };
+  return { status: "READY", planned_date_cells: ["G2", "G3"], system_date_cell: "G4", stage_input_cells: ["G5", "G6", "G7"] };
+}
+
+function di3SupplyNumberPrefixForDate_(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    throw new Error("Для формирования номера поставки укажи корректную дату заказа в магазине (G2).");
+  }
+  var tz = di3GetConfiguredTimeZone_();
+  var yy = Utilities.formatDate(date, tz, "yy");
+  var month = Number(Utilities.formatDate(date, tz, "M"));
+  var dd = Utilities.formatDate(date, tz, "dd");
+  var monthCodes = di3GetDocumentMonthCodes_();
+  var code = monthCodes[month - 1];
+  return yy + code + dd;
+}
+
+function di3GetSupplyNumberCandidate_(date) {
+  var prefix = di3SupplyNumberPrefixForDate_(date);
+  var supplyNumbers = di3ReadTableColumnValues_("V3_Supplies", 1);
+  var maxSequence = 0;
+  supplyNumbers.forEach(function (value) {
+    var number = String(value || "");
+    if (number.indexOf(prefix) !== 0) return;
+    var suffix = number.slice(prefix.length);
+    if (/^\d+$/.test(suffix)) maxSequence = Math.max(maxSequence, Number(suffix));
+  });
+  var props = PropertiesService.getScriptProperties();
+  var propertyKey = "DI3_SUPPLY_SEQUENCE_" + prefix;
+  maxSequence = Math.max(maxSequence, Number(props.getProperty(propertyKey) || 0));
+  return { prefix: prefix, property_key: propertyKey, sequence: maxSequence + 1, number: prefix + String(maxSequence + 1) };
+}
+
+/** Preview the next available number without consuming its sequence. */
+function di3PeekSupplyNumberForDate_(date) {
+  return di3GetSupplyNumberCandidate_(date).number;
+}
+
+/** Reserve a sequence number. Call only from the locked document-save path. */
+function di3SupplyNumberForDate_(date) {
+  var candidate = di3GetSupplyNumberCandidate_(date);
+  PropertiesService.getScriptProperties().setProperty(candidate.property_key, String(candidate.sequence));
+  return candidate.number;
+}
+
+function di3FindSupplyByNumber_(supplyNumber) {
+  var match = di3ReadRowByColumnValue_("V3_Supplies", 1, String(supplyNumber || ""));
+  if (!match) return null;
+  var record = {};
+  DI3_TABLE_SCHEMAS.V3_Supplies.forEach(function (header, index) { record[header] = match.values[index]; });
+  record.row_number = match.row_number;
+  return record;
+}
+
+function di3GetSupplyItems_(supplyId) {
+  return di3ReadRowsByColumnValue_("V3_SupplyItems", 1, supplyId).map(function (match) {
+    var record = {};
+    DI3_TABLE_SCHEMAS.V3_SupplyItems.forEach(function (header, i) { record[header] = match.values[i]; });
+    record.row_number = match.row_number;
+    return record;
+  }).sort(function (a, b) { return Number(a.line_no) - Number(b.line_no); });
+}
+
+function di3SupplyToRow_(supply, existing) {
+  var now = new Date();
+  return [
+    supply.supply_id,
+    supply.supply_number,
+    supply.supplier || "",
+    supply.status || DI3_SUPPLY_STATUS.CREATED,
+    existing && existing.created_at ? existing.created_at : supply.created_at || now,
+    existing && existing.sent_at ? existing.sent_at : "",
+    existing && existing.awaiting_at ? existing.awaiting_at : "",
+    existing && existing.received_at ? existing.received_at : "",
+    supply.goods_amount,
+    supply.seller_discount_amount,
+    supply.partner_discount_amount,
+    supply.discount_total,
+    supply.shipping_amount,
+    supply.final_amount,
+    supply.notes || "",
+    di3GetBaseCurrency_(),
+    now,
+    supply.supplier_order_date || "",
+    supply.expected_received_date || ""
+  ];
+}
+
+function di3SupplyItemToRow_(supplyId, line, lineNo, existing) {
+  var now = new Date();
+  return [
+    existing ? existing.supply_item_id : di3MakeUuid_(), supplyId, lineNo,
+    line.product_id, line.product_label_snapshot, line.pack_variant_id,
+    line.units_per_pack, line.packs, line.purchase_price_per_pack,
+    line.base_line_amount, line.allocated_seller_discount,
+    line.allocated_partner_discount, line.allocated_shipping,
+    line.final_pack_cost, line.received_units, line.final_line_amount,
+    line.unit_cost, existing ? existing.created_at : now, now
+  ];
+}
+
+function di3SetSupplySelectorValidation_(sheet, includeNumber) {
+  var numbers = di3GetSupplyFormLoadSummary_().map(function (supply) { return String(supply.supply_number); });
+  if (includeNumber) numbers.push(String(includeNumber));
+  var seen = Object.create(null);
+  numbers = numbers.filter(function (number) {
+    if (!number || seen[number]) return false;
+    seen[number] = true;
+    return true;
+  });
+  var selector = sheet.getRange(DI3_SUPPLY_FORM.selector);
+  if (numbers.length) {
+    selector.setDataValidation(SpreadsheetApp.newDataValidation()
+      .requireValueInList(numbers, true).setAllowInvalid(false).build());
+  } else {
+    selector.clearDataValidations();
+  }
+  return numbers;
+}
+
+function di3SetSupplyDraftEditContext_(sheet, supplyNumber, supplyId) {
+  // B2 is a strict dropdown. Include the in-flight number before writing it,
+  // because a new parent row does not exist yet at this point in the save flow.
+  di3SetSupplySelectorValidation_(sheet, supplyNumber);
+  // Write the technical target first. If execution stops between these cell
+  // updates and the parent append, the next save can safely detect stale context.
+  sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).setValue(String(supplyId));
+  sheet.getRange("B2:B3").setValues([[String(supplyNumber)], [String(supplyNumber)]]);
+  sheet.getRange("M2").setValue("Редактирование: " + String(supplyNumber));
+  return { supply_id: String(supplyId), supply_number: String(supplyNumber) };
+}
+
+function di3ClearStaleSupplyDraftEditContext_(sheet) {
+  // Keep all business inputs and product lines so a failed first save does not
+  // force the user to re-enter the form. Only stale document identity is reset.
+  sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).clearContent();
+  sheet.getRange("B2:B3").clearContent();
+  sheet.getRange("M2").setValue("Новая поставка");
+  try { di3SetSupplySelectorValidation_(sheet, ""); } catch (ignore) {}
+}
+
+function di3ResolveSupplyDraftEditTarget_(sheet) {
+  var editSupplyId = String(sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "").trim();
+  var selectorNumber = String(sheet.getRange(DI3_SUPPLY_FORM.selector).getValue() || "").trim();
+  var formNumber = String(sheet.getRange(DI3_SUPPLY_FORM.number).getValue() || "").trim();
+
+  if (editSupplyId) {
+    var byId = di3GetSupplyById_(editSupplyId);
+    if (!byId) {
+      // A hard stop may have happened after the form stored its generated ID but
+      // before V3_Supplies accepted the parent row. Recover as a new draft only
+      // when neither visible number resolves to a real document.
+      var staleReference = selectorNumber || formNumber;
+      var conflictingDocument = staleReference ? di3FindSupplyByNumber_(staleReference) : null;
+      if (!conflictingDocument) {
+        di3ClearStaleSupplyDraftEditContext_(sheet);
+        return null;
+      }
+      throw new Error("Служебный ID режима редактирования не совпадает с существующей поставкой. Обнови форму и выбери черновик заново.");
+    }
+    if (di3NormalizeSupplyStatus_(byId.status) !== DI3_SUPPLY_STATUS.CREATED) {
+      throw new Error("Редактировать можно только поставку со статусом «Оформлена».");
+    }
+    if (selectorNumber && selectorNumber !== String(byId.supply_number)) {
+      throw new Error("В списке выбран другой черновик. Дождись его загрузки или заново выбери нужный документ.");
+    }
+    if (formNumber && formNumber !== String(byId.supply_number)) {
+      throw new Error("Номер в форме не совпадает с загруженной поставкой. Загрузите черновик заново.");
+    }
+    return byId;
+  }
+
+  // A number or selector without an explicit edit context must never silently
+  // fall through into CREATE. This catches a missed/onEdit trigger and prevents
+  // the exact duplicate-document behaviour reported by users.
+  var referenceNumber = selectorNumber || formNumber;
+  if (referenceNumber) {
+    var referenced = di3FindSupplyByNumber_(referenceNumber);
+    if (!referenced) {
+      if (selectorNumber) throw new Error("Выбранный черновик " + selectorNumber + " больше не найден. Обнови список поставок.");
+      if (formNumber) throw new Error("В поле номера указан неизвестный документ. Для новой поставки используй команду «Новая поставка».");
+    } else {
+      if (di3NormalizeSupplyStatus_(referenced.status) !== DI3_SUPPLY_STATUS.CREATED) {
+        throw new Error("Эту поставку нельзя редактировать: её статус — «" + di3GetSupplyStatusLabel_(referenced.status) + "».");
+      }
+      throw new Error("Черновик " + referenceNumber + " выбран, но не загружен в режим редактирования. Выбери его в B2 и дождись заполнения формы либо используй команду «Загрузить выбранную поставку».");
+    }
+  }
+  return null;
+}
+
+function di3SupplyLineIdentityKey_(line) {
+  return String(line.product_id || "") + "\u001f" + String(line.pack_variant_id || "");
+}
+
+function di3SaveSupplyDraft(options) {
+  options = options || {};
+  var initialSheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  if (String(initialSheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === "FULL_EDIT") {
+    throw new Error("Включено «Полное редактирование поставки». Используй «Сохранить изменения поставки», чтобы не обойти аудит корректировки.");
+  }
+  var historicalMode = String(initialSheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") === "HISTORICAL_CREATE";
+  if (historicalMode && options.skipInitialStatusHistory !== true) {
+    throw new Error("В режиме «Внести старую поставку» используй команду «Сохранить и оприходовать старую поставку». Обычное сохранение создаст незавершённый черновик без складской приёмки.");
+  }
+  var recalculateNumber = options.recalculateNumber === true;
+  var requireExisting = options.requireExisting === true;
+  return di3WithLock_(function () {
+    di3EnsureCoreFoundationSchemas_();
+    var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+    var existing = di3ResolveSupplyDraftEditTarget_(sheet);
+    if (requireExisting && !existing) {
+      throw new Error("Команда «Обновить черновик» доступна только для уже загруженной поставки. Выбери её в B2 и дождись загрузки формы.");
+    }
+    var form = sheet.getRange("B3:B8").getValues().map(function (row) { return row[0]; });
+    var supplier = di3NormalizeText_(form[1]);
+    var sellerDiscount = form[2] === "" ? 0 : form[2];
+    var partnerDiscount = form[3] === "" ? 0 : form[3];
+    var shipping = form[4] === "" ? 0 : form[4];
+    var notes = di3NormalizeText_(form[5]);
+    var planningDateValues = sheet.getRange("G2:G3").getValues();
+    var orderCreatedInStoreDate = di3ParseSupplyCalendarDate_(planningDateValues[0][0], "Дата создания заказа в магазине");
+    var expectedReceivedDate = di3ParseSupplyCalendarDate_(planningDateValues[1][0], "Ожидаемая дата прибытия");
+    di3ValidateSupplyPlanningDates_(orderCreatedInStoreDate, expectedReceivedDate);
+
+    var currentLines = di3ResolveSupplyFormLines_(false);
+    if (!currentLines.length) throw new Error("Добавь хотя бы одну товарную позицию.");
+    // Validate every input and all money allocation before creating missing pack variants.
+    di3BuildSupplyFinancialPlan_({
+      lines: currentLines,
+      seller_discount_amount: sellerDiscount,
+      partner_discount_amount: partnerDiscount,
+      shipping_amount: shipping
+    });
+    currentLines = di3ResolveSupplyFormLines_(true);
+    var plan = di3BuildSupplyFinancialPlan_({
+      lines: currentLines,
+      seller_discount_amount: sellerDiscount,
+      partner_discount_amount: partnerDiscount,
+      shipping_amount: shipping
+    });
+
+    var now = new Date();
+    var supplyId = existing ? String(existing.supply_id) : di3MakeUuid_();
+    var previousSupplyNumber = existing ? String(existing.supply_number) : "";
+    // Ordinary saves preserve the assigned number. The explicit update command
+    // only allocates a new number when G2 now points to a different date prefix.
+    var supplyNumber = existing ? previousSupplyNumber : di3SupplyNumberForDate_(orderCreatedInStoreDate);
+    var numberRecalculated = false;
+    if (existing && recalculateNumber) {
+      if (!orderCreatedInStoreDate) {
+        throw new Error("Для пересчёта номера заполни дату создания заказа в магазине в G2.");
+      }
+      var expectedPrefix = di3SupplyNumberPrefixForDate_(orderCreatedInStoreDate);
+      if (supplyNumber.indexOf(expectedPrefix) !== 0) {
+        supplyNumber = di3SupplyNumberForDate_(orderCreatedInStoreDate);
+        var numberCollision = di3FindSupplyByNumber_(supplyNumber);
+        if (numberCollision && String(numberCollision.supply_id) !== supplyId) {
+          throw new Error("Не удалось обновить номер поставки: номер «" + supplyNumber + "» уже используется другим документом. Данные не изменены.");
+        }
+        numberRecalculated = supplyNumber !== previousSupplyNumber;
+      }
+    }
+    var supplyRecord = {
+      supply_id: supplyId, supply_number: supplyNumber, supplier: supplier,
+      status: DI3_SUPPLY_STATUS.CREATED, created_at: existing ? existing.created_at : now,
+      goods_amount: plan.goods_amount, seller_discount_amount: plan.seller_discount_amount,
+      partner_discount_amount: plan.partner_discount_amount, discount_total: plan.discount_total,
+      shipping_amount: plan.shipping_amount, final_amount: plan.final_amount, notes: notes,
+      supplier_order_date: orderCreatedInStoreDate || "", expected_received_date: expectedReceivedDate || ""
+    };
+
+    var supplyRow = di3SupplyToRow_(supplyRecord, existing);
+    var isNewDraft = !existing;
+    // Persist edit identity before the first business write. If a later item-row
+    // write fails (or its acknowledgement is lost), the next click on Save updates
+    // this same document instead of appending a duplicate supply.
+    if (isNewDraft) {
+      di3SetSupplyDraftEditContext_(sheet, supplyNumber, supplyId);
+      try {
+        di3AppendTableRows_("V3_Supplies", [supplyRow]);
+      } catch (parentWriteError) {
+        var persistedParent = di3GetSupplyById_(supplyId);
+        if (!persistedParent) {
+          di3ClearStaleSupplyDraftEditContext_(sheet);
+          throw parentWriteError;
+        }
+        // Sheets may commit a write while the Apps Script acknowledgement is lost.
+        // Continue through the same reconciliation path as an ordinary edit.
+        existing = persistedParent;
+      }
+    }
+
+    // Reconcile line identity by product + pack variant, not by visual row index.
+    // Reordering rows in the form must not attach an old supply_item_id to another item.
+    var oldItems = existing ? di3GetSupplyItems_(supplyId) : [];
+    var oldItemsByKey = Object.create(null);
+    oldItems.forEach(function (item) {
+      var key = di3SupplyLineIdentityKey_(item);
+      if (oldItemsByKey[key]) throw new Error("В сохранённом черновике найдены повторяющиеся товарные строки. Автоматическое обновление остановлено.");
+      oldItemsByKey[key] = item;
+    });
+    var retainedItemIds = Object.create(null);
+    var updates = [];
+    var appends = [];
+    plan.lines.forEach(function (line, index) {
+      var key = di3SupplyLineIdentityKey_(line);
+      var old = oldItemsByKey[key] || null;
+      var row = di3SupplyItemToRow_(supplyId, line, index + 1, old);
+      if (old) {
+        updates.push({ row_number: old.row_number, values: row });
+        retainedItemIds[String(old.supply_item_id)] = true;
+      } else {
+        appends.push(row);
+      }
+    });
+    if (updates.length) di3ApplyContiguousRowUpdates_("V3_SupplyItems", updates);
+    if (appends.length) di3AppendTableRows_("V3_SupplyItems", appends);
+    var removedItems = oldItems.filter(function (item) { return !retainedItemIds[String(item.supply_item_id)]; });
+    if (removedItems.length) {
+      removedItems.sort(function (a, b) { return b.row_number - a.row_number; })
+        .forEach(function (item) { di3GetSheetOrThrow_("V3_SupplyItems").deleteRow(item.row_number); });
+    }
+
+    if (existing) {
+      di3ApplyContiguousRowUpdates_("V3_Supplies", [{ row_number: existing.row_number, values: supplyRow }]);
+    }
+
+    var statusExists = di3ReadRowsByColumnValue_("DocumentStatusHistory", 2, supplyId).some(function (match) {
+      var row = match.values;
+      return String(row[1]) === "SUPPLY" && String(row[4]) === DI3_SUPPLY_STATUS.CREATED;
+    });
+    if (!statusExists && options.skipInitialStatusHistory !== true) {
+      var actor = di3GetActorEmail_();
+      di3AppendTableRows_("DocumentStatusHistory", [[
+        di3MakeUuid_(), "SUPPLY", supplyId, "", DI3_SUPPLY_STATUS.CREATED,
+        now, actor, "", isNewDraft ? "Создание черновика поставки" : "Восстановление истории черновика"
+      ]]);
+    }
+
+    // Persist the explicit edit target after every successful create/update.
+    // Only «Новая поставка» clears this context and enables CREATE.
+    di3SetSupplyDraftEditContext_(sheet, supplyNumber, supplyId);
+    di3RenderSupplyFinancialPreview_(plan);
+    di3RefreshSupplyFormValidations();
+    di3RefreshSupplyDatePanel_(di3FindSupplyByNumber_(supplyNumber), { preservePendingInput: true });
+    di3SetSupplyFormStateBaseline_(sheet);
+    return {
+      status: isNewDraft ? "CREATED" : "UPDATED",
+      supply_id: supplyId,
+      supply_number: supplyNumber,
+      previous_supply_number: previousSupplyNumber || supplyNumber,
+      number_recalculated: numberRecalculated,
+      lines: plan.lines.length,
+      goods_amount: plan.goods_amount,
+      discount_total: plan.discount_total,
+      shipping_amount: plan.shipping_amount,
+      final_amount: plan.final_amount,
+      supplier_order_date: orderCreatedInStoreDate || "",
+      expected_received_date: expectedReceivedDate || ""
+    };
+  });
+}
+
+function di3UpdateSupplyDraft() {
+  var result = di3SaveSupplyDraft({ recalculateNumber: true, requireExisting: true });
+  di3GetSpreadsheet_().toast(
+    result.number_recalculated
+      ? "Черновик обновлён. Номер изменён: " + result.previous_supply_number + " → " + result.supply_number
+      : "Черновик обновлён. Номер уже соответствует дате G2.",
+    "Поставки", 6
+  );
+  return result;
+}
+
+function di3GetSupplyFormLoadSummary_() {
+  var statuses = [DI3_SUPPLY_STATUS.CREATED, "Создана", "Оформлена",
+    DI3_SUPPLY_STATUS.SENT, "Отправлена",
+    DI3_SUPPLY_STATUS.AWAITING,
+    DI3_SUPPLY_STATUS.RECEIVED, "Доставлена", "Получена",
+    DI3_SUPPLY_STATUS.CANCELLED, "Отменена"];
+  var byId = Object.create(null);
+  statuses.forEach(function (status) {
+    di3ReadRowsByColumnValue_("V3_Supplies", 3, status).forEach(function (match) {
+      var row = match.values;
+      var supplyId = String(row[0] || "");
+      if (!supplyId || byId[supplyId]) return;
+      byId[supplyId] = {
+        supply_id: supplyId, supply_number: String(row[1] || ""), supplier: String(row[2] || ""),
+        status: String(row[3] || ""), created_at: row[4] || "", supplier_order_date: row[17] || ""
+      };
+    });
+  });
+  return Object.keys(byId).map(function (id) { return byId[id]; }).sort(function (a, b) {
+    return di3CompareSupplyOrderChronology_(a.supplier_order_date, a.created_at, a.supply_number,
+      b.supplier_order_date, b.created_at, b.supply_number);
+  });
+}
+
+function di3GetSupplyDraftSummary() {
+  var rows = [];
+  [DI3_SUPPLY_STATUS.CREATED, "Создана", "Оформлена"].forEach(function (status) {
+    rows = rows.concat(di3ReadRowsByColumnValue_("V3_Supplies", 3, status));
+  });
+  var seenSupplyIds = Object.create(null);
+  var result = [];
+  rows.forEach(function (match) {
+    var row = match.values;
+    var supplyId = String(row[0] || "");
+    if (!supplyId || seenSupplyIds[supplyId]) return;
+    seenSupplyIds[supplyId] = true;
+    result.push({
+      supply_id: row[0], supply_number: row[1], supplier: row[2], status: di3GetSupplyStatusLabel_(row[3]), final_amount: row[13],
+      created_at: row[4] || "", supplier_order_date: row[17] || ""
+    });
+  });
+  return result.sort(function (a, b) {
+    return di3CompareSupplyOrderChronology_(a.supplier_order_date, a.created_at, a.supply_number,
+      b.supplier_order_date, b.created_at, b.supply_number);
+  });
+}
+
+/** Preview never creates pack variants or writes document records. */
+function di3PreviewSupplyForm() {
+  var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  var lines = di3ResolveSupplyFormLines_(false);
+  var form = sheet.getRange("B5:B7").getValues().map(function (row) { return row[0]; });
+  var plan = di3BuildSupplyFinancialPlan_({
+    lines: lines,
+    seller_discount_amount: form[0] === "" ? 0 : form[0],
+    partner_discount_amount: form[1] === "" ? 0 : form[1],
+    shipping_amount: form[2] === "" ? 0 : form[2]
+  });
+  di3RenderSupplyFinancialPreview_(plan);
+  return {
+    lines: plan.lines.length, goods_amount: plan.goods_amount,
+    discount_total: plan.discount_total, shipping_amount: plan.shipping_amount,
+    final_amount: plan.final_amount
+  };
+}
+
+function di3RenderSupplyFinancialPreview_(plan) {
+  var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  var rows = plan.lines.map(function (line) {
+    return [
+      line.base_line_amount, line.allocated_seller_discount,
+      line.allocated_partner_discount, line.allocated_shipping,
+      line.final_pack_cost, line.received_units
+    ];
+  });
+  var range = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 5, DI3_SUPPLY_FORM.lineCount, 6);
+  range.clearContent();
+  if (rows.length) sheet.getRange(DI3_SUPPLY_FORM.firstLine, 5, rows.length, 6).setValues(rows);
+  sheet.getRange(DI3_SUPPLY_FORM.firstLine, 5, DI3_SUPPLY_FORM.lineCount, 5).setNumberFormat("#,##0.00 ₽");
+  sheet.getRange(DI3_SUPPLY_FORM.firstLine, 10, DI3_SUPPLY_FORM.lineCount, 1).setNumberFormat("#,##0");
+  sheet.getRange("L4:M8").setValues([
+    ["Товары", plan.goods_amount], ["Скидка продавца", plan.seller_discount_amount],
+    ["Скидка партнёров", plan.partner_discount_amount], ["Доставка", plan.shipping_amount],
+    ["Итого", plan.final_amount]
+  ]);
+  sheet.getRange("M4:M8").setNumberFormat("#,##0.00 ₽");
+}
+
+function di3ResolveSupplyFormLines_(createVariants) {
+  var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  var values = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues();
+  var products = di3GetProductFormOptionIndex_();
+  var variants = di3LoadPackVariantIndex_();
+  var lines = [];
+  values.forEach(function (row, offset) {
+    var label = String(row[0] || "").trim();
+    if (!label && row.slice(1).every(function (value) { return value === "" || value == null; })) return;
+    if (!label) throw new Error("Строка " + (DI3_SUPPLY_FORM.firstLine + offset) + ": выбери товар.");
+    var product = products.byLabel[label];
+    if (!product) throw new Error("Строка " + (DI3_SUPPLY_FORM.firstLine + offset) + ": товар не найден в каталоге. Обнови список.");
+    var units = Number(row[1]);
+    if (!Number.isInteger(units) || units <= 0) throw new Error("Строка " + (DI3_SUPPLY_FORM.firstLine + offset) + ": укажи фасовку в штуках.");
+    var key = di3BuildPackVariantKey_(String(product.product_id), units);
+    var existingVariant = variants.byProductAndUnits[key];
+    var variantId;
+    if (createVariants) {
+      variantId = di3GetOrCreatePackVariant_(String(product.product_id), units, "SUPPLY_DRAFT").pack_variant_id;
+    } else {
+      variantId = existingVariant ? String(existingVariant.pack_variant_id) : "PREVIEW:" + key;
+    }
+    lines.push({
+      product_id: String(product.product_id), pack_variant_id: variantId,
+      product_label_snapshot: di3GetProductLabel_(product), units_per_pack: units,
+      packs: row[2], purchase_price_per_pack: row[3]
+    });
+  });
+  return lines;
+}
+
+function di3RefreshSupplyFormValidations() {
+  var sheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
+  if (!sheet) throw new Error('Сначала запусти di3SetupSupplyForm().');
+  var productIndex = di3GetProductFormOptionIndex_();
+  var productRange = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 1);
+  if (productIndex.options.length) {
+    productRange.setDataValidation(SpreadsheetApp.newDataValidation()
+      .requireValueInList(productIndex.options, true).setAllowInvalid(false).build());
+  } else {
+    productRange.clearDataValidations();
+  }
+  var moneyValidation = di3BuildOptionalNonnegativeNumberValidation_();
+  sheet.getRange("B5:B7").setDataValidation(moneyValidation).setNumberFormat("#,##0.00 ₽");
+  sheet.getRange("B12:B31").setDataValidation(di3BuildOptionalPositiveIntegerValidation_("B12")).setNumberFormat("0");
+  sheet.getRange("C12:C31").setDataValidation(di3BuildOptionalPositiveIntegerValidation_("C12")).setNumberFormat("0");
+  sheet.getRange("D12:D31").setDataValidation(moneyValidation).setNumberFormat("#,##0.00 ₽");
+  sheet.getRange("B5").setNote("Необязательно. Сумма скидки продавца — неотрицательное число; скидка не может превышать стоимость товаров.");
+  sheet.getRange("B6").setNote("Необязательно. Сумма скидки партнёров — неотрицательное число; скидки вместе не могут превышать стоимость товаров.");
+  sheet.getRange("B7").setNote("Необязательно. Доставка — неотрицательная сумма в рублях.");
+  sheet.getRange("B12").setNote("Для заполненной строки: штук в упаковке — положительное целое число.");
+  sheet.getRange("C12").setNote("Для заполненной строки: число упаковок — положительное целое число.");
+  sheet.getRange("D12").setNote("Для заполненной строки: закупочная цена за упаковку — неотрицательное число; 0 допустим для бесплатного товара.");
+  var drafts = di3GetSupplyDraftSummary();
+  var selectableSupplies = di3GetSupplyFormLoadSummary_();
+  di3SetSupplySelectorValidation_(sheet, "");
+
+  // This menu command is also the supported repair path for stale G5:G7 rules.
+  // Re-apply the next-stage validation from the authoritative loaded supply ID,
+  // preserving any pending date already entered in the currently active field.
+  var activeSupplyId = String(sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "").trim();
+  var activeSupply = activeSupplyId ? di3GetSupplyById_(activeSupplyId) : null;
+  if (activeSupply) {
+    var selectedNumber = String(sheet.getRange(DI3_SUPPLY_FORM.selector).getValue() || "").trim();
+    if (selectedNumber && selectedNumber !== String(activeSupply.supply_number)) {
+      throw new Error("B2 и загруженный supply_id указывают на разные поставки. Повторно выбери документ в B2.");
+    }
+    di3RefreshSupplyDatePanel_(activeSupply, { preservePendingInput: true });
+  } else {
+    di3RefreshSupplyDatePanel_(null);
+  }
+  return { products: productIndex.options.length, drafts: drafts.length, selectable_supplies: selectableSupplies.length, numeric_validation_ranges: 4, numeric_validation_cells: 63, stage_input_refreshed: true, active_supply_id: activeSupply ? activeSupplyId : "" };
+}
+
+/** Read-only diagnosis of the loaded supply and the active factual-date input. */
+function di3DiagnoseSupplyStageInputState() {
+  var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  var supplyId = String(sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "").trim();
+  var supply = supplyId ? di3GetSupplyById_(supplyId) : null;
+  var rawStatus = supply ? String(supply.status || "") : "";
+  var normalizedStatus = supply ? di3NormalizeSupplyStatus_(rawStatus) : "";
+  var nextStage = supply ? di3GetNextSupplyStageConfig_(rawStatus) : null;
+  var validations = ["G5", "G6", "G7"].map(function (address) {
+    var rule = sheet.getRange(address).getDataValidation();
+    var criteria = rule ? String(rule.getCriteriaType()) : "NONE";
+    var values = rule && typeof rule.getCriteriaValues === "function" ? rule.getCriteriaValues() : [];
+    return {
+      cell: address,
+      criteria: criteria,
+      allow_invalid: rule && typeof rule.getAllowInvalid === "function" ? rule.getAllowInvalid() : null,
+      criteria_values: (values || []).map(function (value) {
+        return value instanceof Date ? Utilities.formatDate(value, di3GetConfiguredTimeZone_(), "dd.MM.yyyy HH:mm:ss") : String(value);
+      })
+    };
+  });
+  return {
+    mode: "READ_ONLY",
+    selector: String(sheet.getRange(DI3_SUPPLY_FORM.selector).getValue() || ""),
+    form_number: String(sheet.getRange(DI3_SUPPLY_FORM.number).getValue() || ""),
+    supply_id: supplyId,
+    supply_found: !!supply,
+    stored_status: rawStatus,
+    normalized_status: normalizedStatus,
+    next_input_cell: nextStage ? nextStage.input_cell : "",
+    values: {
+      G5: sheet.getRange("G5").getValue(),
+      G6: sheet.getRange("G6").getValue(),
+      G7: sheet.getRange("G7").getValue()
+    },
+    form_mode: String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") || "STANDARD",
+    validations: validations
+  };
 }
 
 function di3SetupSupplyForm() {
@@ -568,7 +1150,6 @@ function di3BuildSupplyFormStatePayload_(fields) {
   return {
     document: di3NormalizeSupplyFormStateValue_(fields.document || []), // B3:B8
     dates: di3NormalizeSupplyFormStateValue_(fields.dates || []),       // G2:G7
-    times: di3NormalizeSupplyFormStateValue_(fields.times || []),       // H5:H7
     lines: di3NormalizeSupplyFormStateValue_(fields.lines || []),       // A12:D31
     reason: di3NormalizeSupplyFormStateValue_(fields.reason == null ? "" : fields.reason) // M9
   };
@@ -582,7 +1163,6 @@ function di3GetSupplyFormStateHash_(sheet) {
   var payload = di3BuildSupplyFormStatePayload_({
     document: sheet.getRange("B3:B8").getValues(),
     dates: sheet.getRange("G2:G7").getValues(),
-    times: sheet.getRange("H5:H7").getDisplayValues(),
     lines: sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues(),
     reason: sheet.getRange("M9").getValue()
   });
@@ -601,12 +1181,10 @@ function di3HasSupplyFormUserData_(sheet) {
   function hasValue(value) { return value !== "" && value !== null && value !== undefined; }
   var documentValues = sheet.getRange("B3:B8").getValues();
   var stageDates = sheet.getRange("G3:G7").getValues();
-  var stageTimes = sheet.getRange("H5:H7").getDisplayValues();
   var lines = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues();
   var reason = sheet.getRange("M9").getValue();
   if (documentValues.some(function (row) { return hasValue(row[0]); })) return true;
   if (stageDates.some(function (row) { return hasValue(row[0]); })) return true;
-  if (stageTimes.some(function (row) { return hasValue(row[0]); })) return true;
   if (lines.some(function (row) { return row.some(hasValue); })) return true;
   if (hasValue(reason)) return true;
   // G2 is prefilled with today's date for a new blank supply. Treat another date
@@ -658,7 +1236,6 @@ function di3NewSupplyForm(options) {
   }
   sheet.getRange("B2:B8").clearContent();
   sheet.getRange("G2:G7").clearContent();
-  sheet.getRange("H5:H7").clearContent();
   sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent();
   sheet.getRange("M4:M8").clearContent();
   sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).clearContent();
