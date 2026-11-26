@@ -37,7 +37,7 @@ function di3GetConfiguredTimeZone_() {
   try {
     Utilities.formatDate(new Date(), value, "yyyy-MM-dd HH:mm:ss");
   } catch (error) {
-    throw new Error("Некорректный часовой пояс DI3_APP_CONFIG.TIME_ZONE: " + value + ". Используй идентификатор IANA, например Europe/Helsinki. " + (error.message || String(error)));
+    throw new Error("Некорректный часовой пояс DI3_APP_CONFIG.TIME_ZONE: " + value + ". Используй идентификатор IANA, например Europe/Moscow. " + (error.message || String(error)));
   }
   return value;
 }
