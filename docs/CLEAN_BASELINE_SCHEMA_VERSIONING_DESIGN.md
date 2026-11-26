@@ -54,7 +54,7 @@ The final schema must be designed as one coherent release and include:
 - StockLedger.ledger_sequence (F-07).
 - FifoProductState.last_processed_ledger_sequence (F-07).
 - FifoAllocationArchive, FifoLotCacheArchive and FifoReplayEvents, with replay identity, source allocation identity, provenance and PREPARED/COMMITTED/QUARANTINED events (F-06 schema is now defined in `00_DI3_SchemaRegistry.gs`).
-- V3_Orders.business_date and any required historical-sale fields (F-02; exact dispatch date/time is confirmed, with separate date-picker and mandatory HH:mm time inputs).
+- V3_Orders.business_date and any required historical-sale fields (F-02; exact dispatch and completion use separate date-picker and mandatory HH:mm time inputs). The same date/time input contract applies to supply lifecycle events and manual warehouse movements, without splitting their canonical timestamp columns.
 - Existing commission_payer and money-minor-unit fields.
 - All metadata keys and version gates for FIFO, money calculations, application version and configured timezone.
 
@@ -97,3 +97,8 @@ Do not freeze the final schema version number until F-02 field semantics and F-0
 - The legacy path is preserved for recognized earlier workbooks; the clean path does not adopt RC8 data or execute RC8 migrations.
 - Added twelve targeted System Safety UX tests for empty workbook eligibility, rejection of unversioned business rows, rejection of legacy/mismatched headers, and recognition after normal business rows exist.
 - The latest PR validation is GitHub Actions run `45728640689` (run #98): syntax check for 50 `.gs` files and 130/130 Node tests (FIFO 41, Order Domain 17, Supply UX 15, Catalog/Order UX 12, System Safety 32, Warehouse Dashboard 9, Finance 4). This run includes clean-baseline recovery, duplicate/mismatched journal, missing-table, out-of-schema and fully-cleared-header rejection checks. Real Apps Script Dry Run/setup/interruption acceptance remains pending.
+
+
+## Shared operational date/time input contract — 26.11.2026
+
+The final schema contract retains one canonical timestamp for each event. Separate date and time controls are a UI concern across orders, supplies and manual warehouse movements; they do not add split date/time columns to V3_Supplies or StockLedger. Date-only business/planning values remain date-only. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md`. Do not freeze or increment the final target schema version until F-02 and F-06 schema contracts are jointly frozen.
