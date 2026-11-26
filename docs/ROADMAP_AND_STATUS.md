@@ -160,7 +160,7 @@ The following issues have source changes and local regression coverage. They are
 - **F-10:** PeriodLocks now appends `LOCKED` / `REOPENED` events; current state is derived from the latest event per period. Structural tests were added, but local execution and close → reopen → re-close runtime acceptance remain pending. Previously overwritten legacy history cannot be recovered.
 - **F-14:** true multi-session ScriptLock contention/recovery is not proven by local tests.
 - **F-17:** delivery-method catalogue needs the user's actual options; none are invented.
-- **F-20:** source implementation now includes centralized active-user capture, immutable operation-initiator attribution in order/supply/manual-stock audit rows, executor identity in attempt diagnostics, and checks for remaining administrative writers. Regression assertions and runner updates are committed, but the runner and syntax checks have not been executed after these latest F-20 changes; restored-workbook recovery acceptance is also pending. See docs/F20_OPERATION_IDENTITY_AUDIT.md.
+- **F-20:** source implementation includes centralized active-user capture, immutable operation-initiator attribution in order/supply/manual-stock audit rows, executor identity in attempt diagnostics, and checks for remaining administrative writers. The current System Safety runner exercises identity capture, initiator-vs-recovery attribution, and administrative writer paths; these assertions passed in GitHub Actions run 45728640689 (32/32 System Safety tests). Restored-workbook recovery acceptance remains pending. See docs/F20_OPERATION_IDENTITY_AUDIT.md.
 - The Warehouse Dashboard chart remains blank in the user's Sheets copy. The next step is to run the existing read-only chart diagnostics on the restored test copy and inspect N1:O21 plus the chart's actual source range.
 
 
@@ -337,3 +337,13 @@ The following issues have source changes and local regression coverage. They are
 - GitHub Actions code run `45728096949` and PR integration run `45728149345` (run #93, merge commit `a17111e`) passed syntax for 50 `.gs` files and 129/129 Node tests: FIFO 41, Order Domain 17, Supply UX 15, Catalog/Order UX 12, System Safety 31, Warehouse Dashboard 9, Finance 4. The idempotency test verifies recovery after schema_version has been written but before the baseline journal row is completed. This remains source-level validation, not Google Sheets runtime acceptance.
 - Added a regression case proving that a fully cleared header row after baseline adoption is BLOCKED; CI rerun for this final guard is pending.
 - **Still not runtime-accepted:** actual Google Sheets Dry Run, empty-workbook setup, setup rerun, interruption injection at both journal boundaries, backup/restore-as-new, and end-to-end supply/dispatch/return/finance flows. Existing RC8 remains untouched.
+
+
+## Verification update — 26.11.2026 (supersedes earlier pending-CI notes)
+
+- Latest PR quality-gates run: GitHub Actions run 45728640689, completed successfully against PR merge commit 903b546 (head a20dfba).
+- Apps Script syntax: **50/50 .gs files PASS**.
+- Regression suites: **130/130 PASS** — FIFO replay 41/41; Order Domain 17/17; Supply Workspace UX 15/15; Catalog/Order UX 12/12; System Safety UX 32/32; Warehouse Dashboard 9/9; Finance Schema 4/4.
+- This run includes the final clean-baseline guard rejecting a fully cleared core-table header after adoption. It also executes the current F-20 identity/initiator regression assertions through the System Safety runner.
+- These results are source/Node CI only. They do not establish Google Apps Script runtime behavior, Google Sheets chart rendering, multi-user LockService behavior, backup/restore consistency, or live business-cycle correctness.
+- N-03 source-CI gate is now passed. Remaining N-03 acceptance is Google Sheets Dry Run/setup/rerun/interruption recovery on a disposable empty workbook, plus backup/restore-as-new. PR #1 remains Draft and unmerged; main and the existing RC8 workbook remain unchanged.
