@@ -6,7 +6,7 @@ var DI3_WAREHOUSE_MANAGEMENT_SHEET = "Управление складом";
 var DI3_WAREHOUSE_MANAGER_SHEET = DI3_WAREHOUSE_MANAGEMENT_SHEET;
 var DI3_LEGACY_WAREHOUSE_MANAGER_SHEET = "Менеджер склада";
 var DI3_WAREHOUSE_MANAGER_CELLS = Object.freeze({
-  direction: "B3", effective_at: "B4", product: "B5", reason: "B6",
+  direction: "B3", effective_at: "B4", effective_time: "C4", product: "B5", reason: "B6",
   quantity: "B7", cost_status: "B8", unit_cost: "B9", unit_sale_price: "B10", note: "B11"
 });
 
@@ -56,7 +56,10 @@ function di3RefreshWarehouseManagerValidations() {
   var quantityRule = di3BuildPositiveIntegerValidation_(DI3_WAREHOUSE_MANAGER_CELLS.quantity);
   var nonnegativeMoneyRule = di3BuildOptionalNonnegativeNumberValidation_();
   sheet.getRange(DI3_WAREHOUSE_MANAGER_CELLS.effective_at).setDataValidation(dateRule)
-    .setNumberFormat("dd.mm.yyyy hh:mm");
+    .setNumberFormat("dd.mm.yyyy")
+    .setNote("Выбери календарную дату операции. Время вводится отдельно в C4.");
+  sheet.getRange(DI3_WAREHOUSE_MANAGER_CELLS.effective_time).setNumberFormat("@")
+    .setNote("Обязательное местное время операции в формате HH:mm (24 часа). Изменение даты не должно менять это значение.");
   sheet.getRange(DI3_WAREHOUSE_MANAGER_CELLS.quantity).setDataValidation(quantityRule)
     .setNumberFormat("#,##0")
     .setNote("Укажи положительное целое количество. Дробные значения не допускаются.");
@@ -165,13 +168,16 @@ function di3SetupWarehouseManager() {
     sheet.getRange("A2:E2").merge();
     sheet.getRange("A2").setValue("Ручное оформление прихода и расхода товаров. Все движения проходят через FIFO.");
     sheet.getRange("A3:A11").setValues([
-      ["Тип движения"], ["Дата и время операции"], ["Товар"], ["Основание"],
+      ["Тип движения"], ["Дата операции"], ["Товар"], ["Основание"],
       ["Количество, шт."], ["Состояние себестоимости (для прихода)"],
       ["Себестоимость единицы, ₽ (для прихода)"], ["Цена продажи за единицу, ₽ (для продажи)"], ["Комментарий"]
     ]);
     sheet.getRange("B3").setValue("Приход");
-    sheet.getRange("B4").setValue(new Date());
-    sheet.getRange("B4").setNumberFormat("dd.mm.yyyy hh:mm");
+    var initialNow = new Date();
+    var initialParts = di3SplitEffectiveDateTime_(initialNow, "Дата ручного движения");
+    sheet.getRange("B4").setValue(initialParts.date).setNumberFormat("dd.mm.yyyy");
+    sheet.getRange("C3").setValue("Время (HH:mm)").setFontWeight("bold").setBackground("#EEF2F7");
+    sheet.getRange("C4").setNumberFormat("@").setValue(initialParts.time);
     sheet.getRange("A13:E13").merge();
     sheet.getRange("A13").setValue("После заполнения формы выбери меню «Склад» → «Провести приход / расход».");
     sheet.getRange("A1:E1").setFontWeight("bold").setFontSize(14).setBackground("#17243A").setFontColor("#FFFFFF");
@@ -181,7 +187,7 @@ function di3SetupWarehouseManager() {
     sheet.getRange("A1:E13").setVerticalAlignment("middle");
     sheet.setColumnWidth(1, 270);
     sheet.setColumnWidth(2, 340);
-    sheet.setColumnWidth(3, 28);
+    sheet.setColumnWidth(3, 145);
     sheet.setColumnWidth(4, 28);
     sheet.setColumnWidth(5, 28);
     sheet.setRowHeight(1, 34);
@@ -189,11 +195,26 @@ function di3SetupWarehouseManager() {
     sheet.setRowHeights(3, 9, 30);
     di3SetFrozenRowsSafely_(sheet, 2);
   } else {
-    var expected = ["Тип движения", "Дата и время операции", "Товар", "Основание", "Количество, шт."];
+    var expected = ["Тип движения", "Дата операции", "Товар", "Основание", "Количество, шт."];
     var actual = sheet.getRange("A3:A7").getDisplayValues().map(function (r) { return r[0]; });
-    for (var i = 0; i < expected.length; i++) {
-      if (actual[i] !== expected[i]) throw new Error('Лист «Управление складом» уже существует, но имеет другую структуру. Автоматическое перезаписывание запрещено.');
+    if (actual[0] !== expected[0] ||
+        (actual[1] !== expected[1] && actual[1] !== "Дата и время операции") ||
+        actual[2] !== expected[2] || actual[3] !== expected[3] || actual[4] !== expected[4]) {
+      throw new Error('Лист «Управление складом» уже существует, но имеет другую структуру. Автоматическое перезаписывание запрещено.');
     }
+    // One-time, non-destructive upgrade of the old combined B4 timestamp.
+    var oldDateValue = sheet.getRange("B4").getValue();
+    var oldTimeValue = String(sheet.getRange("C4").getDisplayValue() || "").trim();
+    if (oldDateValue instanceof Date && !isNaN(oldDateValue.getTime()) && !oldTimeValue) {
+      var oldParts = di3SplitEffectiveDateTime_(oldDateValue, "Существующая дата ручного движения");
+      sheet.getRange("B4").setValue(oldParts.date);
+      sheet.getRange("C4").setNumberFormat("@").setValue(oldParts.time);
+    }
+    sheet.getRange("A4").setValue("Дата операции");
+    sheet.getRange("C3").setValue("Время (HH:mm)").setFontWeight("bold").setBackground("#EEF2F7");
+    sheet.getRange("B4").setNumberFormat("dd.mm.yyyy");
+    sheet.getRange("C4").setNumberFormat("@")
+      .setNote("Обязательное местное время операции в формате HH:mm (24 часа).");
   }
   if (created) di3GetFormRequestToken_("WAREHOUSE");
   else if (sheet.getMaxColumns() >= 14) di3AdoptLegacyFormRequestToken_("WAREHOUSE", sheet, "N2");
@@ -254,7 +275,7 @@ function di3SubmitWarehouseManagerForm() {
   if (!reasonCode) throw new Error("Выбери основание, соответствующее типу движения.");
   var command = {
     direction: direction,
-    effective_at: values[1],
+    effective_at: di3BuildEffectiveDateTime_(values[1], sheet.getRange("C4").getDisplayValue(), "Ручное складское движение"),
     product_id: selected[0].product_id,
     reason_code: reasonCode,
     quantity: values[4],
@@ -286,8 +307,9 @@ function di3SubmitWarehouseManagerForm() {
     throw error;
   }
   sheet.getRange("B5:B11").clearContent();
-  sheet.getRange("B4").setValue(new Date());
-  sheet.getRange("B4").setNumberFormat("dd.mm.yyyy hh:mm");
+  var nextNow = di3SplitEffectiveDateTime_(new Date(), "Дата следующего ручного движения");
+  sheet.getRange("B4").setValue(nextNow.date).setNumberFormat("dd.mm.yyyy");
+  sheet.getRange("C4").setNumberFormat("@").setValue(nextNow.time);
   di3RotateFormRequestToken_("WAREHOUSE");
   if (typeof di3RefreshWarehouseViewsAfterCommit_ === "function") di3RefreshWarehouseViewsAfterCommit_("Управление складом");
   di3GetSpreadsheet_().toast(
