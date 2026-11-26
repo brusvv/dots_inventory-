@@ -715,6 +715,9 @@ function di3RunSystemSafetyUxUnitTests() {
     var preflightSource = di3PreflightCoreSchemas_.toString();
     includes(preflightSource, "business_date");
     includes(preflightSource, "column AD");
+    var historicalWorkflowSource = di3CreateHistoricalSale.toString();
+    includes(historicalWorkflowSource, 'dispatchOperation.values[5]');
+    includes(historicalWorkflowSource, 'persistedDispatchPayload.historical_mode !== true');
   });
 
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
