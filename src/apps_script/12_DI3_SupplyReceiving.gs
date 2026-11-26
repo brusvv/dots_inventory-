@@ -86,7 +86,7 @@ function di3GetNextSupplyStageConfig_(currentStatus) {
 function di3ApplyNextSupplyStageFromForm() {
   var formSheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
   if (String(formSheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") === "HISTORICAL_CREATE") {
-    throw new Error("В режиме «Внести старую поставку» не выполняй последовательные этапы. Заполни G2, G5, G6, G7 и используй «Сохранить и оприходовать старую поставку».");
+    throw new Error("В режиме «Внести старую поставку» не выполняй последовательные этапы. Заполни G2, даты G5:G7 и времена H5:H7, затем используй «Сохранить и оприходовать старую поставку».");
   }
   var ss = di3GetSpreadsheet_();
   var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
@@ -101,11 +101,7 @@ function di3ApplyNextSupplyStageFromForm() {
   var config = di3GetNextSupplyStageConfig_(supply.status);
   if (!config) throw new Error("Для статуса «" + di3GetSupplyStatusLabel_(supply.status) + "» следующего этапа нет.");
 
-  var rawDate = sheet.getRange(config.input_cell).getValue();
-  if (rawDate === "" || rawDate == null) {
-    throw new Error("Не заполнена дата этапа «" + config.label + "» в ячейке " + config.input_cell + ". Введи дату и время; текущая дата автоматически не подставляется.");
-  }
-  var effectiveAt = di3ParseSupplyEffectiveDate_(rawDate, null);
+  var effectiveAt = di3ReadSupplyStageDateTime_(sheet, config.input_cell, "Этап поставки «" + config.label + "»", false);
 
   // Before sending a draft, persist any pending edits to its header and items.
   // Save refresh preserves the user's entered G5 value instead of clearing it.
