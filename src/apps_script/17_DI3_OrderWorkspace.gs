@@ -426,7 +426,8 @@ function di3SetupOrderWorkspace() {
   var methods = di3SetupDeliveryMethodsSheet();
   var form = di3SetupOrderForm();
   var register = di3SetupOrderRegister();
-  return { status: "READY", delivery_methods: methods, form: form, register: register };
+  var historicalSale = di3SetupHistoricalSaleForm();
+  return { status: "READY", delivery_methods: methods, form: form, register: register, historical_sale: historicalSale };
 }
 
 function di3GetSelectedOrderRegisterRow_() {
