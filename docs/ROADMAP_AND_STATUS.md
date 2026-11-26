@@ -532,5 +532,15 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Added 11 deployment-manager unit tests covering manifest validation, safe redirect hosts, file comparison, manifest preservation and backup tamper detection.
 - CI run [45882134713](https://github.com/brusvv/dots_inventory-/actions/runs/45882134713) passed: 51/51 Apps Script syntax files; 151/151 existing regression tests; 9/9 release-manifest tests; 11/11 deployment-manager tests.
 - PR #3: [D-03/D-04 GitHub release check and source backup](https://github.com/brusvv/dots_inventory-/pull/3), Draft, based on PR #2's feature branch. PR #2 remains Draft; neither PR has been merged.
-- **Not implemented yet:** D-05 confirmed install/post-write verification, D-06 code rollback and D-07 live runtime acceptance.
+- **D-05 staged:** read-only install preview builds a complete replacement set while preserving the actual manifest, all non-server files and unmanaged local modules; it does not call `projects.updateContent`. Confirmed install/post-write verification remains unimplemented. D-06 code rollback and D-07 live runtime acceptance remain pending.
 - No live Apps Script project, Google Sheet, RC8 workbook, source code, deployment or spreadsheet data was accessed or modified. Actual OAuth consent and Drive backup test must be performed separately in a disposable/test Apps Script project.
+
+
+## 26.11.2026 — D-05 staged install preview
+
+- Added a read-only GitHub install preview that downloads only full-commit-pinned release sources, disables redirects, and independently verifies byte length and SHA-256 before building the candidate project file set.
+- Candidate composition preserves the target project's actual appsscript.json, all non-SERVER_JS files and all local SERVER_JS modules not present in the release. Existing release modules are replaced in place; new modules are appended; no file is deleted.
+- The preview fails closed for incomplete project files, duplicate identities, missing manifest, missing/extra downloaded sources, hash/size mismatches and collisions with non-server file names.
+- Menu: Система → GitHub и обновления → Предварительно собрать обновление (без установки).
+- The candidate file set exists only in memory and is shown as a summary. No Apps Script project content, Drive file, deployment, spreadsheet, schema, FIFO or stock data is written or changed.
+- Still pending: separately confirmed projects.updateContent, post-write full-file comparison, code rollback (D-06), and live runtime acceptance (D-07). No install has been performed.
