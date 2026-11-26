@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { buildManifest, writeReleaseArtifacts } = require("./build_release_manifest");
+const { buildManifest, writeReleaseArtifacts, listAppsScriptFiles } = require("./build_release_manifest");
 const hash = (x) => crypto.createHash("sha256").update(x).digest("hex");
 function fixture(fn) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dots-release-test-"));
@@ -45,6 +45,6 @@ fixture(({ sourceDir }) => {
 });
 fixture(({ sourceDir }) => {
   test("rejects missing schema version", () => { fs.writeFileSync(path.join(sourceDir, "33_DI3_SchemaVersioning.gs"), "var CURRENT = 4;"); assert.throws(() => buildManifest({ ...base, sourceDir }), /DI3_SCHEMA_VERSION/); });
-  test("rejects empty source tree", () => { for (const n of fs.readdirSync(sourceDir)) fs.unlinkSync(path.join(sourceDir, n)); assert.throws(() => buildManifest({ ...base, sourceDir }), /не найдено ни одного/); });
+  test("rejects empty source tree", () => { for (const n of fs.readdirSync(sourceDir)) fs.unlinkSync(path.join(sourceDir, n)); assert.throws(() => listAppsScriptFiles(sourceDir), /не найдено ни одного/); });
 });
 process.stdout.write("\n" + passed + " release-manifest tests passed.\n");
