@@ -122,6 +122,17 @@ function di3RunCatalogOrderUxUnitTests() {
     equal(read >= 0 && plan > read && confirm > plan && create > confirm, true);
   });
 
+  test("successful historical-sale save clears the current date and time inputs only after creation", function () {
+    var source = di3SaveHistoricalSaleForm.toString();
+    var create = source.indexOf("di3CreateHistoricalSale(command)");
+    var clearDates = source.indexOf('sheet.getRange("B4:B6").clearContent()');
+    var clearCurrentTimes = source.indexOf('sheet.getRange("C5:C6").clearContent()');
+    var clearLegacyTimes = source.indexOf('sheet.getRange("D5:D6").clearContent()');
+    var cancel = source.indexOf("CANCELLED_BY_USER");
+    equal(create >= 0 && clearDates > create && clearCurrentTimes > create && clearLegacyTimes > create, true);
+    equal(cancel >= 0 && cancel < create, true);
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Catalog/Order UX tests failed: " + JSON.stringify(failed));
   return report;
