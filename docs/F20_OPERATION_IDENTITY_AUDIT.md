@@ -199,3 +199,16 @@ The system-safety test runner now loads the source modules needed to check these
 **Still not executed:** the runner, JavaScript syntax checks, and restored-workbook acceptance. The runner update only establishes its module list; it is not evidence that the suite passes.
 
 The initiator regression test was strengthened beyond source-string checks: it now builds representative dispatch, return and supply-receipt detail rows with a stubbed initiator and asserts that the persisted actor column contains the initiator email. This exercises the row builders without accessing a spreadsheet.
+
+
+## Verification update — 26.11.2026
+
+The previously stated pending source-test status is superseded by GitHub Actions run `45728640689` (PR run #98, merge commit `903b546`). The run passed Apps Script syntax checks for 50 `.gs` files and the System Safety UX suite **32/32**. The current runner loads the actor-context, operation, supply, order, period, schema-versioning and full-edit modules; the passing suite includes tests for:
+
+- identified, empty and unavailable active-user Session identity, with no effective-user fallback;
+- immutable operation initiator remaining distinct from a different recovery executor;
+- initiator attribution in dispatch, return and supply-receipt movement details;
+- centralized actor acquisition in manual and administrative audit writers;
+- executor identity visibility in attempt diagnostics and manual-review rows.
+
+This is source-level Node validation. It does not prove which identity Apps Script exposes in the deployed spreadsheet, nor does it replace the restored-workbook tests with separate user accounts and installable triggers. No schema migration, deployment, trigger change or live workbook mutation was performed.
