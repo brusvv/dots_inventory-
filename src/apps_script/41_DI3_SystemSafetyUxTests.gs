@@ -573,6 +573,78 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("clean baseline adoption writes one final journal record and reruns idempotently", function () {
+    var originals = {
+      report: di3GetSchemaVersioningReport_,
+      validate: di3ValidateExistingCoreSchemas_,
+      spreadsheet: di3GetSpreadsheet_,
+      state: di3GetCleanBaselineState_,
+      version: di3GetSchemaVersion_,
+      rows: di3GetSchemaMigrationRows_,
+      create: di3CreateSchemaMigrationRecord_,
+      setMeta: di3SetAppMetaValue_,
+      setStatus: di3SetSchemaMigrationStatus_
+    };
+    var version = 0;
+    var records = [];
+    var createCount = 0;
+    var statusWriteCount = 0;
+    try {
+      di3GetSchemaVersioningReport_ = function () { return { issues: [] }; };
+      di3ValidateExistingCoreSchemas_ = function () { return []; };
+      di3GetSpreadsheet_ = function () { return { getSheetByName: function () { return {}; } }; };
+      di3GetCleanBaselineState_ = function () {
+        return { eligible: true, record: records.length ? records[0] : null };
+      };
+      di3GetSchemaVersion_ = function () { return version; };
+      di3GetSchemaMigrationRows_ = function () { return records; };
+      di3CreateSchemaMigrationRecord_ = function (definition) {
+        createCount++;
+        records.push({
+          migration_key: definition.key, from_schema_version: definition.from,
+          to_schema_version: definition.to, status: "STARTED", row_number: 2
+        });
+        return records[0];
+      };
+      di3SetAppMetaValue_ = function (key, value) {
+        equal(key, "schema_version");
+        version = value;
+      };
+      di3SetSchemaMigrationStatus_ = function (rowNumber, status) {
+        equal(rowNumber, 2);
+        records[0].status = status;
+        statusWriteCount++;
+      };
+
+      var first = di3EnsureSchemaVersioning_(null);
+      equal(first.installation_path, "CLEAN_FINAL_BASELINE");
+      equal(first.status, "INITIALIZED_CLEAN_BASELINE");
+      equal(version, DI3_SCHEMA_VERSION);
+      equal(records.length, 1);
+      equal(records[0].migration_key, DI3_CLEAN_BASELINE_MIGRATION_KEY);
+      equal(records[0].status, "COMPLETED");
+      equal(createCount, 1);
+      equal(statusWriteCount, 1);
+
+      var second = di3EnsureSchemaVersioning_(null);
+      equal(second.installation_path, "CLEAN_FINAL_BASELINE");
+      equal(second.status, "CURRENT");
+      equal(records.length, 1, "Rerun must not append another baseline record");
+      equal(createCount, 1, "Rerun must not recreate the baseline");
+      equal(statusWriteCount, 1, "Rerun must not rewrite a completed journal row");
+    } finally {
+      di3GetSchemaVersioningReport_ = originals.report;
+      di3ValidateExistingCoreSchemas_ = originals.validate;
+      di3GetSpreadsheet_ = originals.spreadsheet;
+      di3GetCleanBaselineState_ = originals.state;
+      di3GetSchemaVersion_ = originals.version;
+      di3GetSchemaMigrationRows_ = originals.rows;
+      di3CreateSchemaMigrationRecord_ = originals.create;
+      di3SetAppMetaValue_ = originals.setMeta;
+      di3SetSchemaMigrationStatus_ = originals.setStatus;
+    }
+  });
+
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
     ["StockLedger", "StockAllocations", "FifoAllocationRuns", "FifoAllocationArchive",
       "FifoLotCacheArchive", "FifoReplayEvents"].forEach(function (sheetName) {
