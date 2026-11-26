@@ -457,6 +457,7 @@ function di3CreateHistoricalSale(command) {
     di3EnsureCoreFoundationSchemas_();
     command = command || {};
     if (command.historical_mode !== true) throw new Error("Историческая продажа должна быть создана через отдельный режим.");
+    command.__historical_sale_authorized = true;
     var token = String(command.request_token || "").trim();
     if (!token) throw new Error("Не найден токен формы исторической продажи.");
     var dispatchAt = di3ToDate_(command.historical_dispatched_at, "Историческая дата отправки");
