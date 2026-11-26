@@ -11,7 +11,7 @@ The current order lifecycle is split across three existing mechanisms:
 2. `ORDER_DISPATCH` creates the stock OUT movement, then runs FIFO allocation/replay. The movement's `effective_at` is the dispatch timestamp and `recorded_at` is the actual execution timestamp.
 3. Completion is a non-stock order-status transition. It settles buyer payment, seller revenue and realized commission; the FIFO snapshots provide actual COGS/profit.
 
-The existing order schema is v3. `V3_Orders` currently has 29 columns; `commission_payer` is column AC. `created_at` is currently both the recorded order creation timestamp and the lower bound for dispatch date validation. The order number is generated from `created_at`.
+The existing order schema is v3. `V3_Orders` currently has 29 columns; `commission_payer` is column AC. `created_at` is currently both the recorded order creation timestamp and the lower bound for dispatch date validation. The order number is generated from `created_at`. After F-02, preserve `created_at` for record identity/audit, but validate customer-order date against the actual dispatch date; do not reject a legitimate business_date merely because it predates the workbook entry timestamp.
 
 The current order-draft builder validates requested quantity against today's available stock and estimates FIFO cost from today's valuation. That is correct for a new order, but not sufficient for a historical sale: stock may have been consumed by later transactions, and the historical balance must be evaluated at the historical dispatch timestamp.
 
@@ -98,7 +98,7 @@ No new operation type is required if the orchestration can safely resume the exi
 
 The customer-order business date is descriptive/accounting metadata; it is not a stock movement timestamp. It must not change FIFO event ordering or be substituted for dispatch `effective_at`.
 
-The order's actual dispatch remains a separate lifecycle event. When the user dispatches the order, the ordinary date + exact-time controls produce the canonical `effective_at` in the configured spreadsheet timezone. The FIFO engine then allocates stock lots according to the actual dispatch event chronology. No approximate midnight fallback, uncertainty interval, time-window overlap guard or `dispatch_time_precision` field is required for F-02.
+The order's actual dispatch remains a separate lifecycle event. When the user dispatches the order, the ordinary date + exact-time controls produce the canonical `effective_at` in the configured spreadsheet timezone. The FIFO engine then allocates stock lots according to the actual dispatch event chronology. No approximate midnight fallback, uncertainty interval, time-window overlap guard or `dispatch_time_precision` field is required for F-02. The business date must not be later than the actual dispatch date, but it may be earlier than `created_at` when the order was entered after the customer placed it.
 
 For an order that was already physically dispatched before it was entered, the existing historical/backdated dispatch mechanism may still be used with a user-supplied actual dispatch date/time. Its FIFO preflight and replay rules remain unchanged; do not guess a time from the customer-order date.
 
