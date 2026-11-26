@@ -1,7 +1,7 @@
 # F-02 — historical sales: source audit and implementation design
 
 Date: 25 November 2026
-Status: DESIGN / SOURCE AUDIT ONLY — no application code or workbook data changed.
+Status: SOURCE IMPLEMENTATION IN PROGRESS — coordinated F-02 source patch is on the PR branch; Google Sheets runtime acceptance is still pending.
 
 ## 1. Current source findings
 
@@ -136,9 +136,27 @@ Runtime acceptance on a restored disposable workbook:
 
 ## 7. Safety boundaries
 
-This document is a design only. No schema, order, stock, FIFO, migration, menu or workbook code was changed as part of this audit. Do not install a partial v4 schema. Do not run the migration on the production workbook. The implementation should be delivered as one coordinated source patch with tests and a dedicated release note, then applied only to a restored test copy after backup and Dry Run.
+The original audit/design-only status is superseded by the source implementation record in section 9. The current branch contains a coordinated F-02 source patch and regression tests, but it has not been runtime-accepted. Do not run the migration on the production workbook. Apply it only to a restored disposable copy after a verified backup and read-only Dry Run. Do not deploy, merge or recreate the production workbook as part of this source task.
 
 
 ## 8. Cross-workspace date/time contract
 
 The common date/time UX remains shared with order lifecycle events, supply lifecycle events and manual warehouse movements. F-02 adds only a manually entered date-only customer-order `business_date`; it does not weaken the ordinary exact date/time input contract for physical dispatch. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md`. This does not add timestamp-split schema columns to supplies or StockLedger.
+
+
+## 9. F-02 source implementation pass — 26.11.2026
+
+Implemented on `feature/clean-final-baseline` / PR #1:
+
+- Raised the clean-final schema target to v4. `V3_Orders` appends `business_date` as AD; the previous 29-column prefix remains in place. The commission-payer upgrade remains a separate 23/28 → 29-column compatibility step.
+- Added `RC8_ORDER_BUSINESS_DATE_V4` (3 → 4). The migration validates the A:AC prefix, rejects unknown AD headers, occupied AD data without a header, formulas in AD, and missing/invalid `created_at` values before backfill. It appends the header and backfills only AD using the configured timezone; it does not rewrite existing order rows or formulas.
+- Updated schema compatibility, setup's explicit migration path and installation preflight so v3 workbooks can reach the journaled v3→v4 migration after backup/Dry Run. Clean baseline adoption targets v4 directly.
+- Normal orders receive a date-only `business_date` derived from the local calendar date of actual `created_at`; historical sales require an explicit business date.
+- Added the dedicated `Историческая продажа` sheet and menu commands. It requires business date, actual dispatch date + HH:mm, actual completion date + HH:mm, product lines and normal commercial inputs. It is separate from the ordinary new-order form.
+- Added `di3CreateHistoricalSale()`: create/recover via `ORDER_CREATE`, dispatch via the existing `ORDER_DISPATCH` at the supplied historical timestamp, then complete/settle at the supplied completion timestamp. Only the explicit historical path bypasses the ordinary dispatch-not-before-`created_at` guard.
+- Historical draft creation bypasses only current-stock quantity rejection. Product, quantity, price and chronology validation remain; scoped FIFO preflight/replay at actual dispatch time decides historical availability and actual COGS.
+- The immutable create-request hash includes business date, historical dispatch/completion timestamps and commercial inputs. Dispatch retry compares the persisted operation timestamp and historical-mode marker; a changed timestamp fails closed. Completed retries verify exact timestamps and refresh derived snapshots/register.
+- Added business date to the order register as a separate visible field. Finance Dashboard recognition remains based on `completed_at`; business_date does not move revenue or COGS between periods.
+- Added source regression tests for request-hash binding, the historical-only created_at bypass, and immutable dispatch retry timestamp checks.
+
+**Not yet accepted:** the latest CI run for the current source revision must pass; then the migration, historical form, FIFO chronology, PeriodGuard, commissions, Finance Dashboard and retry/fault-recovery flows must be exercised on a restored disposable workbook. No production workbook, live RC8 data, or deployed Apps Script was changed by this source patch. PR #1 remains Draft and unmerged.
