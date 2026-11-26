@@ -11,7 +11,7 @@
  */
 var DI3_GITHUB_BOOTSTRAP_CONFIG = Object.freeze({
   REPOSITORY: "brusvv/dots_inventory-",
-  COMMIT: "1ff4c9869364222793ff1c8fe01fa6d42517d41a",
+  COMMIT: "39ae1b1af9753a31ab3c92175d5fe6d33ef92f16",
   EXPECTED_FILE_COUNT: 47,
   BACKUP_PREFIX: "DotsInventory_AppsScript_Source_",
   MAX_BACKUP_BYTES: 10000000,
