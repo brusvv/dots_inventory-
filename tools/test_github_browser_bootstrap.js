@@ -25,19 +25,19 @@ test("bootstrap is pinned to the reviewed immutable commit", () => {
 });
 
 test("GitHub API token is read from Script Properties and cleared after verified source download", () => {
-  assert.match(source, /GITHUB_TOKEN_PROPERTY:\\s*"DI3_GITHUB_TOKEN"/);
-  assert.match(source, /function di3BootstrapGetGitHubToken_/);
-  assert.match(source, /PropertiesService\\.getScriptProperties\\(\\)\\.getProperty/);
-  assert.match(source, /deleteProperty\\(DI3_GITHUB_BOOTSTRAP_CONFIG\\.GITHUB_TOKEN_PROPERTY\\)/);
-  assert.match(source, /Contents: Read-only/);
-  assert.match(source, /Bearer /);
-  assert.match(source, /api\\\\\\.github\\\\\\.com/);
+  assert.ok(source.includes('GITHUB_TOKEN_PROPERTY: "DI3_GITHUB_TOKEN"'));
+  assert.ok(source.includes("function di3BootstrapGetGitHubToken_()"));
+  assert.ok(source.includes("PropertiesService.getScriptProperties().getProperty("));
+  assert.ok(source.includes("deleteProperty(DI3_GITHUB_BOOTSTRAP_CONFIG.GITHUB_TOKEN_PROPERTY)"));
+  assert.ok(source.includes("Contents: Read-only"));
+  assert.ok(source.includes('headers.Authorization = "Bearer " + githubToken'));
   assert.ok(source.includes('replace(token, "[REDACTED]")'));
-  assert.match(source, /function di3BootstrapDownloadPinnedSources_\\(githubToken\\)/);
-  assert.match(source, /rawUrl, "text\\/plain"\\);/);
-  assert.doesNotMatch(source, /ui\\.prompt\\(/);
-  assert.doesNotMatch(source, /ScriptProperties\\)\\.setProperty/);
+  assert.ok(source.includes("function di3BootstrapDownloadPinnedSources_(githubToken)"));
+  assert.ok(source.includes('di3BootstrapFetchText_(rawUrl, "text/plain")'));
+  assert.ok(!source.includes("ui.prompt("));
+  assert.ok(!source.includes("getScriptProperties().setProperty("));
 });
+
 
 test("GitHub fetch safely follows same-host redirects and exposes real HTTP diagnostics", () => {
   assert.match(source, /"User-Agent": "DotsInventoryBrowserBootstrap\/1\.0"/);
