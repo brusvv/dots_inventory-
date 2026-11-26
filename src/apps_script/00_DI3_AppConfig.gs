@@ -22,7 +22,7 @@ var DI3_APP_CONFIG = Object.freeze({
     FULL_HASH_MAX_CELLS_TOTAL: 750000
   }),
   GITHUB_RELEASE: Object.freeze({
-    REPOSITORY: "brusvv/dots_inventory-",
+    REPOSITORY: "brusvv/dots_inventory-",\n    // stable = only verified main releases; preview = prereleases from feature/release branches.\n    RELEASE_CHANNEL: "stable",
     TOKEN_PROPERTY: "DI3_GITHUB_READ_TOKEN",
     SOURCE_BACKUP_PREFIX: "DotsInventory_AppsScript_Source_",
     MAX_SOURCE_BACKUP_BYTES: 10000000
