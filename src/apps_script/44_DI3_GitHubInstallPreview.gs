@@ -105,7 +105,7 @@ function di3BuildGitHubInstallPreview_(manifest, projectFiles, downloadedFiles) 
   }
   return {
     format: DI3_GITHUB_INSTALL_PREVIEW_FORMAT, status: "PREVIEW_READY", write_performed: false, update_content_called: false,
-    release_tag: String(manifest.git_tag || ""), commit: String(manifest.git_commit || ""),
+    release_tag: String(manifest.git_tag || ""), commit: String(manifest.git_commit || ""),\n    release_channel: String(manifest.release_channel || ""), source_branch: String(manifest.source_branch || ""),
     target_schema_version: Number(manifest.target_schema_version), target_time_zone: String(manifest.application_time_zone || ""),
     target_files: target,
     preserved_non_server_files: nonServerAfter.map(function (file) { return file.name + " (" + file.type + ")"; }),
@@ -135,7 +135,7 @@ function di3PrepareGitHubInstallPreview() {
   preview.release = releaseResult.release; preview.project_id = project.script_id; preview.downloaded_bytes = totalBytes;
   preview.source_project_fingerprint = di3AppsScriptFilesFingerprint_(project.content.files);
   var lines = [
-    "Релиз: " + preview.release_tag, "Commit: " + preview.commit,
+    "Канал: " + (preview.release_channel === "preview" ? "PREVIEW" : "STABLE") + (preview.source_branch ? " · ветка: " + preview.source_branch : ""),\n    "Релиз: " + preview.release_tag, "Commit: " + preview.commit,
     "Целевая схема релиза: v" + preview.target_schema_version, "Часовой пояс релиза: " + preview.target_time_zone,
     "Файлов в полном наборе: " + preview.summary.target_file_count,
     "Новых: " + preview.summary.added + " · изменённых: " + preview.summary.changed + " · без изменений: " + preview.summary.unchanged,
