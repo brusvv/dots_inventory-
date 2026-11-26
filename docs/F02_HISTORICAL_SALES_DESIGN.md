@@ -123,3 +123,8 @@ Runtime acceptance on a restored disposable workbook:
 ## 7. Safety boundaries
 
 This document is a design only. No schema, order, stock, FIFO, migration, menu or workbook code was changed as part of this audit. Do not install a partial v4 schema. Do not run the migration on the production workbook. The implementation should be delivered as one coordinated source patch with tests and a dedicated release note, then applied only to a restored test copy after backup and Dry Run.
+
+
+## 8. Cross-workspace date/time contract
+
+The confirmed F-02 date/time UX is now shared with supply lifecycle events and manual warehouse movements. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md` for the complete contract, including the date-only exceptions, supply G5:G7 and register M/N controls, order transition P/Q controls, warehouse date/time pair, shared timezone-aware parser, and regression coverage. This broadens the UI/domain implementation only; it does not add timestamp-split schema columns to supplies or StockLedger.
