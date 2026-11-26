@@ -72,8 +72,6 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           SOURCE_DIR: src/apps_script
           OUTPUT_DIR: dist/release-metadata
-          RELEASE_CHANNEL: ${{ env.RELEASE_CHANNEL }}
-          RELEASE_SOURCE_BRANCH: ${{ env.RELEASE_SOURCE_BRANCH }}
         run: node tools/build_release_manifest.js
       - name: Assemble release bundle
         shell: bash
