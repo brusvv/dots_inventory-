@@ -1,7 +1,7 @@
 # F-19 — FIFO replay and recovery regression coverage
 
 Дата: 25.11.2026  
-Статус: **source CI executed; 44/44 PASS; Apps Script runtime acceptance pending**
+Статус: **source CI executed; 46/46 PASS; Apps Script runtime acceptance pending**
 
 ## Purpose
 
@@ -33,7 +33,7 @@ The runner exits non-zero if any test fails.
 
 ## Boundaries and remaining acceptance
 
-- **Executed by GitHub Actions:** run [45871875403](https://github.com/brusvv/dots_inventory-/actions/runs/45871875403), head `0257f3c9faef202bd8224e208e2adc1b5f83de9a`, reports FIFO replay **44 passed / 0 failed**. The suite includes owner-attested FIFO quarantine resolution and archive-diagnostics validation. The same CI run passed syntax checks for all 50 `.gs` files and all six other regression suites (147/147 total).
+- **Executed by GitHub Actions:** run [45872039297](https://github.com/brusvv/dots_inventory-/actions/runs/45872039297), head `0257f3c9faef202bd8224e208e2adc1b5f83de9a`, reports FIFO replay **46 passed / 0 failed**. The suite includes owner-attested FIFO quarantine resolution and archive-diagnostics validation. The same CI run passed syntax checks for all 50 `.gs` files and all six other regression suites (147/147 total).
 - The pure suite does not simulate Google Sheets write interruption, OperationExecutor persistence, LockService contention, or recovery after a process terminates between sheet writes.
 - No Apps Script, schema, workbook, StockLedger, StockLots, StockAllocations, FifoProductState or cursor values were changed.
 - No full FIFO rebuild or stock operation was executed.
