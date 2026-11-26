@@ -360,13 +360,17 @@ function di3SetupOrderRegister() {
       if (typeof sheet.getRange("A1:M1").breakApart === "function") sheet.getRange("A1:M1").breakApart();
       if (typeof sheet.getRange("A2:M2").breakApart === "function") sheet.getRange("A2:M2").breakApart();
       if (sheet.getLastRow() >= 4) sheet.getRange(4, 1, sheet.getLastRow() - 3, 18).clearContent();
-      sheet.getRange("A1:Q1").merge();
-      sheet.getRange("A2:Q2").merge();
+      sheet.getRange("A1:R1").merge();
+      sheet.getRange("A2:R2").merge();
     } else if (newHeader.slice(0, 17).join("|") !== previousCurrentHeader.join("|") ||
         (newHeader[17] && newHeader[17] !== DI3_ORDER_REGISTER_HEADERS[17])) {
       throw new Error("Лист «Реестр заказов v3» имеет несовместимые заголовки.");
     }
   }
+  if (sheet.getRange("A1:R1").isPartOfMerge()) sheet.getRange("A1:R1").breakApart();
+  if (sheet.getRange("A2:R2").isPartOfMerge()) sheet.getRange("A2:R2").breakApart();
+  sheet.getRange("A1:R1").merge();
+  sheet.getRange("A2:R2").merge();
   sheet.getRange(3, 1, 1, 18).setValues([DI3_ORDER_REGISTER_HEADERS]);
   sheet.getRange("A1:R1").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold").setFontSize(14);
   sheet.getRange("A2:R2").setBackground("#EAF0F7").setFontColor("#40516A");
