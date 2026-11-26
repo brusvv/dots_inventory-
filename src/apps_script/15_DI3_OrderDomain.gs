@@ -314,7 +314,7 @@ function di3BuildOrderRequestHash_(command) {
     discount_rate: Number(command.discount_rate || 0),
     delivery_method: di3NormalizeText_(command.delivery_method),
     notes: di3NormalizeText_(command.notes),
-    business_date: di3FormatBusinessDate_(command.business_date || new Date()),
+    business_date: command.business_date ? di3FormatBusinessDate_(command.business_date) : "",
     historical_mode: command.historical_mode === true,
     historical_dispatched_at: command.historical_dispatched_at ? di3ToDate_(command.historical_dispatched_at, "Историческая дата отправки").toISOString() : "",
     historical_completed_at: command.historical_completed_at ? di3ToDate_(command.historical_completed_at, "Историческая дата завершения").toISOString() : ""
