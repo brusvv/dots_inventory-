@@ -1,5 +1,9 @@
 # Dots Inventory — source repository and v4 deployment work
 
+> **Preferred first installation (no local computer required):** use [docs/BROWSER_ONLY_BOOTSTRAP.md](docs/BROWSER_ONLY_BOOTSTRAP.md) on a new disposable spreadsheet-bound Apps Script project. Only the Bootstrap file is copied manually once; it downloads and verifies the pinned 47-module source set, creates a verified Drive source backup, requests explicit confirmation, writes through Apps Script API, and verifies the complete project afterward. Do not use it on the production RC8 workbook.
+
+> **Current deployment status (27.11.2026):** PR #8 is open as Draft; browser-only Bootstrap source is implemented but has NOT been runtime-tested in Google Apps Script. CI success is not runtime acceptance. Production RC8 and `main` remain untouched.
+
 > **Browser-only first installation:** for a new disposable test spreadsheet, use [docs/BROWSER_ONLY_BOOTSTRAP.md](docs/BROWSER_ONLY_BOOTSTRAP.md). It installs pinned GitHub source without clasp, Git, Node.js or a local repository copy. A one-time copy of the Bootstrap file into Apps Script is still required. Do not use it on the production RC8 workbook.
 
 
