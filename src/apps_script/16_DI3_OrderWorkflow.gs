@@ -492,6 +492,12 @@ function di3CreateHistoricalSale(command) {
     if (dispatchAt.getTime() > Date.now() + 5 * 60 * 1000 || completionAt.getTime() > Date.now() + 5 * 60 * 1000) {
       throw new Error("Исторические этапы не могут находиться в будущем.");
     }
+    // Reject locked periods before creating an otherwise orphaned historical order draft.
+    di3AssertPeriodOpen_(dispatchAt, "Историческая отправка");
+    di3AssertPeriodOpen_(completionAt, "Историческое завершение");
+    (command.lines || []).forEach(function (line) {
+      di3AssertNoBackdatedMovementBeforeReturnedOrder_(String(line.product_id || ""), dispatchAt, "историческая продажа");
+    });
     var createResult = di3CreateOrder(command);
     var order = di3GetOrderById_(createResult.order_id);
     if (!order) throw new Error("Не удалось восстановить созданный исторический заказ.");
