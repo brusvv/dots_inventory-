@@ -850,7 +850,7 @@ function di3BuildEffectiveDateTime_(dateValue, timeValue, label) {
     throw new Error(label + ": укажи корректную календарную дату.");
   }
   var time = String(timeValue == null ? "" : timeValue).trim();
-  if (!/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(time)) {
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
     throw new Error(label + ": обязательное время должно быть в формате HH:mm (24 часа).");
   }
   var timezone = di3GetConfiguredTimeZone_();
