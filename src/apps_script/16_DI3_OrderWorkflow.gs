@@ -228,6 +228,7 @@ function di3DispatchOrder_(order, effectiveAt, options) {
   var existing = di3GetOrderOperationByKey_(key);
   if (existing) {
     var savedPayload = di3ReadVerifiedOperationPayload_(existing);
+    if (effectiveAt === "" || effectiveAt == null) date = di3ToDate_(savedPayload.dispatched_at, "Сохранённая дата отправки");
     if (String(savedPayload.dispatched_at || "") !== date.toISOString()) {
       throw new Error("Для этого заказа уже зарегистрирована операция отправки с другим временем. Повтор с изменённой датой запрещён.");
     }
@@ -490,6 +491,10 @@ function di3CreateHistoricalSale(command) {
         di3ToMillis_(order.completed_at) !== completionAt.getTime()) {
       throw new Error("Не удалось подтвердить полный исторический цикл продажи.");
     }
+    // Idempotent retry also repairs derived snapshots/register if the prior execution
+    // stopped after the immutable completion timestamp was written.
+    di3RefreshAllOrderFifoSnapshots_();
+    di3RefreshOrderRegister();
     return { status: "HISTORICAL_SALE_COMPLETED", order_id: order.order_id,
       order_number: order.order_number, business_date: di3FormatBusinessDate_(order.business_date),
       created_at: order.created_at, dispatched_at: order.dispatched_at, completed_at: order.completed_at };
