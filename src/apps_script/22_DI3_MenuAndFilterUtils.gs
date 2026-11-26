@@ -263,7 +263,8 @@ function di3BuildMenus_() {
     menu.addSubMenu(subMenu("Операции и FIFO", function (child) {
       child.addItem("Отчёт по состоянию операций", "di3ShowOperationRecoveryReport")
         .addItem("Восстановить незавершённые операции…", "di3RecoverAllPendingOperations")
-        .addItem("Снять карантин после ручной сверки…", "di3PromptRequeueQuarantinedOperation")
+        .addItem("Снять карантин операции после ручной сверки…", "di3PromptRequeueQuarantinedOperation")
+        .addItem("Разрешить FIFO quarantine после ручной сверки…", "di3PromptResolveQuarantinedFifoReplay")
         .addSeparator()
         .addItem("Пересчитать FIFO в копейках…", "di3RunMoneyMinorUnitsMigration")
         .addItem("Проверить целостность FIFO (без изменений)", "di3RunFifoIntegrityCheck")
