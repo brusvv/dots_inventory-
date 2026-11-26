@@ -1,3 +1,12 @@
+## D-07 runtime acceptance — runbook prepared, execution blocked — 26.11.2026
+
+- Added [docs/GITHUB_RUNTIME_ACCEPTANCE.md](GITHUB_RUNTIME_ACCEPTANCE.md) with isolated-test-project prerequisites, D-03/D-04/D-05/D-06 happy path, negative/fault-injection scenarios, PASS/FAIL criteria and an evidence log template.
+- The runbook explicitly requires a restored disposable Google Sheets copy and a separate bound Apps Script Script ID. Production RC8 and `main` remain out of scope.
+- Current repository state has no published GitHub Releases, and PR #2–#5 remain unmerged. D-07 cannot execute its release-backed happy path until the release chain is separately reviewed/merged and an annotated stable tag is intentionally published.
+- D-07 status remains **BLOCKED / NOT RUN**. Documentation is not runtime acceptance and does not change that gate.
+
+---
+
 ## Consolidated status — 26.11.2026 (supersedes older point-in-time notes below)
 
 Working branch: `feature/clean-final-baseline`; PR #1 remains Draft and unmerged. Target clean schema: v4. Existing RC8 workbook/deployment and `main` are not modified.
