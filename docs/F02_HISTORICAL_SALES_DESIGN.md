@@ -13,7 +13,7 @@ The current order lifecycle is split across three existing mechanisms:
 
 The existing order schema is v3. `V3_Orders` currently has 29 columns; `commission_payer` is column AC. `created_at` is currently both the recorded order creation timestamp and the lower bound for dispatch date validation. The order number is generated from `created_at`. After F-02, preserve `created_at` for record identity/audit, but validate customer-order date against the actual dispatch date; do not reject a legitimate business_date merely because it predates the workbook entry timestamp.
 
-The current order-draft builder validates requested quantity against today's available stock and estimates FIFO cost from today's valuation. That is correct for a new order, but not sufficient for a historical sale: stock may have been consumed by later transactions, and the historical balance must be evaluated at the historical dispatch timestamp.
+The current order-draft builder validates requested quantity against today's available stock and estimates FIFO cost from today's valuation. That is correct for a new order, but not sufficient for a historical sale: stock may have been consumed by later transactions, and the historical balance must be evaluated at the historical dispatch timestamp. Historical mode must therefore bypass the current-availability rejection (without bypassing product/quantity/price validation) and rely on scoped FIFO preflight at the supplied dispatch timestamp. Any current-valuation estimate shown in historical mode must be labelled non-authoritative; actual COGS comes only from replay allocations.
 
 The FIFO engine already has a relevant capability: events are ordered by `effective_at`, then `recorded_at`, then `movement_id`. A backdated movement triggers product replay when it precedes the persisted product state. The replay fails closed if stock was insufficient at the historical point in the event sequence. The existing scoped FIFO preflight can validate the candidate dispatch before the operation is registered.
 
@@ -48,45 +48,46 @@ Migration `RC8_ORDER_BUSINESS_DATE_V4` (3 → 4):
 - register migration through SchemaMigrations and the normal backup + Dry Run + explicit apply flow;
 - no reverse migration; rollback through verified backup/restore.
 
-The schema registry, legacy-schema compatibility checks, schema-version report, migration executor, order-row builder, order read/write mapping, and order register must all be updated together. The order register should display business date separately from actual record-created time rather than silently relabeling `created_at`.
+The schema registry, legacy-schema compatibility checks, schema-version report, migration executor, order-row builder, order read/write mapping, and order register must all be updated together. The order register should display business date separately from actuThe command collects and confirms:
+- customer-order business date (date only; may precede the actual workbook `created_at`);
+- actual historical dispatch date and exact time (minute precision);
+- actual historical completion date and exact time (minute precision);
+- normal product lines, prices, discount, commission payer/rate, delivery method and notes;
+- one stable request token and a fingerprint covering all commercial inputs and all three business dates/timestamps.
 
-## 3. Historical sale workflow
+This is a completed historical-sale workflow, not merely a backdated order draft. It creates the order with the actual current `created_at`, dispatches it through the existing `ORDER_DISPATCH` operation at the supplied historical dispatch timestamp (thereby invoking FIFO preflight/replay), and completes/settles it at the supplied historical completion timestamp. The historical form must be separate from ordinary «Новый заказ» so the user cannot accidentally bypass current-stock checks or create a historical sale without the chronology inputs.
 
-Recommended UX: a separate menu command **«Внести старую продажу…»** using the existing order calculator's product lines, prices, discount and commission inputs. It must not silently turn ordinary order creation into historical mode.
+### Date/time input UX — confirmed model 26.11.2026
 
-The command collects and confirms:
-- customer-order business date (date only; user-entered, and may precede `created_at`);
-- the normal product lines, prices, discount and commission inputs;
-- the current calculator request token and exact form fingerprint.
+The historical-sale form contains three distinct business-time inputs:
 
-The historical-sale entry creates the order in the same initial lifecycle state as an ordinary order. Dispatch and completion remain separate ordinary lifecycle transitions and use their actual event date/time when performed. Do not force the user to reconstruct a dispatch time merely to represent when the customer placed the order.
+- `business_date`: customer-order calendar date only.
+- Dispatch: required date + exact `HH:mm` time.
+- Completion: required date + exact `HH:mm` time.
 
-### Date/time input UX — simplified decision 26.11.2026
+Example: customer order placed 25 November at 23:00, user sees and records it 26 November at 08:00, dispatch occurs 26 November at 10:30, completion at 27 November at 09:00. Store `business_date = 25 November`, actual `created_at = 26 November 08:00`, `dispatched_at = 26 November 10:30`, and `completed_at = 27 November 09:00`.
 
-- The historical-sale form asks for the customer-order business date as a date-only value.
-- The business date may be earlier than the actual workbook entry timestamp. Example: customer order placed 25 November at 23:00, user sees it and records it 26 November at 08:00. Store `business_date = 25 November`; preserve actual `created_at = 26 November 08:00`.
-- Do not derive `created_at` from the business date and do not overwrite the actual recording timestamp.
-- Do not ask for a dispatch-time window in the historical-sale form. Physical dispatch is a separate lifecycle event and retains the ordinary date + exact time input contract.
-- The date-only business date is not a FIFO event timestamp and must not be used as StockLedger `effective_at`.
-
+The business date is not a FIFO event timestamp and must never be used as StockLedger `effective_at`. The actual dispatch timestamp is the sole stock-out event time. The historical form does not use an approximate time window or infer dispatch time from business_date.
 
 Recommended orchestration reuses the existing idempotent lifecycle rather than introducing a second stock engine:
 
-1. Validate the order form and customer-order business date.
-2. Assert PeriodGuard is open for the business date; apply existing checks to actual dispatch/completion events when those transitions occur.
-3. Build the normal immutable `ORDER_CREATE` request with actual `created_at` and explicit `business_date`; include business_date in the request hash.
+1. Validate all required fields and chronology: `business_date` must not be after the dispatch calendar date; completion timestamp must be at or after dispatch timestamp; dispatch and completion must not be in the future.
+2. PeriodGuard applies to actual dispatch and completion event timestamps. `business_date` is descriptive order metadata and is not itself a stock/settlement event.
+3. Build the immutable `ORDER_CREATE` request with actual `created_at`, explicit `business_date`, historical-mode marker and a request hash covering the business date and all commercial inputs.
 4. Create/recover the order using `ORDER_CREATE`.
-5. Dispatch later through the existing `ORDER_DISPATCH` handler, using the actual dispatch date/time supplied at that transition. FIFO preflight remains authoritative for stock sufficiency and lot allocation.
-6. Complete the order using the existing status/settlement logic at the actual completion timestamp.
-7. Refresh order snapshots/register and verify the actual FIFO COGS, commission settlement and profit.
+5. Dispatch through the existing `ORDER_DISPATCH` handler at the supplied actual historical dispatch timestamp. Historical mode may bypass only the ordinary `dispatched_at >= created_at` guard; all other period, returned-order, pending-operation and scoped FIFO preflight checks remain mandatory.
+6. Complete through the existing order status/settlement logic at the supplied actual completion timestamp; the status chronology check must enforce `completed_at >= dispatched_at`.
+7. Refresh order snapshots/register and verify actual FIFO COGS, commission settlement and profit.
 
-The orchestration must be retry-safe at every boundary. If interrupted after order creation, it must resume the same order. If interrupted after dispatch, it must not dispatch twice and must continue completion. Reusing the same request token with changed lines, prices, business date, dispatch date or completion date must fail closed.
+The orchestration must be retry-safe at every boundary. If interrupted after order creation, it must resume the same order; after dispatch, it must reuse the persisted `ORDER_DISPATCH` payload and must not create a second movement; after completion, it must recognize the settled order. Reusing the same request token with changed lines, prices, business date, dispatch timestamp, completion timestamp, commission settings or delivery data must fail closed. A retry that finds an existing dispatch operation must compare the persisted dispatch timestamp with the requested one rather than silently accepting a changed timestamp.
+
+he orchestration must be retry-safe at every boundary. If interrupted after order creation, it must resume the same order. If interrupted after dispatch, it must not dispatch twice and must continue completion. Reusing the same request token with changed lines, prices, business date, dispatch date or completion date must fail closed.
 
 No new operation type is required if the orchestration can safely resume the existing ORDER_CREATE and ORDER_DISPATCH operations and deterministically finish the completion transition. This must be proven by tests before implementation is accepted.
 
 ## 4. Historical FIFO and cost rules
 
-- StockLedger `effective_at` is the historical dispatch timestamp; `recorded_at` remains the actual timestamp at which the user entered the sale.
+- StockLedger `effective_at` is the actual historical dispatch timestamp; `recorded_at` remains the actual timestamp at which the historical-sale workflow wrote the movement.
 - FIFO replay is authoritative for historical availability and cost. Never use today's average stock valuation as the historical COGS.
 - If stock is insufficient at the historical dispatch point, reject before registering the dispatch operation. Do not allow negative stock or silently borrow future receipts.
 - `UNKNOWN` and `FREE` lots retain their current FIFO semantics; historical sales must not invent a known unit cost.
@@ -110,7 +111,8 @@ Pure/domain tests:
 2. Historical order stores actual created_at separately from manually entered business_date.
 3. An order placed late at night and entered the next morning retains the previous calendar date as business_date and the next-morning timestamp as created_at.
 4. Business date is date-only and does not affect StockLedger event ordering or FIFO lot allocation.
-5. Ordinary dispatch date/time is combined using the configured spreadsheet timezone; backdated dispatch continues to use existing FIFO preflight/replay rules.
+5. Historical dispatch and completion timestamps are combined using the configured spreadsheet timezone; dispatch may precede workbook `created_at` only through the explicit historical-sale workflow. Ordinary dispatch retains the `created_at` lower-bound guard.
+6. Completion must not precede actual dispatch; dispatch must not precede the business-date calendar day.
 6. Historical stock is sufficient at dispatch even if later sales consumed the current stock: preflight passes and replay allocates correct historical lots.
 7. Historical stock is insufficient at dispatch even if a later receipt makes current stock sufficient: preflight rejects.
 8. UNKNOWN/FREE lots preserve cost status and no invented COGS.
@@ -123,9 +125,10 @@ Pure/domain tests:
 Runtime acceptance on a restored disposable workbook:
 - backup + schema Dry Run before migration;
 - migrate v3→v4 and verify manifest/SchemaMigrations;
-- enter a historical sale whose customer-order business date is the previous day while the actual recording time is the next morning;
-- verify that business_date is stored separately and does not alter dispatch effective_at, FIFO allocations or OrderCostSnapshots;
-- verify ordinary dispatch continues to store actual effective_at separately from recorded_at;
+- enter a historical sale whose customer-order business date is the previous day while the actual recording time is the next morning, with independently supplied dispatch and completion timestamps;
+- verify business_date, created_at, dispatched_at and completed_at are stored independently;
+- verify historical dispatch may precede created_at only through the historical workflow, and ordinary dispatch still rejects that chronology;
+- verify dispatch effective_at drives FIFO allocation while recorded_at remains actual workflow execution time;
 - verify buyer-paid and seller-paid commission settlement;
 - verify Finance Dashboard period/filter totals;
 - test insufficient historical stock, locked period, same-day event ordering and recovery;
