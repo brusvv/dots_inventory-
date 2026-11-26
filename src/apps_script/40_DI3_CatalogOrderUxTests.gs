@@ -112,6 +112,9 @@ function di3RunCatalogOrderUxUnitTests() {
     var preview = di3PreviewHistoricalSaleForm.toString();
     var save = di3SaveHistoricalSaleForm.toString();
     includes(preview, "command = command || di3ReadHistoricalSaleFormCommand_()");
+    var readCommand = di3ReadHistoricalSaleFormCommand_.toString();
+    includes(readCommand, 'sheet.getRange("C5").getDisplayValue()');
+    includes(readCommand, 'sheet.getRange("C6").getDisplayValue()');
     var read = save.indexOf("di3ReadHistoricalSaleFormCommand_()");
     var plan = save.indexOf("di3PreviewHistoricalSaleForm(command)");
     var confirm = save.indexOf("ui.alert(");
