@@ -53,15 +53,18 @@ The command collects and confirms:
 - completion date plus a separately entered completion time;
 - current calculator request token and exact form fingerprint.
 
-### Date/time input UX — decision confirmed 26.11.2026
+### Date/time input UX — updated decision 26.11.2026
 
-The historical dispatch must use an exact time; date-only dispatch is not accepted. The date picker and time input must be separate controls, placed side-by-side on the same form row:
-- date control: calendar picker, displayed as `ДД.ММ.ГГГГ`;
-- time control: required 24-hour input, displayed/entered as `ЧЧ:ММ` (for example `14:35`), with minute precision and seconds normalized to `00`;
-- completion uses the same date + time pair so the settlement timestamp is explicit and validated;
-- business date remains a date-only field.
+The physical dispatch date is required; an additional time window is optional. The user may enter a time window to narrow down when the sale occurred, but must be able to save a historical sale using the date alone.
 
-Do **not** use one combined date-time cell/control with the calendar picker and rely only on a custom number format such as `ДД.ММ.ГГГГ ЧЧ:ММ`. A Sheets date picker selects a date without a time component and can therefore replace the time portion with midnight; number formatting changes display, not the underlying timestamp. Keep the time in its own field/control and combine date + time into one timestamp in the configured spreadsheet timezone before validation, hashing the immutable request and passing `effective_at` to the workflow. Empty or malformed time must fail closed; do not silently default to midnight or the current time. In a sheet-row implementation, use adjacent date and time columns in the same row, format the time column as `HH:mm`, and validate it independently.
+- date control: required calendar picker, displayed as `ДД.ММ.ГГГГ`;
+- optional time window: two 24-hour time inputs, `с` / `по`, minute precision (`ЧЧ:ММ`); when supplied, validate that the start does not exceed the end and use the interval when determining/validating the dispatch timestamp;
+- completion date/time remains separately validated; whether its time is mandatory or may also be omitted should follow the same explicit timestamp policy;
+- business date remains date-only.
+
+Do **not** combine date and time in one date-picker-controlled cell: a Sheets date picker can replace the time portion with midnight. Keep date and optional time-window values in separate controls/columns, and combine them only in the workflow layer using the configured spreadsheet timezone.
+
+**Still to decide before implementation:** what deterministic `effective_at` value should be assigned when the user supplies only a dispatch date and no time window. FIFO needs a single timestamp, and any date-only convention is necessarily an approximation of within-day ordering. Do not silently choose midnight, noon, end-of-day or current time. The same issue must be resolved for completion if its time is optional.
 
 Recommended orchestration reuses the existing idempotent lifecycle rather than introducing a second stock engine:
 
@@ -87,11 +90,13 @@ No new operation type is required if the orchestration can safely resume the exi
 - Existing return linkage remains through `V3_OrderItems.dispatch_movement_id`; F-01's movement-based lookup must continue to work when a historical sale is later returned.
 - A sale whose dispatch or completion date falls in a locked period must be blocked by PeriodGuard. Reopening a period remains an explicit, audited action.
 
-## 5. Confirmed precision rule
+## 5. Precision rule and remaining timestamp decision
 
-The FIFO comparator orders same-day events by `recorded_at` after `effective_at`. A historical sale entered today with only a date (no time) can therefore be ordered after already-recorded movements at the same effective timestamp/date and produce misleading historical lot attribution.
+The FIFO comparator orders same-day events by `recorded_at` after `effective_at`. A historical sale entered later with only a date cannot reveal its true within-day position relative to receipts and other sales.
 
-Decision confirmed 26.11.2026: **require the exact physical dispatch date and time**. The user also requires the date picker not to erase the entered time. Implement this as separate adjacent date and time controls/columns, not as a single date-time field controlled by a calendar. The time is mandatory, 24-hour `HH:mm`, minute precision; seconds are normalized to `00`. Completion also uses a separate date + time pair. Business date remains date-only. Do not silently choose midnight, noon, end-of-day or current time.
+Decision confirmed 26.11.2026: **the dispatch time window is optional**. The user may provide a date only or narrow the dispatch time using a from/to window. The UI must keep date and time-window inputs separate so a date picker cannot erase time values.
+
+Implementation remains blocked on one deterministic fallback rule: the timestamp to use when no time window is provided. Any fallback (start, midpoint or end of day) is an approximation and can change historical FIFO lot attribution or stock sufficiency. Do not silently choose one. Also decide whether completion time is required or follows the same optional-time policy.
 
 ## 6. Required regression and acceptance coverage
 
@@ -102,7 +107,7 @@ Pure/domain tests:
 4. Dispatch before business date, completion before dispatch, future dates and invalid dates fail closed.
 5. Historical stock is sufficient at dispatch even if later sales consumed the current stock: preflight passes and replay allocates correct historical lots.
 6. Historical stock is insufficient at dispatch even if a later receipt makes current stock sufficient: preflight rejects.
-7. Same-day receipt/sale ordering uses the explicitly entered dispatch time; missing/invalid time fails closed and does not default to midnight.
+7. Same-day receipt/sale ordering respects an entered dispatch time window; missing time follows the separately approved fallback convention, while malformed or inverted windows fail closed.
 8. UNKNOWN/FREE lots preserve cost status and no invented COGS.
 9. Existing F-01 return-after-unrelated-FIFO-run scenario still returns the original dispatch lots.
 10. Request-token retry with identical dates is idempotent; changed dates or form payload are rejected.
