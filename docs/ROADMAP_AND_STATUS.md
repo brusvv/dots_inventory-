@@ -501,3 +501,13 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Latest PR quality-gates run: [45864597621](https://github.com/brusvv/dots_inventory-/actions/runs/45864597621), run #240, completed successfully on head `5698e8321f255055f7472a8374e8ca4b846184e5`.
 - Apps Script syntax: **50/50 .gs files PASS**. Regression suites: **147/147 PASS** — FIFO 42, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 39, Warehouse Dashboard 9, Finance Schema 4.
 - This is source/Node CI only. Google Sheets Dry Run, clean setup/rerun, interruption recovery, and backup/restore-as-new still require runtime acceptance on a disposable empty workbook. PR #1 remains Draft and unmerged; main and the existing RC8 workbook remain unchanged.
+
+
+## F-02 follow-up — historical form reset correction — 26.11.2026
+
+- Source audit confirmed that F-02's historical-sale form reads dispatch/completion time from current cells `C5:C6`, but the successful-save reset still cleared only retired cells `D5:D6`.
+- Fixed `di3SaveHistoricalSaleForm()` to clear `C5:C6` after successful creation and retained cleanup of legacy `D5:D6`.
+- Added a structural regression proving current date/time inputs are cleared only after `di3CreateHistoricalSale(command)`; cancellation returns before creation.
+- CI [45885423968](https://github.com/brusvv/dots_inventory-/actions/runs/45885423968): syntax 50/50; FIFO 46/46; Order Domain 22/22; Supply UX 17/17; Catalog/Order UX 15/15; System Safety 39/39; Warehouse Dashboard 9/9; Finance schema 4/4. **152/152 tests passed.**
+- N-02 and F-01 remain source-implemented with regression coverage; their runtime acceptance is still pending. F-02 source implementation is complete, but v3→v4 migration and the full historical-sale/FIFO/finance cycle have not been accepted in Apps Script.
+- This correction does not alter schema, ledger, stock, FIFO, operation payloads or production data.
