@@ -43,6 +43,15 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     includes(layout, 'parts.time === "00:00" ? "" : parts.time');
   });
 
+  test("supply register next-stage date/time cells are separate and both required", function () {
+    equal(DI3_SUPPLY_REGISTER_HEADERS.length, 14);
+    equal(DI3_SUPPLY_REGISTER_HEADERS[12], "Дата следующего этапа");
+    equal(DI3_SUPPLY_REGISTER_HEADERS[13], "Время следующего этапа (HH:mm)");
+    includes(di3GetSelectedSupplyRegisterRow_.toString(), "di3BuildEffectiveDateTime_");
+    includes(di3RefreshSupplyRegister.toString(), "input.time");
+    includes(di3TransitionSelectedSupply_.toString(), "getRange(selected.row_number, 13, 1, 2).clearContent()");
+  });
+
   test("discard confirmation is requested for dirty forms unless an internal caller explicitly bypasses it", function () {
     equal(di3ShouldConfirmSupplyFormDiscard_(true, {}), true);
     equal(di3ShouldConfirmSupplyFormDiscard_(false, {}), false);
