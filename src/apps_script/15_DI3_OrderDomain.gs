@@ -349,6 +349,9 @@ function di3BuildOrderDraftPayload_(command) {
   command = command || {};
   var createdAt = command.created_at ? di3ToDate_(command.created_at, "Дата создания заказа") : new Date();
   var historicalMode = command.historical_mode === true;
+  if (historicalMode && command.__historical_sale_authorized !== true) {
+    throw new Error("Исторический режим доступен только через di3CreateHistoricalSale().");
+  }
   var businessDate = di3ParseBusinessDate_(command.business_date || createdAt);
   if (historicalMode) {
     if (!command.historical_dispatched_at || !command.historical_completed_at) {
