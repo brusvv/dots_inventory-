@@ -447,4 +447,4 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Source audit found that the recovery catch previously appended QUARANTINED for every exception, including transient Google Sheets write failures after the target projection had already been applied. That made a recoverable PREPARED replay terminal.
 - Recovery now distinguishes explicit integrity/input failures (which quarantine) from unexpected execution/service failures (which leave the immutable replay PREPARED and report that it can be retried).
 - Added a FIFO regression for a transient failure during product-state update; it asserts no QUARANTINED event is written. Existing changed-input fingerprint regression still asserts quarantine before projection writes.
-- Source CI is pending for this patch. Runtime fault injection and disposable-workbook recovery remain required.
+- **Source CI passed:** GitHub Actions run `45854606470` (run #237): syntax 50/50; 146/146 tests (FIFO 42, Order Domain 22, Supply UX 17, Catalog/Order UX 14, System Safety 38, Warehouse Dashboard 9, Finance 4). Runtime fault injection and disposable-workbook recovery remain required.
