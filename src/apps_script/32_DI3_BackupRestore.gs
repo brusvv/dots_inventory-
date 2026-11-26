@@ -461,11 +461,26 @@ function di3CreateSpreadsheetBackupInternal_(reason) {
 }
 
 function di3CreateSpreadsheetBackup() {
-  return di3WithLock_(function () {
-    var result = di3CreateSpreadsheetBackupInternal_("MANUAL");
-    try { di3GetSpreadsheet_().toast("Резервная копия: " + result.backup_file_name + " · " + result.verification_level, "Backup · VERIFIED", 10); } catch (ignoreToast) {}
-    return result;
+  var lockWaitStartedAt = Date.now();
+  var lockAcquiredAt = 0;
+  var result = di3WithLock_(function () {
+    lockAcquiredAt = Date.now();
+    return di3CreateSpreadsheetBackupInternal_("MANUAL");
   });
+  var lockReleasedAt = Date.now();
+  result.timing = result.timing || {};
+  result.timing.lock_wait_ms = lockAcquiredAt ? lockAcquiredAt - lockWaitStartedAt : null;
+  result.timing.lock_held_ms = lockAcquiredAt ? lockReleasedAt - lockAcquiredAt : null;
+  // Toast is deliberately outside the critical section so UI latency does not
+  // extend the global mutation lock.
+  try {
+    di3GetSpreadsheet_().toast(
+      "Резервная копия: " + result.backup_file_name + " · " + result.verification_level +
+      " · lock " + result.timing.lock_held_ms + " ms",
+      "Backup · VERIFIED", 10
+    );
+  } catch (ignoreToast) {}
+  return result;
 }
 
 function di3CreateSpreadsheetBackupFromMenu() {
