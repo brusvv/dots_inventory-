@@ -1,7 +1,7 @@
 # Clean baseline schema and versioning strategy
 
 Date: 2026-11-26  
-Status: clean-baseline source path implemented on `feature/clean-final-baseline`; targeted regression cases added. CI and Google Sheets runtime acceptance are pending.
+Status: clean-baseline source path implemented on `feature/clean-final-baseline`; targeted regression cases and GitHub Actions CI pass. Google Sheets runtime acceptance remains pending.
 
 ## Why this is required
 
@@ -86,7 +86,7 @@ Do not freeze the final schema version number until F-02 field semantics and F-0
 - `di3DryRunInstallation()` now inventories every workbook tab. Known system tables, current/legacy managed workspaces and the default blank tab names are allowlisted. Any other tab containing cells or charts is reported as a blocking issue; the preflight does not rename, clear or delete it. This is source-implemented and covered by the System Safety UX Node suite, but still needs a real Google Sheets Dry Run check.
 - Backup hashing priority now explicitly includes `FifoAllocationArchive`, `FifoLotCacheArchive` and `FifoReplayEvents`; a regression test protects that priority. Backup snapshots still enumerate all spreadsheet tabs.
 - The setup flow in `04_DI3_Setup.gs` still runs schema versioning after `di3EnsureCoreFoundationSchemas_(true)` has created/initialized the current schema. `33_DI3_SchemaVersioning.gs` now distinguishes a clean final baseline from the RC8 upgrade path. A clean workbook receives one `CLEAN_FINAL_BASELINE_ADOPTION` record (0 → current target version) after exact final-header validation; the legacy RC8 baseline and ordered v1→v2→v3 chain remain separate. The clean path is recognized on subsequent setup runs even after ordinary business rows have been created, and interrupted STARTED records can resume after revalidation.
-- Current source CI validates 50 Apps Script files and 118/118 Node tests. This is not Google Sheets runtime acceptance.
+- Latest GitHub Actions PR run `45728149345` (run #93, merge commit `a17111e`) passed syntax checks for 50 `.gs` files and 129/129 Node tests: FIFO 41, Order Domain 17, Supply UX 15, Catalog/Order UX 12, System Safety 31, Warehouse Dashboard 9, Finance 4. This validates source-level behavior only, not Google Sheets runtime acceptance.
 
 
 ## Implementation note — clean baseline branch
@@ -96,4 +96,4 @@ Do not freeze the final schema version number until F-02 field semantics and F-0
 - Eligibility is fail-closed: the workbook must be unversioned, have no legacy migration records, contain no business rows before the first baseline record, and have only absent/blank/exact-current system headers. Once the clean baseline record exists, it remains the identity anchor for later setup reruns. An unversioned populated workbook without a recognized legacy migration identity is BLOCKED rather than silently adopted as either clean or legacy.
 - The legacy path is preserved for recognized earlier workbooks; the clean path does not adopt RC8 data or execute RC8 migrations.
 - Added eleven targeted System Safety UX tests for empty workbook eligibility, rejection of unversioned business rows, rejection of legacy/mismatched headers, and recognition after normal business rows exist.
-- At commit `e695bf9`, GitHub Actions passed all source gates: syntax check for 50 `.gs` files and 124/124 Node tests (FIFO 41, Order Domain 17, Supply UX 15, Catalog/Order UX 12, System Safety 26, Warehouse Dashboard 9, Finance 4). Four additional System Safety cases were subsequently added for interrupted-baseline recovery, journal mismatch/duplicates, and missing/out-of-schema system data; their rerun is pending. Real Apps Script Dry Run/setup/interruption acceptance remains pending.
+- The latest PR validation is GitHub Actions run `45728149345` (run #93): syntax check for 50 `.gs` files and 129/129 Node tests (FIFO 41, Order Domain 17, Supply UX 15, Catalog/Order UX 12, System Safety 31, Warehouse Dashboard 9, Finance 4). This run includes the additional clean-baseline recovery, duplicate/mismatched journal, missing-table and out-of-schema checks. Real Apps Script Dry Run/setup/interruption acceptance remains pending.
