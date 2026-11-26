@@ -579,3 +579,8 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - After explicit YES, the full project file set is restored with projects.updateContent and then read back for exact verification. No automatic rollback/retry is attempted on uncertain outcomes.
 - Spreadsheet data, triggers, Script Properties, versioned deployments and deployment pointers are outside the source rollback.
 - No live Apps Script project was accessed or modified.
+
+
+## GitHub Preview release channels (2026-11-26)
+
+Implemented on `feature/github-preview-releases`: Stable tags are restricted to commits reachable from `main`; Preview tags use `-preview.N`, carry an explicit `source-branch:` annotation, and publish as GitHub prereleases. Manifest pins channel, source branch and full commit SHA. Apps Script config selects `stable` (default) or `preview`; manager rejects cross-channel releases. No tag/release was created and no live Apps Script project or spreadsheet was modified. CI/runtime validation pending.
