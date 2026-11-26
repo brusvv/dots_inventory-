@@ -330,29 +330,44 @@ function di3WorkbookHasExistingContent_() {
 /** Internal implementation. Caller may already hold the shared mutation lock. */
 function di3CreateSpreadsheetBackupInternal_(reason) {
   if (typeof DriveApp === "undefined") throw new Error("Backup остановлен: Google Drive недоступен или разрешение не предоставлено.");
+  var startedAtMs = Date.now();
+  var startedAt = new Date(startedAtMs);
   var spreadsheet = di3GetSpreadsheet_();
   if (!spreadsheet || typeof spreadsheet.getId !== "function" || !spreadsheet.getId()) {
     throw new Error("Backup остановлен: не удалось определить текущую Google-таблицу.");
   }
   var timezone = di3GetConfiguredTimeZone_();
-  var now = new Date();
-  var stamp = Utilities.formatDate(now, timezone, "yyyyMMdd_HHmmss");
+  var stamp = Utilities.formatDate(startedAt, timezone, "yyyyMMdd_HHmmss");
   var token = Utilities.getUuid().replace(/-/g, "").slice(0, 10).toUpperCase();
   var config = di3GetBackupConfig_();
   var folder = di3GetBackupFolder_();
   var sourceFile = DriveApp.getFileById(spreadsheet.getId());
-  // Ensure writes queued earlier in this execution are committed before the
-  // native file copy is taken. The caller holds the shared mutation lock.
-  if (typeof SpreadsheetApp.flush === "function") SpreadsheetApp.flush();
+
+  if (typeof SpreadsheetApp.flush !== "function") {
+    throw new Error("Backup остановлен: SpreadsheetApp.flush() недоступен; нельзя подтвердить фиксацию ожидающих записей перед копированием.");
+  }
+  var flushStartedAt = Date.now();
+  SpreadsheetApp.flush();
+  var flushMs = Date.now() - flushStartedAt;
+
+  var snapshotStartedAt = Date.now();
   var sourceSheets = di3GetSpreadsheetBackupSnapshot_(spreadsheet);
+  var snapshotMs = Date.now() - snapshotStartedAt;
+
   var backupName = config.file_prefix + stamp + "_" + token;
+  var copyStartedAt = Date.now();
   var backupFile = sourceFile.makeCopy(backupName, folder);
+  var copyMs = Date.now() - copyStartedAt;
+  var backupCreatedAt = new Date();
   var copiedSpreadsheet;
   try { copiedSpreadsheet = SpreadsheetApp.openById(backupFile.getId()); }
   catch (openError) {
     throw new Error("Резервная копия создана, но её невозможно открыть для проверки. Файл сохранён: " + backupFile.getId() + ". " + (openError.message || String(openError)));
   }
+
+  var verificationStartedAt = Date.now();
   var verification = di3VerifySpreadsheetBackupSnapshot_(copiedSpreadsheet, sourceSheets);
+  var verificationMs = Date.now() - verificationStartedAt;
   if (!verification.passed) {
     try { backupFile.setDescription("DI3_BACKUP_FAILED: " + verification.issues.join("; ")); } catch (ignoreDescription) {}
     throw new Error("Резервная копия не прошла проверку структуры. Файл сохранён для расследования: " + backupFile.getId() + ". " + verification.issues.join("; "));
@@ -373,8 +388,9 @@ function di3CreateSpreadsheetBackupInternal_(reason) {
     source_spreadsheet_id: spreadsheet.getId(),
     source_spreadsheet_name: spreadsheet.getName(),
     source_spreadsheet_url: spreadsheet.getUrl(),
-    created_at_utc: now.toISOString(),
-    created_at_local: Utilities.formatDate(now, timezone, "yyyy-MM-dd HH:mm:ss"),
+    backup_started_at_utc: startedAt.toISOString(),
+    created_at_utc: backupCreatedAt.toISOString(),
+    created_at_local: Utilities.formatDate(backupCreatedAt, timezone, "yyyy-MM-dd HH:mm:ss"),
     time_zone: timezone,
     reason: String(reason || "MANUAL"),
     workbook_metadata: di3GetBackupWorkbookMetadata_(),
@@ -391,12 +407,20 @@ function di3CreateSpreadsheetBackupInternal_(reason) {
       full_hash_max_cells_per_sheet: config.full_hash_max_cells_per_sheet,
       full_hash_max_cells_total: config.full_hash_max_cells_total
     },
+    timing: {
+      flush_ms: flushMs,
+      source_snapshot_ms: snapshotMs,
+      drive_copy_ms: copyMs,
+      verification_ms: verificationMs,
+      elapsed_before_manifest_ms: Date.now() - startedAtMs
+    },
     restore_mode: "CREATE_NEW_SPREADSHEET",
     bound_script_source_included: true,
     bound_script_source_copy_expected: true,
     installable_triggers_require_revalidation: true
   };
 
+  var manifestWriteStartedAt = Date.now();
   // Embed manifest before writing the optional sidecar: the copy remains
   // discoverable if sidecar creation fails.
   backupFile.setDescription(di3SerializeBackupManifest_(manifest));
@@ -404,10 +428,18 @@ function di3CreateSpreadsheetBackupInternal_(reason) {
   try {
     sidecar = folder.createFile(backupName + ".manifest.json", JSON.stringify(manifest, null, 2), "application/json");
     manifest.manifest_file_id = sidecar.getId();
-    backupFile.setDescription(di3SerializeBackupManifest_(manifest));
     if (typeof sidecar.setContent === "function") sidecar.setContent(JSON.stringify(manifest, null, 2));
   } catch (manifestError) {
     warnings.push("Не удалось создать/обновить JSON sidecar; манифест сохранён в описании файла backup: " + (manifestError.message || String(manifestError)));
+  }
+  manifest.finalized_at_utc = new Date().toISOString();
+  manifest.timing.manifest_write_ms = Date.now() - manifestWriteStartedAt;
+  manifest.timing.total_ms = Date.now() - startedAtMs;
+  try {
+    backupFile.setDescription(di3SerializeBackupManifest_(manifest));
+    if (sidecar && typeof sidecar.setContent === "function") sidecar.setContent(JSON.stringify(manifest, null, 2));
+  } catch (finalManifestError) {
+    warnings.push("Не удалось обновить финальные timing-поля манифеста; первоначальный VERIFIED-манифест сохранён: " + (finalManifestError.message || String(finalManifestError)));
   }
 
   PropertiesService.getScriptProperties().setProperty("DI3_LAST_BACKUP_FILE_ID", backupFile.getId());
@@ -422,12 +454,12 @@ function di3CreateSpreadsheetBackupInternal_(reason) {
     sheet_count: sourceSheets.length,
     verification: verification,
     verification_level: verification.verification_level,
+    timing: manifest.timing,
     warnings: warnings,
     reason: manifest.reason
   };
 }
 
-/** Create a full file-copy backup while holding the shared mutation lock. */
 function di3CreateSpreadsheetBackup() {
   return di3WithLock_(function () {
     var result = di3CreateSpreadsheetBackupInternal_("MANUAL");
