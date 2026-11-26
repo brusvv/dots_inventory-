@@ -189,7 +189,9 @@ function di3EnableFullSupplyEditMode() {
     sheet.getRange("L9").setValue("Причина корректировки");
     sheet.getRange("M9").clearContent().setNote("Обязательно укажи причину изменения поставки. Она попадёт в неизменяемый payload операции.");
     sheet.getRange("M2").setValue("ПОЛНОЕ РЕДАКТИРОВАНИЕ · " + supply.supply_number + " · " + di3GetSupplyStatusLabel_(supply.status));
-    sheet.getRange("G4:G7").setNumberFormat("dd.mm.yyyy hh:mm");
+    sheet.getRange("G4").setNumberFormat("dd.mm.yyyy hh:mm");
+    sheet.getRange("G5:G7").setNumberFormat("dd.mm.yyyy");
+    sheet.getRange("H5:H7").setNumberFormat("@");
     di3ApplySupplyStageInputState_(sheet, supply, null);
     sheet.getRange("B3").setNote("Номер поставки защищён. Для смены номера используй отдельное действие пересчёта по G2; прямое редактирование запрещено.");
     return { status: "READY", supply_id: supplyId, supply_number: supply.supply_number, document_status: status, baseline_fingerprint: snapshot.fingerprint, stock_impact_policy: status === DI3_SUPPLY_STATUS.RECEIVED ? "STOCK_IMPACTING_CHANGES_REQUIRE_SUPPLY_CORRECTION" : "NO_RECEIPT_POSTED" };
@@ -227,9 +229,9 @@ function di3ParseSupplyFullEditInput_(sheet) {
   var orderDate = di3ParseSupplyCalendarDate_(dates[0], "Дата заказа в магазине");
   var expectedDate = di3ParseSupplyCalendarDate_(dates[1], "Ожидаемая дата прибытия");
   di3ValidateSupplyPlanningDates_(orderDate, expectedDate);
-  var sentAt = dates[3] === "" || dates[3] == null ? null : di3ParseSupplyEffectiveDate_(dates[3], null);
-  var awaitingAt = dates[4] === "" || dates[4] == null ? null : di3ParseSupplyEffectiveDate_(dates[4], null);
-  var receivedAt = dates[5] === "" || dates[5] == null ? null : di3ParseSupplyEffectiveDate_(dates[5], null);
+  var sentAt = di3ReadSupplyStageDateTime_(sheet, "G5", "Дата отправки", true);
+  var awaitingAt = di3ReadSupplyStageDateTime_(sheet, "G6", "Дата ожидания получения", true);
+  var receivedAt = di3ReadSupplyStageDateTime_(sheet, "G7", "Дата получения", true);
   di3ValidateSupplyFullEditDates_({
     order_date: orderDate, expected_date: expectedDate, sent_at: sentAt,
     awaiting_at: awaitingAt, received_at: receivedAt
