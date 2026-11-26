@@ -239,9 +239,13 @@ test("rollback refuses a backup from a different Apps Script project", () => {
 });
 test("rollback refuses a backup without appsscript manifest", () => {
   const project = { script_id: "script-123", content: { files: [
-    { name: "Code", type: "SERVER_JS", source: "function oldCode() {}\\n" }
+    { name: "Code", type: "SERVER_JS", source: "function oldCode() {}\\n" },
+    { name: "appsscript", type: "JSON", source: '{}' }
   ] } };
   const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')", context);
+  envelope.payload.files = envelope.payload.files.filter(f => !(f.type === "JSON" && f.name === "appsscript"));
+  envelope.payload.file_count = envelope.payload.files.length;
+  envelope.payload_sha256 = crypto.createHash("sha256").update(JSON.stringify(envelope.payload)).digest("hex");
   const currentProject = { script_id: "script-123", content: { files: [
     { name: "Code", type: "SERVER_JS", source: "function currentCode() {}\\n" },
     { name: "appsscript", type: "JSON", source: '{}' }
