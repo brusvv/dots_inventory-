@@ -1117,6 +1117,101 @@ function di3RunStockCoreUnitTests() {
     }
   });
 
+  test("N-02 requeues a linked quarantined operation only after FIFO journal resolution", function () {
+    var originals = {
+      withLock: di3WithLock_, normalize: di3NormalizeText_, latest: di3GetLatestFifoReplayEvent_,
+      readRows: di3ReadRowsByColumnValue_, archive: di3ReadFifoReplayArchiveSnapshots_,
+      allocationFingerprint: di3BuildFifoAllocationSnapshotFingerprint_, fingerprint: di3BuildFifoFingerprint_,
+      append: di3AppendFifoReplayEvent_, updateRun: di3UpdateFifoRunStatus_,
+      findOperation: di3FindRowByFirstColumn_, attempts: di3GetOperationAttemptRows_,
+      registry: di3GetOperationHandlerRegistry_, readPayload: di3ReadVerifiedOperationPayload_,
+      requeue: di3RequeueQuarantinedOperation
+    };
+    var event = ["event-2", "OP:op-1:PRODUCT:p1", 2, "QUARANTINED", "run-1", "op-1",
+      "PRODUCT", '["p1"]', "input-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
+    var run = ["run-1", 1, "FAILED", "TEST", new Date(), "", 1, 0, 1, "integrity failure", "op-1", "OP:op-1", "PRODUCT_SET", '["p1"]', "input-fp"];
+    var operation = { row_number: 7, values: ["op-1", "key", "SUPPLY_RECEIVE", "SUPPLY", "s1", "QUARANTINED"] };
+    var sequence = [];
+    try {
+      di3WithLock_ = function (callback) { return callback(); };
+      di3NormalizeText_ = function (value) { return String(value || "").trim(); };
+      di3GetLatestFifoReplayEvent_ = function () { return { row_number: 3, values: event }; };
+      di3ReadRowsByColumnValue_ = function () { return [{ row_number: 2, values: run }]; };
+      di3ReadFifoReplayArchiveSnapshots_ = function () { return { allocation_rows: [], lot_archive_rows: [] }; };
+      di3BuildFifoAllocationSnapshotFingerprint_ = function () { return "source-a"; };
+      di3BuildFifoFingerprint_ = function () { return "source-l"; };
+      di3FindRowByFirstColumn_ = function (table, id) { equal(table, "Operations"); equal(id, "op-1"); return operation; };
+      di3GetOperationAttemptRows_ = function () { return []; };
+      di3GetOperationHandlerRegistry_ = function () { return { SUPPLY_RECEIVE: function () {} }; };
+      di3ReadVerifiedOperationPayload_ = function () { sequence.push("VERIFY_PAYLOAD"); return {}; };
+      di3AppendFifoReplayEvent_ = function (context, type) { sequence.push("APPEND_" + type); return {}; };
+      di3UpdateFifoRunStatus_ = function (row, status) { sequence.push("RUN_" + status); };
+      di3RequeueQuarantinedOperation = function (id, confirmation, reason) {
+        equal(id, "op-1");
+        equal(confirmation, "RESUME_AFTER_RECONCILIATION");
+        equal(reason, "Проверены все связанные складские таблицы и история заказа.");
+        sequence.push("REQUEUE_OPERATION");
+        return { status: "REQUEUED" };
+      };
+      var result = di3ResolveQuarantinedFifoReplay(
+        "OP:op-1:PRODUCT:p1", "RESOLVE_AFTER_MANUAL_RECONCILIATION",
+        "Проверены все связанные складские таблицы и история заказа."
+      );
+      equal(result.status, "MANUALLY_RESOLVED");
+      equal(result.operation_requeue.status, "REQUEUED");
+      equal(sequence.join("|"), "VERIFY_PAYLOAD|APPEND_MANUALLY_RESOLVED|RUN_MANUALLY_RESOLVED|REQUEUE_OPERATION");
+    } finally {
+      di3WithLock_ = originals.withLock; di3NormalizeText_ = originals.normalize;
+      di3GetLatestFifoReplayEvent_ = originals.latest; di3ReadRowsByColumnValue_ = originals.readRows;
+      di3ReadFifoReplayArchiveSnapshots_ = originals.archive;
+      di3BuildFifoAllocationSnapshotFingerprint_ = originals.allocationFingerprint;
+      di3BuildFifoFingerprint_ = originals.fingerprint; di3AppendFifoReplayEvent_ = originals.append;
+      di3UpdateFifoRunStatus_ = originals.updateRun; di3FindRowByFirstColumn_ = originals.findOperation;
+      di3GetOperationAttemptRows_ = originals.attempts; di3GetOperationHandlerRegistry_ = originals.registry;
+      di3ReadVerifiedOperationPayload_ = originals.readPayload;
+      di3RequeueQuarantinedOperation = originals.requeue;
+    }
+  });
+
+  test("N-02 refuses FIFO quarantine resolution when the archived source fingerprint is damaged", function () {
+    var originals = {
+      withLock: di3WithLock_, normalize: di3NormalizeText_, latest: di3GetLatestFifoReplayEvent_,
+      readRows: di3ReadRowsByColumnValue_, archive: di3ReadFifoReplayArchiveSnapshots_,
+      allocationFingerprint: di3BuildFifoAllocationSnapshotFingerprint_, fingerprint: di3BuildFifoFingerprint_,
+      append: di3AppendFifoReplayEvent_, updateRun: di3UpdateFifoRunStatus_
+    };
+    var event = ["event-2", "OP:op-1:PRODUCT:p1", 2, "QUARANTINED", "run-1", "",
+      "PRODUCT", '["p1"]', "input-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
+    var run = ["run-1", 1, "FAILED", "TEST", new Date(), "", 1, 0, 1, "integrity failure", "", "OP:op-1", "PRODUCT_SET", '["p1"]', "input-fp"];
+    var appended = 0, updated = 0;
+    try {
+      di3WithLock_ = function (callback) { return callback(); };
+      di3NormalizeText_ = function (value) { return String(value || "").trim(); };
+      di3GetLatestFifoReplayEvent_ = function () { return { row_number: 3, values: event }; };
+      di3ReadRowsByColumnValue_ = function () { return [{ row_number: 2, values: run }]; };
+      di3ReadFifoReplayArchiveSnapshots_ = function () { return { allocation_rows: [], lot_archive_rows: [] }; };
+      di3BuildFifoAllocationSnapshotFingerprint_ = function () { return "damaged-source"; };
+      di3BuildFifoFingerprint_ = function () { return "source-l"; };
+      di3AppendFifoReplayEvent_ = function () { appended++; };
+      di3UpdateFifoRunStatus_ = function () { updated++; };
+      var rejected = false;
+      try {
+        di3ResolveQuarantinedFifoReplay("OP:op-1:PRODUCT:p1",
+          "RESOLVE_AFTER_MANUAL_RECONCILIATION", "Проверены все связанные складские таблицы и история заказа.");
+      } catch (error) { rejected = /archive snapshots do not match/.test(error.message); }
+      equal(rejected, true);
+      equal(appended, 0);
+      equal(updated, 0);
+    } finally {
+      di3WithLock_ = originals.withLock; di3NormalizeText_ = originals.normalize;
+      di3GetLatestFifoReplayEvent_ = originals.latest; di3ReadRowsByColumnValue_ = originals.readRows;
+      di3ReadFifoReplayArchiveSnapshots_ = originals.archive;
+      di3BuildFifoAllocationSnapshotFingerprint_ = originals.allocationFingerprint;
+      di3BuildFifoFingerprint_ = originals.fingerprint; di3AppendFifoReplayEvent_ = originals.append;
+      di3UpdateFifoRunStatus_ = originals.updateRun;
+    }
+  });
+
   var report = { passed: passed, failed: failures.length, failures: failures };
   if (failures.length) throw new Error("Stock Core tests failed: " + JSON.stringify(failures));
   return report;
