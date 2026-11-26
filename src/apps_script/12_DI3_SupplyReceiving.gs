@@ -8,9 +8,14 @@ var DI3_SUPPLY_REGISTER_SHEET = "Реестр поставок v3";
 var DI3_SUPPLY_REGISTER_HEADERS = [
   "Запись создана в системе", "Номер поставки", "Продавец", "Оформлена",
   "Отправлена", "Ожидает получения", "Получена", "Ожидаемая дата прибытия",
-  "Статус", "Итого, ₽", "Комментарий", "supply_id", "Дата следующего этапа (необязательно)"
+  "Статус", "Итого, ₽", "Комментарий", "supply_id", "Дата следующего этапа", "Время следующего этапа (HH:mm)"
 ];
 // The immediately previous released layout: dates were grouped before the system timestamp.
+var DI3_SUPPLY_REGISTER_PREVIOUS_CURRENT_HEADERS = [
+  "Запись создана в системе", "Номер поставки", "Продавец", "Оформлена",
+  "Отправлена", "Ожидает получения", "Получена", "Ожидаемая дата прибытия",
+  "Статус", "Итого, ₽", "Комментарий", "supply_id", "Дата следующего этапа (необязательно)"
+];
 var DI3_SUPPLY_REGISTER_PREVIOUS_ORDER_HEADERS = [
   "Номер поставки", "Продавец", "Статус", "Дата создания заказа в магазине", "Ожидаемая дата прибытия",
   "Запись создана в системе", "Отправлена", "Прибыла, ожидает получения", "Получена", "Итого, ₽",
@@ -721,32 +726,32 @@ function di3CancelSelectedSupply() {
 
 
 /** Capture editable next-stage timestamps before the generated register header is upgraded. */
+/** Capture editable next-stage date/time inputs before the register header is upgraded. */
 function di3GetSupplyRegisterEffectiveDates_(sheet) {
   if (!sheet || sheet.getLastRow() < 4) return {};
   var width = Math.min(DI3_SUPPLY_REGISTER_HEADERS.length, sheet.getMaxColumns());
   var headers = sheet.getRange(3, 1, 1, width).getDisplayValues()[0].map(di3NormalizeHeader_);
-  var headerSets13 = [
-    DI3_SUPPLY_REGISTER_HEADERS,
-    DI3_SUPPLY_REGISTER_PREVIOUS_ORDER_HEADERS,
-    DI3_SUPPLY_REGISTER_COMPAT_HEADERS,
-    DI3_SUPPLY_REGISTER_PREVIOUS_HEADERS
-  ];
-  var modern = headerSets13.some(function (known) {
-    return headers.length >= known.length && headers.slice(0, known.length).join("|") === known.join("|");
+  var known13 = [DI3_SUPPLY_REGISTER_PREVIOUS_CURRENT_HEADERS,
+    DI3_SUPPLY_REGISTER_PREVIOUS_ORDER_HEADERS, DI3_SUPPLY_REGISTER_COMPAT_HEADERS,
+    DI3_SUPPLY_REGISTER_PREVIOUS_HEADERS];
+  var modern13 = known13.some(function (known) {
+    return headers.length >= 13 && headers.slice(0, 13).join("|") === known.join("|");
   });
+  var current14 = headers.length >= 14 && headers.slice(0, 14).join("|") === DI3_SUPPLY_REGISTER_HEADERS.join("|");
   var legacy = headers.length >= DI3_SUPPLY_REGISTER_LEGACY_HEADERS.length &&
     headers.slice(0, DI3_SUPPLY_REGISTER_LEGACY_HEADERS.length).join("|") === DI3_SUPPLY_REGISTER_LEGACY_HEADERS.join("|");
-  if (!modern && !legacy) return {};
-  var oldWidth = modern ? DI3_SUPPLY_REGISTER_HEADERS.length : DI3_SUPPLY_REGISTER_LEGACY_HEADERS.length;
+  if (!modern13 && !current14 && !legacy) return {};
+  var oldWidth = current14 ? 14 : (modern13 ? 13 : DI3_SUPPLY_REGISTER_LEGACY_HEADERS.length);
   var rows = sheet.getRange(4, 1, sheet.getLastRow() - 3, oldWidth).getValues();
-  // In every 13-column version L/M are the stable hidden ID and editable stage timestamp.
-  var idIndex = modern ? 11 : 9;
-  var dateIndex = modern ? 12 : 10;
+  var idIndex = modern13 || current14 ? 11 : 9;
+  var dateIndex = modern13 || current14 ? 12 : 10;
   var result = {};
   rows.forEach(function (row) {
     var supplyId = row[idIndex];
-    var effectiveAt = row[dateIndex];
-    if (supplyId) result[String(supplyId)] = effectiveAt || "";
+    if (!supplyId) return;
+    result[String(supplyId)] = current14
+      ? { date: row[12] || "", time: String(row[13] || "") }
+      : di3SplitRegisterEffectiveInput_(row[dateIndex] || "");
   });
   return result;
 }
@@ -764,72 +769,69 @@ function di3SetupSupplyRegisterSheet() {
   di3EnsureSheetCapacity_(sheet, Math.max(3, sheet.getLastRow()), DI3_SUPPLY_REGISTER_HEADERS.length);
   if (!created && sheet.getLastRow() > 0) {
     var current = sheet.getRange(3, 1, 1, DI3_SUPPLY_REGISTER_HEADERS.length).getDisplayValues()[0].map(di3NormalizeHeader_);
+    var previousCurrent = sheet.getRange(3, 1, 1, 13).getDisplayValues()[0].map(di3NormalizeHeader_);
     var previousOrder = sheet.getRange(3, 1, 1, DI3_SUPPLY_REGISTER_PREVIOUS_ORDER_HEADERS.length).getDisplayValues()[0].map(di3NormalizeHeader_);
     var legacy = sheet.getRange(3, 1, 1, DI3_SUPPLY_REGISTER_LEGACY_HEADERS.length).getDisplayValues()[0].map(di3NormalizeHeader_);
     var previous = sheet.getRange(3, 1, 1, DI3_SUPPLY_REGISTER_PREVIOUS_HEADERS.length).getDisplayValues()[0].map(di3NormalizeHeader_);
     var compat = sheet.getRange(3, 1, 1, DI3_SUPPLY_REGISTER_COMPAT_HEADERS.length).getDisplayValues()[0].map(di3NormalizeHeader_);
     var isCurrent = current.join("|") === DI3_SUPPLY_REGISTER_HEADERS.join("|");
+    var isPreviousCurrent = previousCurrent.join("|") === DI3_SUPPLY_REGISTER_PREVIOUS_CURRENT_HEADERS.join("|");
     var isPreviousOrder = previousOrder.join("|") === DI3_SUPPLY_REGISTER_PREVIOUS_ORDER_HEADERS.join("|");
     var isCompat = compat.join("|") === DI3_SUPPLY_REGISTER_COMPAT_HEADERS.join("|");
     var isPrevious = previous.join("|") === DI3_SUPPLY_REGISTER_PREVIOUS_HEADERS.join("|");
     var isLegacy = legacy.join("|") === DI3_SUPPLY_REGISTER_LEGACY_HEADERS.join("|");
-    if (!isCurrent && !isPreviousOrder && !isCompat && !isPrevious && !isLegacy) {
+    if (!isCurrent && !isPreviousCurrent && !isPreviousOrder && !isCompat && !isPrevious && !isLegacy) {
       throw new Error("Лист «Реестр поставок v3» имеет неизвестную структуру. Автоматическая перезапись остановлена.");
     }
+    if (di3PreflightHasBodyValues_(sheet, 14, 1) && !isCurrent) {
+      throw new Error("Реестр поставок: колонка N содержит данные без заголовка. Добавление времени следующего этапа остановлено.");
+    }
   }
-  // Capture editable stage-date values before the old header row is replaced.
-  var preservedEffectiveDatesById = di3GetSupplyRegisterEffectiveDates_(sheet);
-
-  // Rebuild only the generated header region. Existing rows are reconstructed from V3_Supplies;
-  // the user-entered next-stage date is preserved by supply_id.
-  sheet.getRange("A1:M2").breakApart();
-  sheet.getRange("A1:M1").merge();
+  var preservedDateTimesById = di3GetSupplyRegisterEffectiveDates_(sheet);
+  sheet.getRange("A1:N2").breakApart();
+  sheet.getRange("A1:N1").merge();
   sheet.getRange("A1").setValue("РЕЕСТР ПОСТАВОК");
-  sheet.getRange("A2:M2").merge();
-  sheet.getRange("A2").setValue("A — автоматическая дата записи в Dots Inventory. Цепочка дат: Оформлена (дата заказа в магазине) → Отправлена → Ожидает получения → Получена. Сортировка — по дате оформления (сначала новые); ожидаемая дата прибытия показана отдельно. Фактические даты вводятся в доступное поле G5/G6/G7 листа «Поставка v3» и применяются через меню «Поставки». Колонка M сохранена скрытой только для совместимости со старыми версиями.");
+  sheet.getRange("A2:N2").merge();
+  sheet.getRange("A2").setValue("A — автоматическая дата записи в Dots Inventory. Цепочка дат: Оформлена → Отправлена → Ожидает получения → Получена. Сортировка — по дате оформления. Для следующего этапа заполни M (дату) и N (время HH:mm); обе ячейки обязательны.");
   sheet.getRange(3, 1, 1, DI3_SUPPLY_REGISTER_HEADERS.length).setValues([DI3_SUPPLY_REGISTER_HEADERS]);
-  sheet.getRange("A1:M1").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold").setFontSize(14);
-  sheet.getRange("A2:M2").setBackground("#EAF0F7").setFontColor("#40516A");
-  sheet.getRange("A3:M3").setBackground("#253B59").setFontColor("#FFFFFF").setFontWeight("bold");
+  sheet.getRange("A1:N1").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold").setFontSize(14);
+  sheet.getRange("A2:N2").setBackground("#EAF0F7").setFontColor("#40516A");
+  sheet.getRange("A3:N3").setBackground("#253B59").setFontColor("#FFFFFF").setFontWeight("bold");
   di3SetFrozenRowsSafely_(sheet, 3);
-  [190, 150, 220, 145, 160, 200, 145, 160, 150, 130, 280, 90, 220].forEach(function (width, index) {
+  [190, 150, 220, 145, 160, 200, 145, 160, 150, 130, 280, 90, 145, 120].forEach(function (width, index) {
     sheet.setColumnWidth(index + 1, width);
   });
   sheet.hideColumns(12);
-  sheet.hideColumns(13); // Legacy manual effective-date column is no longer used by the form workflow.
+  sheet.showColumns(13, 2);
   di3CompactSheet_(sheet, Math.max(3, sheet.getLastRow()), DI3_SUPPLY_REGISTER_HEADERS.length);
   sheet.setHiddenGridlines(true);
-  di3RefreshSupplyRegister(preservedEffectiveDatesById);
+  di3RefreshSupplyRegister(preservedDateTimesById);
   return { status: "READY", sheet: DI3_SUPPLY_REGISTER_SHEET, columns: DI3_SUPPLY_REGISTER_HEADERS.length, upgraded: !created };
 }
 
-function di3RefreshSupplyRegister(preservedEffectiveDatesById) {
+function di3RefreshSupplyRegister(preservedDateTimesById) {
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_REGISTER_SHEET);
   if (!sheet) return { refreshed: false, reason: "SHEET_MISSING" };
-
-  // When called from setup, the values were captured before header replacement. A regular refresh
-  // reads the current register layout and preserves the optional timestamp by stable supply_id.
-  var effectiveDatesById = preservedEffectiveDatesById && typeof preservedEffectiveDatesById === "object"
-    ? preservedEffectiveDatesById : di3GetSupplyRegisterEffectiveDates_(sheet);
-
+  var dateTimesById = preservedDateTimesById && typeof preservedDateTimesById === "object"
+    ? preservedDateTimesById : di3GetSupplyRegisterEffectiveDates_(sheet);
   var supplies = di3ReadTableValues_("V3_Supplies");
   var headers = DI3_TABLE_SCHEMAS.V3_Supplies;
   var orderDateIndex = headers.indexOf("supplier_order_date");
   var expectedDateIndex = headers.indexOf("expected_received_date");
   var rows = supplies.map(function (row) {
     var supplyId = String(row[0] || "");
+    var input = dateTimesById[supplyId] || { date: "", time: "" };
     return [
       row[4], row[1], row[2],
       orderDateIndex >= 0 ? row[orderDateIndex] || "" : "",
       row[5], row[6], row[7],
       expectedDateIndex >= 0 ? row[expectedDateIndex] || "" : "",
       di3GetSupplyStatusLabel_(row[3]), row[13], row[14], supplyId,
-      effectiveDatesById[supplyId] || ""
+      input.date || "", input.time || ""
     ];
   }).sort(function (a, b) {
     return di3CompareSupplyOrderChronology_(a[3], a[0], a[1], b[3], b[0], b[1]);
   });
-
   var oldCount = Math.max(0, sheet.getLastRow() - 3);
   di3EnsureSheetCapacity_(sheet, Math.max(3, 3 + rows.length), DI3_SUPPLY_REGISTER_HEADERS.length);
   if (oldCount) sheet.getRange(4, 1, oldCount, DI3_SUPPLY_REGISTER_HEADERS.length).clearContent();
@@ -840,7 +842,8 @@ function di3RefreshSupplyRegister(preservedEffectiveDatesById) {
     sheet.getRange(4, 5, rows.length, 3).setNumberFormat("dd.mm.yyyy hh:mm");
     sheet.getRange(4, 8, rows.length, 1).setNumberFormat("dd.mm.yyyy");
     sheet.getRange(4, 10, rows.length, 1).setNumberFormat("#,##0.00 ₽");
-    sheet.getRange(4, 13, rows.length, 1).setNumberFormat("dd.mm.yyyy hh:mm");
+    sheet.getRange(4, 13, rows.length, 1).setNumberFormat("dd.mm.yyyy");
+    sheet.getRange(4, 14, rows.length, 1).setNumberFormat("@");
     sheet.getBandings().forEach(function (banding) { banding.remove(); });
     di3ApplyLightBandingWithDarkText_(sheet.getRange(4, 1, rows.length, DI3_SUPPLY_REGISTER_HEADERS.length));
     var filter = sheet.getFilter();
@@ -853,7 +856,7 @@ function di3RefreshSupplyRegister(preservedEffectiveDatesById) {
   }
   di3SetFrozenRowsSafely_(sheet, 3);
   sheet.hideColumns(12);
-  sheet.hideColumns(13); // Keep legacy values intact but remove the obsolete manual-input column from the UI.
+  sheet.showColumns(13, 2);
   di3CompactSheet_(sheet, Math.max(3, 3 + rows.length), DI3_SUPPLY_REGISTER_HEADERS.length);
   return { refreshed: true, supplies: rows.length, max_rows: sheet.getMaxRows(), max_columns: sheet.getMaxColumns() };
 }
