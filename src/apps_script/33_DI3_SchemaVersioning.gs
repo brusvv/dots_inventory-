@@ -41,6 +41,10 @@ function di3ApplyOrderBusinessDateMigration_() {
     di3ToDate_(row[0], "created_at заказа в строке " + (index + 2));
     if (businessDates[index][0] !== "" && businessDates[index][0] != null) {
       di3FormatBusinessDate_(businessDates[index][0]);
+      if (businessDates[index][0] instanceof Date &&
+          Utilities.formatDate(businessDates[index][0], di3GetConfiguredTimeZone_(), "HH:mm:ss") !== "00:00:00") {
+        throw new Error("F-02 migration остановлена: business_date в строке " + (index + 2) + " содержит время, а поле должно быть date-only.");
+      }
     }
   });
   if (!actual[29]) sheet.getRange(1, 30).setValue(targetHeader).setFontWeight("bold");
