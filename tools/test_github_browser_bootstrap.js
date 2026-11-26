@@ -57,7 +57,8 @@ test("backup is written and read back before project update", () => {
   const updateAt = source.indexOf("di3BootstrapUpdateProject_(project.script_id, targetFiles)");
   assert.ok(backupAt >= 0 && confirmAt > backupAt && updateAt > confirmAt);
   assert.match(source, /dots-inventory-appsscript-source-backup\/v1/);
-  assert.match(source, /DI3_APPS_SCRIPT_SOURCE_BACKUP_V1:/);\n  assert.match(source, /BACKUP_PREFIX:\\s*"DotsInventory_AppsScript_Source_"/);
+  assert.match(source, /DI3_APPS_SCRIPT_SOURCE_BACKUP_V1:/);
+  assert.match(source, /BACKUP_PREFIX:\s*"DotsInventory_AppsScript_Source_"/);
   assert.match(source, /saved\.payload_sha256 !== di3BootstrapSha256_\(JSON\.stringify\(saved\.payload\)\)/);
 });
 
