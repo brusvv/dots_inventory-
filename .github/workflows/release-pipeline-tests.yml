@@ -30,6 +30,7 @@ on:
       - feature/github-runtime-acceptance
       - feature/github-deployment-manager
       - feature/github-release-pipeline
+      - feature/github-preview-releases
 
 permissions:
   contents: read
