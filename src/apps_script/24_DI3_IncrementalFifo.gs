@@ -422,7 +422,8 @@ function di3AppendFifoReplayEvent_(context, eventType, fingerprints, details) {
       throw di3FifoReplayIntegrityError_("FIFO replay " + context.replay_id + " уже существует с другими fingerprint-значениями.");
     }
     if (String(latestRow[3]) === eventType || String(latestRow[3]) === "COMMITTED") return latest;
-    if (String(latestRow[3]) !== "PREPARED") {
+    var manualQuarantineResolution = String(latestRow[3]) === "QUARANTINED" && eventType === "MANUALLY_RESOLVED";
+    if (String(latestRow[3]) !== "PREPARED" && !manualQuarantineResolution) {
       throw di3FifoReplayIntegrityError_("FIFO replay " + context.replay_id + " находится в терминальном состоянии " + latestRow[3] + ".");
     }
   }
@@ -437,6 +438,140 @@ function di3AppendFifoReplayEvent_(context, eventType, fingerprints, details) {
   ];
   di3AppendTableRows_("FifoReplayEvents", [row]);
   return { row_number: di3GetSheetOrThrow_("FifoReplayEvents").getLastRow(), values: row };
+}
+
+/**
+ * Release a quarantined FIFO replay only after an owner has reconciled the
+ * ledger, movement details, lots, active allocations, product states,
+ * sequence cursor and affected order snapshots. This appends an audit event;
+ * it never edits business projections. A linked quarantined operation is
+ * requeued into a new retry epoch after the FIFO run is released.
+ */
+function di3ResolveQuarantinedFifoReplay(replayId, confirmation, reason) {
+  var id = String(replayId || "").trim();
+  var why = di3NormalizeText_(reason);
+  if (!id) throw new Error("Укажи replay_id FIFO.");
+  if (String(confirmation || "") !== "RESOLVE_AFTER_MANUAL_RECONCILIATION") {
+    throw new Error("Для разрешения FIFO quarantine требуется точное подтверждение RESOLVE_AFTER_MANUAL_RECONCILIATION.");
+  }
+  if (!why || why.length < 30) {
+    throw new Error("Опиши ручную сверку не менее чем в 30 символах.");
+  }
+
+  var result = di3WithLock_(function () {
+    var latest = di3GetLatestFifoReplayEvent_(id);
+    if (!latest || String(latest.values[3]) !== "QUARANTINED") {
+      throw new Error("Разрешить можно только replay с последним событием QUARANTINED.");
+    }
+    var event = latest.values;
+    var runId = String(event[4] || "");
+    var runMatches = di3ReadRowsByColumnValue_("FifoAllocationRuns", 0, runId);
+    if (runMatches.length !== 1) throw new Error("Не удалось однозначно найти исходный FIFO run.");
+    var runRecord = runMatches[0];
+    if (String(runRecord.values[2]) !== "FAILED") {
+      throw new Error("Исходный FIFO run должен иметь статус FAILED; фактический статус: " + runRecord.values[2]);
+    }
+
+    // Verify that the immutable source archive itself is intact before
+    // accepting an operator's reconciliation attestation.
+    var archive = di3ReadFifoReplayArchiveSnapshots_(id);
+    var sourceAllocationFingerprint = di3BuildFifoAllocationSnapshotFingerprint_(archive.allocation_rows);
+    var sourceLotSnapshot = archive.lot_archive_rows.map(function (row) {
+      return [String(row[2]), String(row[3]), row[4]];
+    });
+    sourceLotSnapshot.sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])); });
+    var sourceLotFingerprint = di3BuildFifoFingerprint_(sourceLotSnapshot);
+    if (sourceAllocationFingerprint !== String(event[9]) || sourceLotFingerprint !== String(event[11])) {
+      throw di3FifoReplayIntegrityError_("FIFO archive snapshots do not match the quarantined replay fingerprints.");
+    }
+
+    var operationId = String(event[5] || "");
+    var operationStatus = "";
+    var operationRecord = null;
+    if (operationId) {
+      operationRecord = di3FindRowByFirstColumn_("Operations", operationId);
+      if (!operationRecord) throw new Error("Связанная операция не найдена: " + operationId);
+      operationStatus = String(operationRecord.values[5] || "");
+      var attempts = di3GetOperationAttemptRows_(operationId);
+      if (attempts.some(function (item) {
+        return !item.values[7] || String(item.values[8]) === "STARTED";
+      })) {
+        throw new Error("Нельзя разрешить FIFO quarantine: у связанной операции есть незавершённая попытка.");
+      }
+      if (operationStatus === "QUARANTINED") {
+        var registry = di3GetOperationHandlerRegistry_();
+        if (typeof registry[String(operationRecord.values[2] || "")] !== "function") {
+          throw new Error("Для связанной операции нет зарегистрированного обработчика восстановления.");
+        }
+        di3ReadVerifiedOperationPayload_(operationRecord);
+      } else if (["COMMITTED", "RETRYABLE", "PREPARED", "REJECTED"].indexOf(operationStatus) < 0) {
+        throw new Error("Неизвестный статус связанной операции: " + operationStatus);
+      }
+    }
+
+    var actor = "";
+    try { actor = di3GetActorEmail_(); } catch (ignoreActor) {}
+    var fingerprints = {
+      source_allocations: String(event[9]), target_allocations: String(event[10]),
+      source_lots: String(event[11]), target_lots: String(event[12])
+    };
+    var context = {
+      replay_id: id, fifo_run_id: runId, operation_id: operationId,
+      scope_type: String(event[6]), scope_json: String(event[7]),
+      input_fingerprint: String(event[8])
+    };
+    var audit = {
+      resolution: "OWNER_ATTESTED_MANUAL_RECONCILIATION",
+      reason: why,
+      actor: actor || "UNAVAILABLE",
+      linked_operation_status_before: operationStatus,
+      note: "No stock/FIFO projection rows were changed by this resolution."
+    };
+    di3AppendFifoReplayEvent_(context, "MANUALLY_RESOLVED", fingerprints, audit);
+    di3UpdateFifoRunStatus_(runRecord.row_number, "MANUALLY_RESOLVED", new Date(),
+      "Manually resolved after owner reconciliation: " + why, null);
+    return {
+      status: "MANUALLY_RESOLVED",
+      replay_id: id,
+      fifo_run_id: runId,
+      operation_id: operationId,
+      operation_status: operationStatus,
+      actor: actor || "UNAVAILABLE"
+    };
+  });
+
+  // Start a new bounded retry epoch only after the FIFO quarantine event and
+  // run have been durably resolved. The retry itself remains an explicit
+  // operation-recovery action; no stock mutation is executed here.
+  if (result.operation_status === "QUARANTINED") {
+    try {
+      result.operation_requeue = di3RequeueQuarantinedOperation(
+        result.operation_id, "RESUME_AFTER_RECONCILIATION", why
+      );
+    } catch (requeueError) {
+      result.operation_requeue_error = requeueError && requeueError.message
+        ? requeueError.message : String(requeueError);
+    }
+  }
+  return result;
+}
+
+function di3PromptResolveQuarantinedFifoReplay() {
+  var ui = SpreadsheetApp.getUi();
+  var idPrompt = ui.prompt("Разрешение FIFO quarantine",
+    "Введи replay_id после сверки StockLedger, StockMovementDetails, StockLots, StockAllocations, FifoProductState, курсора и связанных OrderCostSnapshots.",
+    ui.ButtonSet.OK_CANCEL);
+  if (idPrompt.getSelectedButton() !== ui.Button.OK) return { status: "CANCELLED" };
+  var reasonPrompt = ui.prompt("Результат ручной сверки",
+    "Опиши, что именно сверено и как обеспечена согласованность данных (не менее 30 символов).",
+    ui.ButtonSet.OK_CANCEL);
+  if (reasonPrompt.getSelectedButton() !== ui.Button.OK) return { status: "CANCELLED" };
+  var answer = ui.alert("Подтверждение разрешения FIFO quarantine",
+    "Это не исправляет и не перестраивает FIFO автоматически. Команда запишет неизменяемое событие MANUALLY_RESOLVED после твоей ручной сверки. Связанная QUARANTINED-операция будет переведена в RETRYABLE, но не исполнится автоматически. Продолжить?",
+    ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return { status: "CANCELLED_BY_USER" };
+  return di3ResolveQuarantinedFifoReplay(idPrompt.getResponseText(),
+    "RESOLVE_AFTER_MANUAL_RECONCILIATION", reasonPrompt.getResponseText());
 }
 
 function di3ReadFifoReplayArchiveSnapshots_(replayId) {
@@ -1492,8 +1627,8 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
       if (index > 0 && (terminal || (type !== "COMMITTED" && type !== "QUARANTINED"))) {
         errors.push("FifoReplayEvents: недопустимый переход состояния для replay " + replayId + ".");
       }
-      if (type === "COMMITTED" || type === "QUARANTINED") terminal = true;
-      if (["PREPARED", "COMMITTED", "QUARANTINED"].indexOf(type) < 0) {
+      if (["COMMITTED", "QUARANTINED", "MANUALLY_RESOLVED"].indexOf(type) >= 0) terminal = true;
+      if (["PREPARED", "COMMITTED", "QUARANTINED", "MANUALLY_RESOLVED"].indexOf(type) < 0) {
         errors.push("FifoReplayEvents: неизвестный event_type " + type + " для replay " + replayId + ".");
       }
     });
@@ -1509,6 +1644,7 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
     }
     if (String(latest[3]) === "PREPARED") warnings.push("FIFO replay " + replayId + " остаётся PREPARED и требует recovery.");
     if (String(latest[3]) === "QUARANTINED") warnings.push("FIFO replay " + replayId + " находится в QUARANTINED и требует ручной сверки.");
+    if (String(latest[3]) === "MANUALLY_RESOLVED") warnings.push("FIFO replay " + replayId + " разрешён владельцем после ручной сверки; автоматическая корректировка проекции не выполнялась.");
     var run = runsById[String(latest[4])];
     if (run && String(run[2]) === "COMMITTED" && String(latest[3]) !== "COMMITTED") {
       errors.push("FifoAllocationRuns " + latest[4] + " помечен COMMITTED, но replay " + replayId + " не COMMITTED.");
@@ -1537,12 +1673,13 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
       }
     }
   });
-  var pendingReplays = 0, committedReplays = 0, quarantinedReplays = 0;
+  var pendingReplays = 0, committedReplays = 0, quarantinedReplays = 0, manuallyResolvedReplays = 0;
   Object.keys(latestByReplay).forEach(function (replayId) {
     var status = String(latestByReplay[replayId][3]);
     if (status === "PREPARED") pendingReplays++;
     else if (status === "COMMITTED") committedReplays++;
     else if (status === "QUARANTINED") quarantinedReplays++;
+    else if (status === "MANUALLY_RESOLVED") manuallyResolvedReplays++;
   });
   return {
     ok: errors.length === 0,
@@ -1556,7 +1693,8 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
       replay_events: (eventRows || []).length,
       pending_replays: pendingReplays,
       committed_replays: committedReplays,
-      quarantined_replays: quarantinedReplays
+      quarantined_replays: quarantinedReplays,
+      manually_resolved_replays: manuallyResolvedReplays
     }
   };
 }
