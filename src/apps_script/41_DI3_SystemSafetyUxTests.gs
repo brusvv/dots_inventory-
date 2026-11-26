@@ -573,6 +573,43 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("completed clean baseline rejects a system table whose entire header row was cleared", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      function headerSheet(name, blankHeader) {
+        var expected = DI3_TABLE_SCHEMAS[name];
+        var values = blankHeader ? expected.map(function () { return ""; }) : expected.slice();
+        return {
+          getLastRow: function () { return name === "Products" ? 2 : 1; },
+          getLastColumn: function () { return expected.length; },
+          getMaxColumns: function () { return expected.length; },
+          getRange: function () { return { getDisplayValues: function () { return [values]; } }; }
+        };
+      }
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) {
+          return DI3_TABLE_SCHEMAS[name] ? headerSheet(name, name === "Products") : null;
+        } };
+      };
+      di3GetSchemaVersion_ = function () { return DI3_SCHEMA_VERSION; };
+      di3GetSchemaMigrationRows_ = function () {
+        return [{ migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY, from_schema_version: 0,
+          to_schema_version: DI3_SCHEMA_VERSION, status: "COMPLETED", row_number: 2 }];
+      };
+      var state = di3GetCleanBaselineState_();
+      equal(state.eligible, false);
+      equal(state.issues.some(function (issue) {
+        return issue.indexOf("Products") >= 0 && issue.indexOf("заголовков") >= 0;
+      }), true);
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
   test("clean baseline adoption writes one final journal record and reruns idempotently", function () {
     var originals = {
       report: di3GetSchemaVersioningReport_,
