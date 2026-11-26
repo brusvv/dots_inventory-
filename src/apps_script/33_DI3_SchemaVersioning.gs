@@ -252,12 +252,14 @@ function di3EnsureSchemaVersioning_(backup) {
   if (cleanState.eligible) {
     var record = cleanState.record;
     var changed = false;
+    var createdCleanBaselineRecord = false;
     if (!record) {
       di3CreateSchemaMigrationRecord_({
         key: DI3_CLEAN_BASELINE_MIGRATION_KEY, from: 0, to: DI3_SCHEMA_VERSION,
         details: "Adopt the fully validated final schema directly; no legacy migration chain was executed."
       }, null);
       changed = true;
+      createdCleanBaselineRecord = true;
     }
     var currentCleanVersion = di3GetSchemaVersion_();
     if (currentCleanVersion === 0) {
@@ -272,7 +274,8 @@ function di3EnsureSchemaVersioning_(backup) {
       di3SetSchemaMigrationStatus_(latestRecord.row_number, "COMPLETED", "");
       changed = true;
     }
-    return { status: changed ? "INITIALIZED_CLEAN_BASELINE" : "CURRENT",
+    return { status: createdCleanBaselineRecord ? "INITIALIZED_CLEAN_BASELINE" :
+        (changed ? "RESUMED_CLEAN_BASELINE" : "CURRENT"),
       installation_path: "CLEAN_FINAL_BASELINE", schema_version: DI3_SCHEMA_VERSION,
       migrations_count: di3GetSchemaMigrationRows_().length, changed: changed };
   }
