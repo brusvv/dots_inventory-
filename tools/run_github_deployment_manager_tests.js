@@ -16,8 +16,10 @@ const context = vm.createContext({
   },
   DI3_APP_CONFIG: { GITHUB_RELEASE: { REPOSITORY: "brusvv/dots_inventory-" } }
 });
-const source = fs.readFileSync(path.join(root, "src/apps_script/43_DI3_GitHubDeploymentManager.gs"), "utf8");
-vm.runInContext(source, context, { filename: "43_DI3_GitHubDeploymentManager.gs", timeout: 5000 });
+for (const file of ["43_DI3_GitHubDeploymentManager.gs", "44_DI3_GitHubInstallPreview.gs"]) {
+  const source = fs.readFileSync(path.join(root, "src/apps_script", file), "utf8");
+  vm.runInContext(source, context, { filename: file, timeout: 5000 });
+}
 let passed = 0;
 function test(name, fn) { fn(); passed++; console.log("PASS " + name); }
 function validManifest() {
