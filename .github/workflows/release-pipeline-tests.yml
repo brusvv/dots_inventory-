@@ -1,0 +1,42 @@
+name: Release pipeline checks
+
+on:
+  push:
+    branches:
+      - feature/github-release-pipeline
+    paths:
+      - "src/apps_script/**"
+      - "tools/build_release_manifest.js"
+      - "tools/test_release_manifest.js"
+      - ".github/workflows/release-pipeline-tests.yml"
+  pull_request:
+    branches:
+      - feature/clean-final-baseline
+
+permissions:
+  contents: read
+
+jobs:
+  release-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Validate manifest builder syntax
+        run: node --check tools/build_release_manifest.js && node --check tools/test_release_manifest.js
+      - name: Test release manifest contract
+        run: node tools/test_release_manifest.js
+      - name: Validate all Apps Script modules
+        run: bash tools/check_syntax.sh
+      - name: Existing source regression suites
+        run: |
+          node tools/run_fifo_replay_tests.js
+          node tools/run_order_domain_tests.js
+          node tools/run_supply_workspace_ux_tests.js
+          node tools/run_catalog_order_ux_tests.js
+          node tools/run_system_safety_ux_tests.js
+          node tools/run_warehouse_dashboard_tests.js
+          node tools/run_finance_schema_tests.js
