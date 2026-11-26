@@ -422,3 +422,16 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Added System Safety regressions for flush → snapshot → copy → verify ordering, timing fields, and lock metrics/toast placement.
 - **Source CI:** run #221 ([45852754294](https://github.com/brusvv/dots_inventory-/actions/runs/45852754294)) passed syntax for 50 `.gs` files and 144/144 tests: FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 37, Warehouse Dashboard 9, Finance Schema 4.
 - **Runtime acceptance pending:** run a verified backup on a restored disposable workbook, inspect manifest timestamps and phase timings, compare source/copy snapshots, and capture lock wait/hold duration. Setup/schema-migration backups use the same phase instrumentation but are still subject to the outer setup lock. Do not change backup retention or restore behavior as part of this task.
+
+
+## F-14 — two-execution ScriptLock probe — 26.11.2026
+
+**Probe hardened in source; real concurrency test pending.**
+
+- Updated `runtime/probes/DI3_C06_LOCK_CONTENTION_PROBE.gs` to require a shared `probeId` and explicit `TEST_COPY_ONLY` confirmation.
+- Session A acquires the native ScriptLock, writes a temporary marker to ScriptProperties, holds the lock, then marks release and removes the marker. No business tables are read or written.
+- Session B enters through the production `di3WithLock_()` helper. Outcomes distinguish `CONTENDED` (20-second lock timeout), `ACQUIRED_AFTER_RELEASE` (serialized successfully), and `OVERLAP_DETECTED` (hard failure).
+- Marker cleanup is token-checked and stale markers older than 120 seconds may be cleared on the next probe.
+- Added a System Safety regression proving the probe uses ScriptLock + ScriptProperties only and does not reference business tables.
+- **Source CI:** run #225 ([45853092868](https://github.com/brusvv/dots_inventory-/actions/runs/45853092868)) passed syntax for 50 `.gs` files and 145/145 tests: FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 38, Warehouse Dashboard 9, Finance Schema 4.
+- **Runtime acceptance:** on a restored disposable copy, start Session A with a 25-second hold, then start Session B within the first few seconds using the same probe ID. Expected B result is `CONTENDED` with `callback_entered=false`. Repeat with a 5–15 second hold; B should return `ACQUIRED_AFTER_RELEASE`. Any `OVERLAP_DETECTED` fails the test. Starting B only after A has completed does not test contention.
