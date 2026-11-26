@@ -255,6 +255,6 @@ This section supersedes older schema-version and local-test counts above. The cu
 
 ### Current source verification
 
-- GitHub Actions run #225 (45853092868): 50/50 .gs syntax and 145/145 Node tests (FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 38, Warehouse Dashboard 9, Finance Schema 4).
+- GitHub Actions run #231 (45853915962): 50/50 .gs syntax and 145/145 Node tests (FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 38, Warehouse Dashboard 9, Finance Schema 4).
 - This does not prove Google Apps Script runtime behavior, Google Sheets migration, Drive backup consistency, real concurrent execution or visual Dashboard rendering.
 - PR #1 remains Draft and unmerged. Do not deploy or merge until the consolidated disposable-workbook acceptance evidence is recorded.
