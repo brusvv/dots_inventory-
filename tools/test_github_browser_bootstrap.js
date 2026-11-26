@@ -14,7 +14,7 @@ function test(name, fn) {
 }
 
 test("bootstrap is pinned to the reviewed immutable commit", () => {
-  assert.match(source, /COMMIT:\s*"1ff4c9869364222793ff1c8fe01fa6d42517d41a"/);
+  assert.match(source, /COMMIT:\s*"39ae1b1af9753a31ab3c92175d5fe6d33ef92f16"/);
   assert.match(source, /EXPECTED_FILE_COUNT:\s*47/);
   assert.match(source, /TIME_ZONE:\s*"Europe\/Moscow"/);
   assert.match(source, /\/git\/commits\/.*config\.COMMIT/);
