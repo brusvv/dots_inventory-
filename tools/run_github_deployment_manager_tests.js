@@ -76,6 +76,12 @@ test("reports added and changed modules without deleting local extras", () => {
   assert.equal(r.summary.added, 1);
   assert.deepEqual(Array.from(r.preserved_unmanaged_server_js), ["LocalHelper.gs"]);
 });
+test("refuses to back up an incomplete project without appsscript.json", () => {
+  const project = { script_id: "script-123", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function x() {}\\n" }
+  ] } };
+  assert.throws(() => vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')", context), /отсутствует appsscript.json/);
+});
 test("builds and verifies a source backup including appsscript.json", () => {
   const project = { script_id: "script-123", content: { files: [
     { name: "Code", type: "SERVER_JS", source: "function x() {}\n" },
