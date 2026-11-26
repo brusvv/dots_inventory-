@@ -619,8 +619,10 @@ function di3ReadHistoricalSaleFormCommand_() {
   };
 }
 
-function di3PreviewHistoricalSaleForm() {
-  var command = di3ReadHistoricalSaleFormCommand_();
+function di3PreviewHistoricalSaleForm(command) {
+  // Accept the already-read command so the confirmation and eventual create
+  // operation always describe the exact same immutable form snapshot.
+  command = command || di3ReadHistoricalSaleFormCommand_();
   var products = di3LoadProductsIndex_();
   var lines = command.lines.map(function (raw, index) {
     var product = products.byId[String(raw.product_id || "")];
@@ -656,7 +658,7 @@ function di3PreviewHistoricalSaleForm() {
 
 function di3SaveHistoricalSaleForm() {
   var command = di3ReadHistoricalSaleFormCommand_();
-  var plan = di3PreviewHistoricalSaleForm();
+  var plan = di3PreviewHistoricalSaleForm(command);
   var timezone = di3GetConfiguredTimeZone_();
   var units = command.lines.reduce(function (sum, line) { return sum + Number(line.quantity || 0); }, 0);
   var ui = SpreadsheetApp.getUi();
