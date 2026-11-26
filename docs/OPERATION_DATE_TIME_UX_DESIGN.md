@@ -94,7 +94,7 @@ Regression coverage must include:
 - blank, malformed and impossible times fail closed;
 - timezone conversion and daylight-saving transitions;
 - same-day FIFO receipt/dispatch ordering at minute precision;
-- F-02 date-only and window-start fallback semantics, precision markers, and rejection when another same-product stock event intersects the uncertainty interval;
+- F-02 previous-day business date entered the following morning, kept separate from actual created_at and physical dispatch time;
 - supply sent ≤ awaiting ≤ received;
 - order created/business/dispatch/completion chronology;
 - manual IN/OUT event timestamp versus recorded_at;
@@ -106,6 +106,6 @@ Regression coverage must include:
 
 This contract does not by itself add columns to `V3_Supplies`, `StockLedger`, `StockLots`, or `V3_OrderItems`. Existing timestamp fields are retained.
 
-F-02 requires its separately designed v3→v4 migration appending `V3_Orders.business_date` and `V3_Orders.dispatch_time_precision`. Do not increment the target schema version until the F-02 field contract and F-06 archive table contract are frozen together.
+F-02 requires its separately designed v3→v4 migration appending only `V3_Orders.business_date`. Do not increment the target schema version until the F-02 field contract and F-06 archive table contract are frozen together.
 
 Implement the date/time controls and shared parser as one coordinated source patch across the order, supply, historical-supply and warehouse workspaces. Add source/Node regression tests and CI. Keep PR #1 Draft and unmerged; runtime acceptance must occur on a restored disposable workbook after backup and Dry Run. Never modify the production RC8 workbook during implementation or acceptance.
