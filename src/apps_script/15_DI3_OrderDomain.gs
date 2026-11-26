@@ -328,7 +328,7 @@ function di3FormatBusinessDate_(value) {
   if (value instanceof Date) date = value;
   else {
     var raw = String(value == null ? "" : value).trim();
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
       throw new Error("Дата оформления должна быть указана в формате ГГГГ-ММ-ДД.");
     }
     date = Utilities.parseDate(raw, timezone, "yyyy-MM-dd");
