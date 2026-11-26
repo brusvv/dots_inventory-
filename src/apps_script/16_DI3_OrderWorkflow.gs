@@ -495,10 +495,13 @@ function di3CreateHistoricalSale(command) {
     var createResult = di3CreateOrder(command);
     var order = di3GetOrderById_(createResult.order_id);
     if (!order) throw new Error("Не удалось восстановить созданный исторический заказ.");
-    if (String(order.status) === DI3_ORDER_STATUS.NEW) {
+    if (String(order.status) === DI3_ORDER_STATUS.NEW || String(order.status) === DI3_ORDER_STATUS.IN_TRANSIT) {
+      // Calling the dispatch workflow for IN_TRANSIT is intentional: it verifies
+      // the immutable operation timestamp/mode and resumes PREPARED if a prior
+      // execution wrote the status but stopped before committing the operation.
       di3DispatchOrder_(order, dispatchAt, { allowHistoricalBackdate: true });
       order = di3GetOrderById_(order.order_id);
-    } else if (String(order.status) === DI3_ORDER_STATUS.IN_TRANSIT || String(order.status) === DI3_ORDER_STATUS.COMPLETED) {
+    } else if (String(order.status) === DI3_ORDER_STATUS.COMPLETED) {
       if (!order.dispatched_at || di3ToMillis_(order.dispatched_at) !== dispatchAt.getTime()) {
         throw new Error("У заказа уже сохранено другое время отправки. Повтор исторической операции остановлен.");
       }
@@ -519,6 +522,18 @@ function di3CreateHistoricalSale(command) {
         di3ToMillis_(order.completed_at) !== completionAt.getTime()) {
       throw new Error("Не удалось подтвердить полный исторический цикл продажи.");
     }
+    var committedDispatch = di3GetOrderOperationByKey_("ORDER_DISPATCH:" + order.order_id);
+    if (!committedDispatch) throw new Error("Для исторической продажи отсутствует журнал операции FIFO-списания.");
+    var committedDispatchPayload = di3ReadVerifiedOperationPayload_(committedDispatch);
+    if (String(committedDispatchPayload.dispatched_at || "") !== dispatchAt.toISOString() ||
+        committedDispatchPayload.historical_mode !== true ||
+        String(committedDispatch.values[5]) !== "COMMITTED") {
+      throw new Error("Операция FIFO-списания исторической продажи не подтверждена или не совпадает с заданной датой.");
+    }
+    // Repair the status history if execution stopped after the order row was
+    // updated but before its history row was appended.
+    di3EnsureOrderStatusHistory_(order.order_id, DI3_ORDER_STATUS.IN_TRANSIT,
+      DI3_ORDER_STATUS.COMPLETED, completionAt, "", "Историческое завершение продажи");
     if (completionAlreadyApplied) {
       di3RefreshAllOrderFifoSnapshots_();
       di3RefreshOrderRegister();
