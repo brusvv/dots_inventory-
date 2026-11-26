@@ -313,14 +313,62 @@ function di3BuildOrderRequestHash_(command) {
     discount_enabled: command.discount_enabled === true,
     discount_rate: Number(command.discount_rate || 0),
     delivery_method: di3NormalizeText_(command.delivery_method),
-    notes: di3NormalizeText_(command.notes)
+    notes: di3NormalizeText_(command.notes),
+    business_date: di3FormatBusinessDate_(command.business_date || new Date()),
+    historical_mode: command.historical_mode === true,
+    historical_dispatched_at: command.historical_dispatched_at ? di3ToDate_(command.historical_dispatched_at, "Историческая дата отправки").toISOString() : "",
+    historical_completed_at: command.historical_completed_at ? di3ToDate_(command.historical_completed_at, "Историческая дата завершения").toISOString() : ""
   };
   return di3BuildManualOperationPayloadHash_(canonical);
+}
+
+function di3FormatBusinessDate_(value) {
+  var timezone = di3GetConfiguredTimeZone_();
+  var date;
+  if (value instanceof Date) date = value;
+  else {
+    var raw = String(value == null ? "" : value).trim();
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(raw)) {
+      throw new Error("Дата оформления должна быть указана в формате ГГГГ-ММ-ДД.");
+    }
+    date = Utilities.parseDate(raw, timezone, "yyyy-MM-dd");
+    if (Utilities.formatDate(date, timezone, "yyyy-MM-dd") !== raw) {
+      throw new Error("Указана некорректная дата оформления.");
+    }
+  }
+  if (!(date instanceof Date) || !Number.isFinite(date.getTime())) throw new Error("Указана некорректная дата оформления.");
+  return Utilities.formatDate(date, timezone, "yyyy-MM-dd");
+}
+
+function di3ParseBusinessDate_(value) {
+  var raw = di3FormatBusinessDate_(value);
+  return Utilities.parseDate(raw, di3GetConfiguredTimeZone_(), "yyyy-MM-dd");
 }
 
 function di3BuildOrderDraftPayload_(command) {
   command = command || {};
   var createdAt = command.created_at ? di3ToDate_(command.created_at, "Дата создания заказа") : new Date();
+  var historicalMode = command.historical_mode === true;
+  var businessDate = di3ParseBusinessDate_(command.business_date || createdAt);
+  if (historicalMode) {
+    if (!command.historical_dispatched_at || !command.historical_completed_at) {
+      throw new Error("Для исторической продажи обязательны фактические дата и время отправки и завершения.");
+    }
+    var historicalDispatch = di3ToDate_(command.historical_dispatched_at, "Историческая дата отправки");
+    var historicalCompletion = di3ToDate_(command.historical_completed_at, "Историческая дата завершения");
+    var timezone = di3GetConfiguredTimeZone_();
+    if (Utilities.formatDate(businessDate, timezone, "yyyy-MM-dd") >
+        Utilities.formatDate(historicalDispatch, timezone, "yyyy-MM-dd")) {
+      throw new Error("Дата оформления не может быть позже календарной даты отправки.");
+    }
+    if (historicalCompletion.getTime() < historicalDispatch.getTime()) {
+      throw new Error("Завершение не может быть раньше фактической отправки.");
+    }
+    if (historicalDispatch.getTime() > Date.now() + 5 * 60 * 1000 ||
+        historicalCompletion.getTime() > Date.now() + 5 * 60 * 1000) {
+      throw new Error("Исторические этапы не могут находиться в будущем.");
+    }
+  }
   var requestToken = String(command.request_token || "").trim();
   if (!requestToken) throw new Error("Не найден токен формы. Обнови форму создания заказа.");
   var deliveryMethod = di3NormalizeText_(command.delivery_method);
@@ -349,7 +397,7 @@ function di3BuildOrderDraftPayload_(command) {
     if (!Number.isFinite(price) || price < 0) throw new Error("Позиция " + (index + 1) + ": укажи корректную цену продажи или заполни её в карточке товара.");
     var label = di3GetProductLabel_(product);
     var valuation = di3GetProductFifoValuation(productId);
-    if (valuation.total_quantity <= 0) throw new Error("«" + label + ": нет товара в наличии.");
+    if (!historicalMode && valuation.total_quantity <= 0) throw new Error("«" + label + ": нет товара в наличии.");
     quantitiesByProduct[productId] = (quantitiesByProduct[productId] || 0) + quantity;
     normalizedLines.push({
       product_id: productId,
@@ -362,6 +410,7 @@ function di3BuildOrderDraftPayload_(command) {
   });
   if (!normalizedLines.length) throw new Error("Заказ пуст. Добавь хотя бы одну позицию.");
   Object.keys(quantitiesByProduct).forEach(function (productId) {
+    if (historicalMode) return; // Historical availability is decided by FIFO at the actual dispatch timestamp.
     var valuation = di3GetProductFifoValuation(productId);
     if (quantitiesByProduct[productId] > valuation.total_quantity) {
       var product = products.byId[productId];
@@ -384,7 +433,7 @@ function di3BuildOrderDraftPayload_(command) {
     plan.payable_total, plan.estimated_fifo_cost_total, plan.estimated_fifo_cost_status,
     "", "NOT_DISPATCHED", "", di3NormalizeText_(command.notes), deliveryMethod,
     "", "", "", "", "", now,
-    "", 0, "", "QUOTED", "", plan.commission_payer
+    "", 0, "", "QUOTED", "", plan.commission_payer, businessDate
   ];
   var itemRows = plan.lines.map(function (line, index) {
     return [
@@ -402,7 +451,9 @@ function di3BuildOrderDraftPayload_(command) {
     order_number: orderNumber,
     order_row: orderRow,
     item_rows: itemRows,
-    created_at: createdAt.toISOString()
+    created_at: createdAt.toISOString(),
+    business_date: Utilities.formatDate(businessDate, di3GetConfiguredTimeZone_(), "yyyy-MM-dd"),
+    historical_mode: historicalMode
   };
 }
 
