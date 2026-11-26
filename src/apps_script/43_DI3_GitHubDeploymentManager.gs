@@ -48,7 +48,7 @@ function di3GetGitHubHeaders_() {
   return headers;
 }
 
-function di3FetchGitHubResponse_(url, accept) {
+function di3FetchGitHubResponse_(url, accept, followRedirects) {
   if (typeof UrlFetchApp === "undefined") {
     throw new Error("UrlFetchApp недоступен. Проверка релизов требует разрешения script.external_request.");
   }
@@ -56,7 +56,8 @@ function di3FetchGitHubResponse_(url, accept) {
   if (accept) headers.Accept = accept;
   var response;
   try {
-    response = UrlFetchApp.fetch(url, { method: "get", headers: headers, muteHttpExceptions: true, followRedirects: true });
+    response = UrlFetchApp.fetch(url, { method: "get", headers: headers, muteHttpExceptions: true,
+      followRedirects: followRedirects !== false });
   } catch (error) {
     throw new Error("Не удалось обратиться к GitHub. Проверь доступ к сети и разрешение script.external_request. " +
       (error && error.message ? error.message : String(error)));
@@ -128,6 +129,42 @@ function di3ValidateGitHubReleaseManifest_(manifest, releaseTag) {
   return { status: "VALID", file_count: manifest.files.length, commit: commit };
 }
 
+function di3IsSafeGitHubAssetRedirect_(url) {
+  return /^https:\/\/(?:release-assets|objects)\.githubusercontent\.com\//i.test(String(url || ""));
+}
+
+function di3FetchGitHubAsset_(asset, expectedName) {
+  var config = di3GetGitHubDeploymentConfig_();
+  var expectedApiUrl = "https://api.github.com/repos/" + config.repository + "/releases/assets/" + Number(asset && asset.id);
+  if (!asset || !Number.isSafeInteger(Number(asset.id)) || Number(asset.id) < 1 || asset.url !== expectedApiUrl) {
+    throw new Error("GitHub asset " + expectedName + " имеет неожиданный API URL.");
+  }
+  var response = di3FetchGitHubResponse_(expectedApiUrl, "application/octet-stream", false);
+  if (response.code === 200) return response.text;
+  if ([301, 302, 303, 307, 308].indexOf(response.code) === -1) {
+    throw new Error("Не удалось скачать GitHub asset " + expectedName + ": HTTP " + response.code + ".");
+  }
+  var location = String(response.headers.Location || response.headers.location || "");
+  if (!di3IsSafeGitHubAssetRedirect_(location)) {
+    throw new Error("GitHub asset " + expectedName + " перенаправляет на недоверенный адрес; загрузка остановлена.");
+  }
+  // The signed asset URL is fetched without the GitHub token to avoid forwarding
+  // repository credentials to a redirect host.
+  var redirected;
+  try {
+    redirected = UrlFetchApp.fetch(location, {
+      method: "get", headers: { Accept: "application/octet-stream" },
+      muteHttpExceptions: true, followRedirects: true
+    });
+  } catch (error) {
+    throw new Error("Не удалось скачать GitHub asset после безопасного перенаправления: " +
+      (error && error.message ? error.message : String(error)));
+  }
+  var redirectedCode = Number(redirected.getResponseCode());
+  if (redirectedCode !== 200) throw new Error("GitHub asset " + expectedName + " вернул HTTP " + redirectedCode + " после перенаправления.");
+  return String(redirected.getContentText() || "");
+}
+
 function di3GetLatestGitHubReleaseManifest_() {
   var config = di3GetGitHubDeploymentConfig_();
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(config.repository)) {
@@ -143,23 +180,21 @@ function di3GetLatestGitHubReleaseManifest_() {
     throw new Error("GitHub latest release не является опубликованным стабильным релизом.");
   }
   var assets = Array.isArray(release.assets) ? release.assets : [];
-  function assetUrl(name) {
-    var matches = assets.filter(function (asset) { return asset && asset.name === name && asset.browser_download_url; });
+  function asset(name) {
+    var matches = assets.filter(function (item) { return item && item.name === name && item.id && item.url; });
     if (matches.length !== 1) throw new Error("В релизе должен находиться ровно один asset " + name + ".");
-    return matches[0].browser_download_url;
+    return matches[0];
   }
-  var manifestResponse = di3FetchGitHubResponse_(assetUrl("release-manifest.json"), "application/octet-stream");
-  if (manifestResponse.code !== 200) throw new Error("Не удалось скачать release-manifest.json: HTTP " + manifestResponse.code + ".");
-  var checksumResponse = di3FetchGitHubResponse_(assetUrl("release-manifest.asset.sha256"), "application/octet-stream");
-  if (checksumResponse.code !== 200) throw new Error("Не удалось скачать SHA-256 манифеста: HTTP " + checksumResponse.code + ".");
-  var checksumMatch = checksumResponse.text.trim().match(/^([0-9a-f]{64})\s+\*?(?:.*\/)?release-manifest\.json$/i);
+  var manifestText = di3FetchGitHubAsset_(asset("release-manifest.json"), "release-manifest.json");
+  var checksumText = di3FetchGitHubAsset_(asset("release-manifest.asset.sha256"), "release-manifest.asset.sha256");
+  var checksumMatch = checksumText.trim().match(/^([0-9a-f]{64})\s+\*?(?:.*\/)?release-manifest\.json$/i);
   if (!checksumMatch) throw new Error("Файл release-manifest.asset.sha256 имеет неизвестный формат.");
-  var actualHash = di3Sha256Hex_(manifestResponse.text);
+  var actualHash = di3Sha256Hex_(manifestText);
   if (actualHash.toLowerCase() !== checksumMatch[1].toLowerCase()) {
     throw new Error("SHA-256 release-manifest.json не совпадает с контрольной суммой из релиза.");
   }
   var manifest;
-  try { manifest = JSON.parse(manifestResponse.text); }
+  try { manifest = JSON.parse(manifestText); }
   catch (error) { throw new Error("release-manifest.json содержит некорректный JSON: " + (error.message || String(error))); }
   var validation = di3ValidateGitHubReleaseManifest_(manifest, release.tag_name);
   return {
