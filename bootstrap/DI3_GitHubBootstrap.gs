@@ -15,6 +15,7 @@ var DI3_GITHUB_BOOTSTRAP_CONFIG = Object.freeze({
   COMMIT: "39ae1b1af9753a31ab3c92175d5fe6d33ef92f16",
   EXPECTED_FILE_COUNT: 47,
   BACKUP_PREFIX: "DotsInventory_AppsScript_Source_",
+  GITHUB_TOKEN_PROPERTY: "DI3_GITHUB_TOKEN",
   MAX_BACKUP_BYTES: 10000000,
   TIME_ZONE: "Europe/Moscow",
   REQUIRED_SCOPES: [
@@ -39,11 +40,15 @@ function di3GitHubBootstrapInstall() {
     throw new Error("Bootstrap остановлен: проект не привязан к активной Google-таблице. Создай новую тестовую таблицу и открой Apps Script через Расширения → Apps Script.");
   }
 
-  var githubToken = di3BootstrapPromptGitHubToken_(ui);
+  var githubToken = di3BootstrapGetGitHubToken_();
   var project = di3BootstrapGetProjectContent_();
   di3BootstrapAssertBlankProject_(project.content.files);
   var manifest = di3BootstrapReadAndValidateManifest_(project.content.files);
   var sources = di3BootstrapDownloadPinnedSources_(githubToken);
+  // Remove the credential immediately after the authenticated API reads and
+  // source integrity checks have completed successfully.
+  PropertiesService.getScriptProperties().deleteProperty(DI3_GITHUB_BOOTSTRAP_CONFIG.GITHUB_TOKEN_PROPERTY);
+  githubToken = null;
   var targetFiles = di3BootstrapBuildTargetFiles_(project.content.files, sources);
   var sourceFingerprint = di3BootstrapFingerprint_(project.content.files);
 
@@ -244,32 +249,50 @@ function di3BootstrapDownloadPinnedSources_(githubToken) {
 }
 
 /**
- * Obtain a short-lived GitHub token from the operator without persisting it.
- * Use a fine-grained PAT limited to this repository with Contents: Read-only.
+ * Read the operator-supplied fine-grained token from Apps Script Script
+ * Properties. The property is not part of source backups or GitHub content.
+ *
+ * Setup: Apps Script → Project Settings → Script Properties:
+ *   DI3_GITHUB_TOKEN = <fine-grained PAT with Contents: Read-only>
+ *
+ * The install flow deletes this property immediately after successful source
+ * download and Git blob verification. If download fails, it remains available
+ * for retry; remove it manually after troubleshooting if no longer needed.
  */
-function di3BootstrapPromptGitHubToken_(ui) {
-  var response = ui.prompt(
-    "Dots Inventory · GitHub authentication",
-    "Введи GitHub fine-grained Personal Access Token с доступом только к brusvv/dots_inventory- и разрешением Contents: Read-only. Токен используется только в памяти текущего запуска и не сохраняется.",
-    ui.ButtonSet.OK_CANCEL
-  );
-  if (response.getSelectedButton() !== ui.Button.OK) {
-    throw new Error("Установка отменена: GitHub-аутентификация не предоставлена. Apps Script проект не изменён.");
-  }
-  var token = String(response.getResponseText() || "").trim();
+function di3BootstrapGetGitHubToken_() {
+  var token = String(
+    PropertiesService.getScriptProperties().getProperty(
+      DI3_GITHUB_BOOTSTRAP_CONFIG.GITHUB_TOKEN_PROPERTY
+    ) || ""
+  ).trim();
+
   if (!/^github_pat_[A-Za-z0-9_]+$/.test(token) && !/^gh[pousr]_[A-Za-z0-9_]+$/.test(token)) {
-    throw new Error("Токен не распознан. Используй GitHub fine-grained PAT (github_pat_...). Токен не сохранён.");
+    throw new Error(
+      "Не найден корректный GitHub token. Добавь Script Property " +
+      DI3_GITHUB_BOOTSTRAP_CONFIG.GITHUB_TOKEN_PROPERTY +
+      " в Apps Script → Project Settings → Script Properties. " +
+      "Нужен fine-grained PAT только для brusvv/dots_inventory- с Contents: Read-only. " +
+      "Токен не вставляй в исходный код."
+    );
   }
 
   // Verify identity and repository access before downloading any source.
   var user;
   try {
-    user = JSON.parse(di3BootstrapFetchText_("https://api.github.com/user", "application/vnd.github+json", token));
+    user = JSON.parse(di3BootstrapFetchText_(
+      "https://api.github.com/user",
+      "application/vnd.github+json",
+      token
+    ));
   } catch (error) {
-    throw new Error("GitHub не принял токен или не удалось проверить пользователя. Проверь токен и его срок действия. Подробности: " +
-      String(error.message || error).replace(token, "[REDACTED]"));
+    throw new Error(
+      "GitHub не принял токен или не удалось проверить пользователя. Проверь токен и срок действия. Подробности: " +
+      String(error.message || error).replace(token, "[REDACTED]")
+    );
   }
-  if (!user || !user.login) throw new Error("GitHub вернул неполный профиль пользователя; токен не принят.");
+  if (!user || !user.login) {
+    throw new Error("GitHub вернул неполный профиль пользователя; токен не принят.");
+  }
 
   var repository;
   try {
@@ -279,10 +302,14 @@ function di3BootstrapPromptGitHubToken_(ui) {
       token
     ));
   } catch (error) {
-    throw new Error("Токен действителен, но доступ к репозиторию не подтверждён. Проверь Repository access и Contents: Read-only. Подробности: " +
-      String(error.message || error).replace(token, "[REDACTED]"));
+    throw new Error(
+      "Токен действителен, но доступ к репозиторию не подтверждён. Проверь Repository access и Contents: Read-only. Подробности: " +
+      String(error.message || error).replace(token, "[REDACTED]")
+    );
   }
-  if (!repository || repository.full_name !== DI3_GITHUB_BOOTSTRAP_CONFIG.REPOSITORY || repository.private === true) {
+  if (!repository ||
+      repository.full_name !== DI3_GITHUB_BOOTSTRAP_CONFIG.REPOSITORY ||
+      repository.private === true) {
     throw new Error("Проверка целевого публичного репозитория не пройдена; установка остановлена.");
   }
   return token;
