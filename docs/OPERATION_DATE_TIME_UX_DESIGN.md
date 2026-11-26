@@ -33,10 +33,10 @@ The order register may continue displaying stored event timestamps as one readab
 
 ### Historical sales — F-02
 
-- The customer-order `business_date` is entered manually as a date-only value. It represents when the buyer placed the order, not when the user saw or entered it.
-- Actual order `created_at` remains automatically recorded by the system. Example: an order placed at 23:00 on 25 November and entered at 08:00 on 26 November stores business_date = 25 November and created_at = 26 November 08:00.
-- Business date is included in the immutable order payload/request hash and is validated as a business date; it does not become a StockLedger event timestamp.
-- Physical dispatch and completion remain separate lifecycle transitions and use their actual date + exact time inputs. Existing FIFO preflight/replay uses the actual dispatch event timestamp.
+- The customer-order `business_date` is a manually entered date-only value; it may precede the actual `created_at` recording timestamp.
+- The historical-sale form separately requires actual dispatch date/time and completion date/time. The physical dispatch timestamp—not business_date—drives StockLedger `effective_at` and FIFO.
+- Historical mode may permit dispatch before `created_at` only through its explicit workflow; ordinary order dispatch retains the existing lower-bound validation.
+- Finance Dashboard continues to recognize sales on `completed_at`; business_date does not shift recognized revenue/COGS periods.
 - The F-02 v3→v4 additive schema appends only `business_date`; no dispatch precision/window fields or date/time split columns are added to `V3_Orders`.
 
 ## 4. Supplies
@@ -94,7 +94,7 @@ Regression coverage must include:
 - blank, malformed and impossible times fail closed;
 - timezone conversion and daylight-saving transitions;
 - same-day FIFO receipt/dispatch ordering at minute precision;
-- F-02 previous-day business date entered the following morning, kept separate from actual created_at and physical dispatch time;
+- F-02 previous-day business date entered the following morning, kept separate from actual created_at, actual dispatch timestamp and actual completion timestamp;
 - supply sent ≤ awaiting ≤ received;
 - order created/business/dispatch/completion chronology;
 - manual IN/OUT event timestamp versus recorded_at;
