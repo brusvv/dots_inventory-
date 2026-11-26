@@ -1,0 +1,85 @@
+name: Build and publish Dots Inventory release
+on:
+  push:
+    tags:
+      - "dots-inventory-v*"
+permissions:
+  contents: write
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out tagged source and history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Validate release tag and publication boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          if [[ ! "$TAG" =~ ^dots-inventory-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid release tag: $TAG"
+            exit 1
+          fi
+          git fetch origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::Release commit must already be reachable from main. Draft/feature branches cannot publish releases."
+            exit 1
+          fi
+          if [[ "$(git cat-file -t "refs/tags/$TAG")" != "tag" ]]; then
+            echo "::error::An annotated Git tag is required."
+            exit 1
+          fi
+      - name: Test release manifest builder
+        run: node tools/test_release_manifest.js
+      - name: Build pinned release manifest
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          SOURCE_DIR: src/apps_script
+          OUTPUT_DIR: dist/release-metadata
+        run: node tools/build_release_manifest.js
+      - name: Assemble release bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="dist/DotsInventory_release"
+          mkdir -p "$ROOT/Apps_Script"
+          cp src/apps_script/*.gs "$ROOT/Apps_Script/"
+          cp dist/release-metadata/release-manifest.json "$ROOT/"
+          cp dist/release-metadata/release-manifest.sha256 "$ROOT/"
+          cp dist/release-metadata/SHA256SUMS.txt "$ROOT/"
+          cat > "$ROOT/INSTALLATION_NOTES_RU.txt" <<'EOF'
+          DOTS INVENTORY — GITHUB RELEASE BUNDLE
+          Apps_Script/ contains the source files listed in release-manifest.json.
+          The manifest pins each source file to its exact Git commit and records SHA-256,
+          target schema version and application timezone.
+          appsscript.json is intentionally NOT supplied. An in-project updater must
+          preserve the actual target project's manifest; never invent a Script ID or
+          replace it with a guessed/default manifest.
+          This bundle contains code only. It does not run setup, schema migration,
+          FIFO rebuild, backup restore or stock operations. Code rollback is not a
+          data rollback. Install only after verified backup and explicit approval.
+          EOF
+          (cd dist && zip -qr DotsInventory-source.zip DotsInventory_release)
+          sha256sum dist/DotsInventory-source.zip > dist/DotsInventory-source.zip.sha256
+          sha256sum dist/DotsInventory_release/release-manifest.json > dist/release-manifest.asset.sha256
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/DotsInventory-source.zip \
+            dist/DotsInventory-source.zip.sha256 \
+            dist/DotsInventory_release/release-manifest.json \
+            dist/release-manifest.asset.sha256 \
+            --verify-tag \
+            --title "Dots Inventory ${GITHUB_REF_NAME#dots-inventory-v}" \
+            --generate-notes
