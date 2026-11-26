@@ -16,7 +16,7 @@ var DI3_GITHUB_API_VERSION = "2022-11-28";
 function di3GetGitHubDeploymentConfig_() {
   var config = DI3_APP_CONFIG && DI3_APP_CONFIG.GITHUB_RELEASE ? DI3_APP_CONFIG.GITHUB_RELEASE : {};
   return {
-    repository: String(config.REPOSITORY || "brusvv/dots_inventory-").trim(),
+    repository: String(config.REPOSITORY || "brusvv/dots_inventory-").trim(),\n    release_channel: String(config.RELEASE_CHANNEL || "stable").trim().toLowerCase(),
     token_property: String(config.TOKEN_PROPERTY || "DI3_GITHUB_READ_TOKEN").trim(),
     source_backup_prefix: String(config.SOURCE_BACKUP_PREFIX || "DotsInventory_AppsScript_Source_"),
     max_source_backup_bytes: Math.max(100000, Number(config.MAX_SOURCE_BACKUP_BYTES) || 10000000)
@@ -167,18 +167,23 @@ function di3FetchGitHubAsset_(asset, expectedName) {
 
 function di3GetLatestGitHubReleaseManifest_() {
   var config = di3GetGitHubDeploymentConfig_();
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(config.repository)) {
-    throw new Error("Некорректный DI3_APP_CONFIG.GITHUB_RELEASE.REPOSITORY.");
-  }
+  if (!/^[A-Za-z0-9_.-]+\\/[A-Za-z0-9_.-]+$/.test(config.repository)) throw new Error("Некорректный DI3_APP_CONFIG.GITHUB_RELEASE.REPOSITORY.");
+  if (config.release_channel !== "stable" && config.release_channel !== "preview") throw new Error("GITHUB_RELEASE.RELEASE_CHANNEL должен быть stable или preview.");
   var apiBase = "https://api.github.com/repos/" + config.repository;
-  var releaseResult = di3FetchGitHubJson_(apiBase + "/releases/latest");
-  if (releaseResult.status === "NOT_FOUND") {
-    return { status: "NO_RELEASE", message: "GitHub API вернул 404: стабильный релиз ещё не опубликован либо репозиторий приватный и read-only token не настроен в Script Properties (" +
-      config.token_property + ")." };
-  }
-  var release = releaseResult.data;
-  if (!release || release.draft || release.prerelease) {
-    throw new Error("GitHub latest release не является опубликованным стабильным релизом.");
+  var release;
+  if (config.release_channel === "stable") {
+    var stableResult = di3FetchGitHubJson_(apiBase + "/releases/latest");
+    if (stableResult.status === "NOT_FOUND") return { status: "NO_RELEASE", message: "Опубликованный Stable-релиз не найден." };
+    release = stableResult.data;
+    if (!release || release.draft || release.prerelease) throw new Error("GitHub latest release не является стабильным релизом.");
+  } else {
+    var listResult = di3FetchGitHubJson_(apiBase + "/releases?per_page=100");
+    if (listResult.status === "NOT_FOUND" || !Array.isArray(listResult.data)) return { status: "NO_RELEASE", message: "Список GitHub Releases недоступен или Preview-релизов пока нет." };
+    var previews = listResult.data.filter(function (item) {
+      return item && !item.draft && item.prerelease && /^dots-inventory-v\\d+\\.\\d+\\.\\d+-preview\\.\\d+$/.test(String(item.tag_name || ""));
+    });
+    if (!previews.length) return { status: "NO_RELEASE", message: "Опубликованный Preview-релиз не найден." };
+    release = previews[0];
   }
   var assets = Array.isArray(release.assets) ? release.assets : [];
   function asset(name) {
@@ -188,29 +193,18 @@ function di3GetLatestGitHubReleaseManifest_() {
   }
   var manifestText = di3FetchGitHubAsset_(asset("release-manifest.json"), "release-manifest.json");
   var checksumText = di3FetchGitHubAsset_(asset("release-manifest.asset.sha256"), "release-manifest.asset.sha256");
-  var checksumMatch = checksumText.trim().match(/^([0-9a-f]{64})\s+\*?(?:.*\/)?release-manifest\.json$/i);
+  var checksumMatch = checksumText.trim().match(/^([0-9a-f]{64})\\s+\\*?(?:.*\\/)?release-manifest\\.json$/i);
   if (!checksumMatch) throw new Error("Файл release-manifest.asset.sha256 имеет неизвестный формат.");
-  var actualHash = di3Sha256Hex_(manifestText);
-  if (actualHash.toLowerCase() !== checksumMatch[1].toLowerCase()) {
-    throw new Error("SHA-256 release-manifest.json не совпадает с контрольной суммой из релиза.");
-  }
+  if (di3Sha256Hex_(manifestText).toLowerCase() !== checksumMatch[1].toLowerCase()) throw new Error("SHA-256 release-manifest.json не совпадает с контрольной суммой из релиза.");
   var manifest;
-  try { manifest = JSON.parse(manifestText); }
-  catch (error) { throw new Error("release-manifest.json содержит некорректный JSON: " + (error.message || String(error))); }
+  try { manifest = JSON.parse(manifestText); } catch (error) { throw new Error("release-manifest.json содержит некорректный JSON: " + (error.message || String(error))); }
   var validation = di3ValidateGitHubReleaseManifest_(manifest, release.tag_name);
-  return {
-    status: "READY",
-    release: {
-      tag_name: release.tag_name,
-      name: String(release.name || release.tag_name),
-      html_url: String(release.html_url || ""),
-      published_at: String(release.published_at || "")
-    },
-    manifest: manifest,
-    validation: validation
-  };
+  if (Boolean(release.prerelease) !== (manifest.release_channel === "preview")) throw new Error("Тип GitHub Release не совпадает с release_channel манифеста.");
+  return { status: "READY", release: { tag_name: release.tag_name, name: String(release.name || release.tag_name),
+    html_url: String(release.html_url || ""), published_at: String(release.published_at || ""),
+    prerelease: Boolean(release.prerelease), channel: manifest.release_channel, source_branch: manifest.source_branch },
+    manifest: manifest, validation: validation };
 }
-
 function di3GetAppsScriptProjectContent_() {
   var scriptId = "";
   try { scriptId = String(ScriptApp.getScriptId() || "").trim(); }
