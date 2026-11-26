@@ -14,16 +14,48 @@ Only .gs files directly under src/apps_script are included. Runtime probes, test
 
 The manifest has a detached SHA-256 sidecar. Source checksums are in SHA256SUMS.txt. The release ZIP contains the same manifest and all source modules.
 
-## Publishing
+## Publishing channels
 
-1. Merge the clean-final-baseline work into main only after its own review and runtime acceptance.
-2. Create and push an annotated tag on a commit already reachable from main:
-   git tag -a dots-inventory-v4.0.0 -m "Dots Inventory v4.0.0"
-   git push origin dots-inventory-v4.0.0
-3. GitHub Actions validates tag format, annotated-tag status and ancestry to main, runs manifest tests, builds the package and publishes a GitHub Release.
+### Stable
 
-No release tag is created by this change. Draft/feature branch commits cannot publish.
+Stable is reserved for reviewed code already merged into `main`.
 
+```bash
+git fetch origin
+git switch main
+git pull --ff-only
+git tag -a dots-inventory-v4.0.0 -m "Dots Inventory v4.0.0"
+git push origin dots-inventory-v4.0.0
+```
+
+The workflow requires an annotated `dots-inventory-vX.Y.Z` tag whose commit is reachable from `origin/main`. It publishes a normal GitHub Release.
+
+### Preview from a feature/release branch
+
+Preview can be published without merging the feature branch into `main`. First push the source branch, then create an annotated prerelease tag on the exact commit to test. The tag message must declare the source branch:
+
+```bash
+git fetch origin
+git switch feature/my-change
+git pull --ff-only
+git tag -a dots-inventory-v4.1.0-preview.1 \\\n  -m "Dots Inventory v4.1.0 Preview 1" \\\n  -m "source-branch: feature/my-change"
+git push origin dots-inventory-v4.1.0-preview.1
+```
+
+The workflow validates the Preview tag format, requires an annotated tag, verifies that the declared `feature/*`, `release/*` or `hotfix/*` branch exists on origin and contains the tagged commit, and publishes the GitHub Release with the prerelease flag. The manifest records both `release_channel: preview` and the exact declared `source_branch`; each source file remains pinned to the full commit SHA.
+
+### Selecting a channel in Apps Script
+
+Set `DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL` in `00_DI3_AppConfig.gs`:
+
+- `"stable"` — only the latest non-prerelease release; this remains the default.
+- `"preview"` — only the latest published `-preview.N` release.
+
+The deployment manager rejects a manifest whose channel does not match the configured channel. Switching to Preview is an explicit config change; a Preview cannot silently replace Stable. Restore `"stable"` after testing.
+
+Preview is intended for a disposable restored spreadsheet and a separate Apps Script Script ID. Do not install it into the production workbook. Code installation does not run setup, schema migration, FIFO rebuild or stock operations.
+
+No tag or release is created by this implementation.
 ## Safety contract
 
 - URLs are pinned to a full Git commit, never main or a moving branch.
@@ -36,11 +68,11 @@ No release tag is created by this change. Draft/feature branch commits cannot pu
 ## Status
 
 - D-01 release manifest contract: implemented.
-- D-02 GitHub Actions release builder/publisher: implemented; first actual release awaits merge to main and a tag.
+- D-02 GitHub Actions release builder/publisher: Stable and feature-branch Preview channels implemented; first actual release awaits review, merge/release decision and a tag.
 - D-03 in-project read-only release check and source comparison: implemented; live Apps Script/GitHub authorization acceptance pending.
 - D-04 Apps Script source backup to Drive with read-back and SHA-256 verification: implemented; live Apps Script/Drive acceptance pending.
-- D-05 confirmed install/post-write verification: not implemented.
-- D-06 code rollback: not implemented.
+- D-05 confirmed install/post-write verification: implemented in source; runtime acceptance pending.
+- D-06 code rollback: implemented in source; runtime acceptance pending.
 - D-07 Apps Script runtime acceptance: pending.
 - No live Apps Script project, Google Sheet, RC8 workbook or deployment was modified.
 
