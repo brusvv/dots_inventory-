@@ -173,7 +173,8 @@ function di3GetLatestGitHubReleaseManifest_() {
   var apiBase = "https://api.github.com/repos/" + config.repository;
   var releaseResult = di3FetchGitHubJson_(apiBase + "/releases/latest");
   if (releaseResult.status === "NOT_FOUND") {
-    return { status: "NO_RELEASE", message: "В репозитории пока нет опубликованного стабильного GitHub Release." };
+    return { status: "NO_RELEASE", message: "GitHub API вернул 404: стабильный релиз ещё не опубликован либо репозиторий приватный и read-only token не настроен в Script Properties (" +
+      config.token_property + ")." };
   }
   var release = releaseResult.data;
   if (!release || release.draft || release.prerelease) {
