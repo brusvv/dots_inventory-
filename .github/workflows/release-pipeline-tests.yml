@@ -40,3 +40,4 @@ jobs:
           node tools/run_system_safety_ux_tests.js
           node tools/run_warehouse_dashboard_tests.js
           node tools/run_finance_schema_tests.js
+          node tools/run_github_deployment_manager_tests.js
