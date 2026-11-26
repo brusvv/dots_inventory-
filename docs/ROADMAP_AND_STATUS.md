@@ -3,16 +3,16 @@
 Working branch: `feature/clean-final-baseline`; PR #1 remains Draft and unmerged. Target clean schema: v4. Existing RC8 workbook/deployment and `main` are not modified.
 
 ### Latest verified source CI
-GitHub Actions run [45885667109](https://github.com/brusvv/dots_inventory-/actions/runs/45885667109), code head `ad0cf3aee705b4517f0483b583dd2bc823b36dc4`:
+GitHub Actions run [45885839074](https://github.com/brusvv/dots_inventory-/actions/runs/45885839074), code head `9367bc4b33456cdd74a77898ab97e512a558cf63`:
 - Apps Script syntax: 50/50 `.gs` files.
 - FIFO replay: 46/46.
 - Order Domain: 23/23.
 - Supply Workspace UX: 17/17.
-- Catalog/Order UX: 15/15.
+- Catalog/Order UX: 16/16.
 - System Safety UX: 39/39.
 - Warehouse Dashboard: 9/9.
 - Finance schema: 4/4.
-- Total: **153/153**.
+- Total: **154/154**.
 
 This is Node/source CI, not Google Apps Script runtime acceptance.
 
