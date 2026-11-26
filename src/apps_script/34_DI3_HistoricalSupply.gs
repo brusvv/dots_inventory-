@@ -30,8 +30,9 @@ function di3StartHistoricalSupplyEntry() {
   sheet.getRange(DI3_SUPPLY_FORM.historicalMode).setValue(DI3_HISTORICAL_SUPPLY_MODE_VALUE);
   // Unlike a current order, none of the historical dates should be silently prefilled.
   sheet.getRange("G2:G7").clearContent();
+  sheet.getRange("H5:H7").clearContent();
   sheet.getRange("M2").setValue("Внесение старой поставки");
-  sheet.getRange("D8").setValue("Режим «Внести старую поставку»: заполни G2, при необходимости G3, а также все фактические даты G5:G7. После проверки и подтверждения будет создан документ и одна складская операция приёмки.");
+  sheet.getRange("D8").setValue("Режим «Внести старую поставку»: заполни G2, при необходимости G3, а также даты G5:G7 и обязательное время HH:mm в H5:H7. После проверки и подтверждения будет создан документ и одна складская операция приёмки.");
   di3RefreshSupplyDatePanel_(null);
   di3RefreshSupplyFormValidations();
   // The refresh function respects the mode marker and therefore leaves all G5:G7 editable.
@@ -81,9 +82,9 @@ function di3GetHistoricalSupplyFormSnapshot_() {
   var dates = di3ValidateHistoricalSupplyDates_({
     order_date: sheet.getRange("G2").getValue(),
     expected_date: sheet.getRange("G3").getValue(),
-    sent_at: sheet.getRange("G5").getValue(),
-    awaiting_at: sheet.getRange("G6").getValue(),
-    received_at: sheet.getRange("G7").getValue()
+    sent_at: di3ReadSupplyStageDateTime_(sheet, "G5", "Историческая отправка", false),
+    awaiting_at: di3ReadSupplyStageDateTime_(sheet, "G6", "Историческое ожидание получения", false),
+    received_at: di3ReadSupplyStageDateTime_(sheet, "G7", "Историческое получение", false)
   });
   var lines = di3ResolveSupplyFormLines_(false);
   if (!lines.length) throw new Error("Добавь хотя бы одну товарную позицию старой поставки.");
@@ -410,7 +411,9 @@ function di3DiagnoseHistoricalSupplyMode() {
     receipt_operation_status: receipt ? String(receipt.values[5] || "") : "",
     dates: {
       G2: sheet.getRange("G2").getValue(), G3: sheet.getRange("G3").getValue(),
-      G5: sheet.getRange("G5").getValue(), G6: sheet.getRange("G6").getValue(), G7: sheet.getRange("G7").getValue()
+      G5: sheet.getRange("G5").getValue(), H5: sheet.getRange("H5").getDisplayValue(),
+      G6: sheet.getRange("G6").getValue(), H6: sheet.getRange("H6").getDisplayValue(),
+      G7: sheet.getRange("G7").getValue(), H7: sheet.getRange("H7").getDisplayValue()
     },
     read_only: true
   };
