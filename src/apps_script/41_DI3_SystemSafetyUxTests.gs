@@ -693,6 +693,17 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("manual warehouse movement uses separate date and required HH:mm inputs", function () {
+    equal(DI3_WAREHOUSE_MANAGER_CELLS.effective_at, "B4");
+    equal(DI3_WAREHOUSE_MANAGER_CELLS.effective_time, "C4");
+    var setup = di3SetupWarehouseManager.toString();
+    includes(setup, 'sheet.getRange("B4").setValue(initialParts.date)');
+    includes(setup, 'sheet.getRange("C4").setNumberFormat("@").setValue(initialParts.time)');
+    var submit = di3SubmitWarehouseManagerForm.toString();
+    includes(submit, 'di3BuildEffectiveDateTime_(values[1], sheet.getRange("C4").getDisplayValue()');
+    includes(submit, "di3PostManualStockMovement(command)");
+  });
+
   test("F-02 freezes business_date as the final v4 order column and a 3-to-4 migration", function () {
     equal(DI3_SCHEMA_VERSION, 4);
     equal(DI3_TABLE_SCHEMAS.V3_Orders.length, 30);
