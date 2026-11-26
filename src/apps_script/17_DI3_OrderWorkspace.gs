@@ -480,7 +480,15 @@ function di3GetSelectedOrderRegisterRow_() {
   if (row < 4 || row > sheet.getLastRow()) throw new Error("Выбери строку заказа начиная с 4-й строки.");
   var number = String(sheet.getRange(row, 1).getValue() || "").trim();
   if (!number) throw new Error("В выбранной строке отсутствует номер заказа.");
-  return { order_number: number, row_number: row, effective_at: sheet.getRange(row, 16).getValue() };
+  return {
+    order_number: number,
+    row_number: row,
+    effective_at: di3BuildEffectiveDateTime_(
+      sheet.getRange(row, 16).getValue(),
+      sheet.getRange(row, 17).getDisplayValue(),
+      "Переход заказа"
+    )
+  };
 }
 
 function di3GetOrderTransitionConfirmationText_(order, nextStatus, effectiveAt) {
@@ -521,7 +529,7 @@ function di3TransitionSelectedOrder_(status) {
   // Clear it only when the status actually changed or a PREPARED movement was recovered.
   if (["UPDATED", "COMMITTED"].indexOf(String(result.status)) !== -1) {
     var sheet = di3GetSheetOrThrow_(DI3_ORDER_REGISTER_SHEET);
-    sheet.getRange(selected.row_number, 16).clearContent();
+    sheet.getRange(selected.row_number, 16, 1, 2).clearContent();
     di3RefreshOrderRegister();
     if (typeof di3RefreshWarehouseViewsAfterCommit_ === "function") di3RefreshWarehouseViewsAfterCommit_("Заказ " + selected.order_number);
   }
