@@ -261,8 +261,8 @@ The following issues have source changes and local regression coverage. They are
 - Confirmed period close/reopen and schema migration records use the centralized accessor; period events remain append-only.
 - Simplified redundant actor lookup wrappers.
 - Extended the system-safety runner to load the supply-domain, schema-versioning and full-edit modules; added structural assertions for these paths.
-- **Not verified:** no runner or syntax check was executed. Restored-workbook acceptance remains required.
-- Strengthened F-20 regression coverage to construct dispatch, return and receipt movement-detail rows and assert that their actor column is the immutable initiator. These are source tests only and remain unexecuted.
+- **Source verification passed:** GitHub Actions PR integration run `45728149345` (run #93) passed syntax checks for all 50 `.gs` files and the System Safety UX suite (31/31); all seven suites passed 129/129. This executes the F-20 actor-attribution and administrative-path structural assertions in the Node harness.
+- Runtime acceptance remains open: restored-workbook checks are still required to verify Apps Script Sessions behavior, actual editor/recovery identities, and persisted audit rows in Google Sheets.
 
 ## C-01 / F-09 — performance audit plan — 26.11.2026
 
