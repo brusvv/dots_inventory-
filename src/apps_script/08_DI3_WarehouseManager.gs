@@ -70,7 +70,8 @@ function di3RefreshWarehouseManagerValidations() {
     .setNumberFormat("#,##0.00 ₽")
     .setNote("Для основания «Продажа вне системы» цена обязательна и должна быть больше 0 ₽. В остальных случаях поле можно оставить пустым.");
   return { products: products.length, reasons: di3GetWarehouseReasonLabels_(direction), validations: [
-    DI3_WAREHOUSE_MANAGER_CELLS.effective_at, DI3_WAREHOUSE_MANAGER_CELLS.quantity,
+    DI3_WAREHOUSE_MANAGER_CELLS.effective_at, DI3_WAREHOUSE_MANAGER_CELLS.effective_time,
+    DI3_WAREHOUSE_MANAGER_CELLS.quantity,
     DI3_WAREHOUSE_MANAGER_CELLS.unit_cost, DI3_WAREHOUSE_MANAGER_CELLS.unit_sale_price
   ] };
 }
