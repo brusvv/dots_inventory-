@@ -252,7 +252,9 @@ function di3RunOrderDomainUnitTests() {
     var originalHash = di3BuildManualOperationPayloadHash_;
     var originalBusinessDate = di3FormatBusinessDate_;
     var originalToDate = di3ToDate_;
+    var originalNormalizeText = typeof di3NormalizeText_ === "function" ? di3NormalizeText_ : null;
     try {
+      di3NormalizeText_ = function (value) { return String(value == null ? "" : value).trim(); };
       di3BuildManualOperationPayloadHash_ = function (value) { return JSON.stringify(value); };
       di3FormatBusinessDate_ = function (value) { return String(value); };
       di3ToDate_ = function (value) { return value instanceof Date ? value : new Date(value); };
@@ -273,12 +275,13 @@ function di3RunOrderDomainUnitTests() {
     } finally {
       di3BuildManualOperationPayloadHash_ = originalHash;
       di3FormatBusinessDate_ = originalBusinessDate;
+      di3NormalizeText_ = originalNormalizeText;
       di3ToDate_ = originalToDate;
     }
   });
 
   test("historical mode bypasses only the created_at lower bound for dispatch", function () {
-    var originalParse = di3ParseSupplyEffectiveDate_;
+    var originalParse = typeof di3ParseSupplyEffectiveDate_ === "function" ? di3ParseSupplyEffectiveDate_ : null;
     var originalMillis = di3ToMillis_;
     var originalItems = di3GetOrderItems_;
     var eventAt = new Date("2026-01-02T10:00:00.000Z");
@@ -299,8 +302,10 @@ function di3RunOrderDomainUnitTests() {
 
   test("prepared dispatch retry rejects a changed immutable timestamp", function () {
     var originals = {
-      parse: di3ParseSupplyEffectiveDate_, millis: di3ToMillis_, items: di3GetOrderItems_,
-      pending: di3AssertNoOtherPendingStockOperations_, getOperation: di3GetOrderOperationByKey_,
+      parse: typeof di3ParseSupplyEffectiveDate_ === "function" ? di3ParseSupplyEffectiveDate_ : null,
+      millis: di3ToMillis_, items: di3GetOrderItems_,
+      pending: typeof di3AssertNoOtherPendingStockOperations_ === "function" ? di3AssertNoOtherPendingStockOperations_ : null,
+      getOperation: di3GetOrderOperationByKey_,
       readPayload: di3ReadVerifiedOperationPayload_, complete: di3CompleteOrderDispatch_
     };
     var savedAt = "2026-01-02T10:00:00.000Z";
