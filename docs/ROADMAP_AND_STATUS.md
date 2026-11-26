@@ -384,3 +384,11 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - **Runtime not accepted:** no Google Sheets migration, form submission, FIFO replay, PeriodGuard, commission settlement or Finance Dashboard runtime test has been executed. Run these only on a restored disposable workbook after backup and Dry Run. Production RC8 remains untouched; PR #1 remains Draft/unmerged.
 
 - **F-02 source CI verification:** GitHub Actions run `45847110942` (run #146) passed syntax for 50 Apps Script files and 133/133 regression tests (FIFO 41, Order Domain 20, Supply UX 15, Catalog/Order UX 12, System Safety 32, Warehouse Dashboard 9, Finance 4). Later commits after that run changed documentation only. Google Sheets runtime acceptance remains open.
+
+## F-02 — historical dispatch recovery hardening — 26.11.2026
+
+- Recovered the remaining retry gap where ORDER_DISPATCH had already written order status IN_TRANSIT but its operation journal was still PREPARED. The retry now validates the immutable dispatch timestamp and historical-mode marker and resumes the existing operation instead of returning ALREADY_DISPATCHED.
+- Historical-sale orchestration re-enters dispatch for NEW and IN_TRANSIT orders; before final success it requires a COMMITTED ORDER_DISPATCH payload matching the exact historical timestamp and mode.
+- Completion retry repairs a missing completion status-history row idempotently after checking the immutable completed_at value.
+- Added the IN_TRANSIT + PREPARED recovery regression. Latest source CI run #154 (45847647122): syntax 50/50; all seven suites **134/134 PASS** (FIFO 41, Order Domain 21, Supply UX 15, Catalog/Order UX 12, System Safety 32, Warehouse Dashboard 9, Finance 4).
+- Runtime acceptance remains pending on a restored disposable workbook: schema Dry Run/backup/v3→v4 migration, clean-baseline setup/rerun, historical form, FIFO historical sufficient/insufficient cases, PeriodGuard, commission/Finance Dashboard, operation fault injection and backup/restore-as-new. No production RC8 workbook or deployment was changed.
