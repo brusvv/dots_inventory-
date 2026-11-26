@@ -3,6 +3,7 @@ name: Release pipeline checks
 on:
   push:
     branches:
+      - feature/github-runtime-acceptance
       - feature/github-code-rollback
       - feature/github-install-preview
       - feature/github-deployment-manager
@@ -13,8 +14,11 @@ on:
       - "tools/test_release_manifest.js"
       - "tools/run_github_deployment_manager_tests.js"
       - ".github/workflows/release-pipeline-tests.yml"
+      - "docs/GITHUB_RUNTIME_ACCEPTANCE.md"
+      - "docs/ROADMAP_AND_STATUS.md"
   pull_request:
     branches:
+      - feature/github-runtime-acceptance
       - feature/github-deployment-manager
       - feature/github-release-pipeline
 
