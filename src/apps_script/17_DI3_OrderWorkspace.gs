@@ -736,6 +736,10 @@ function di3SaveHistoricalSaleForm() {
   var result = di3CreateHistoricalSale(command);
   var sheet = di3GetSheetOrThrow_("Историческая продажа");
   sheet.getRange("B4:B6").clearContent();
+  // Current time inputs live in C5:C6. Clear them after a successful save so
+  // the next historical sale cannot silently inherit the previous timestamps.
+  sheet.getRange("C5:C6").clearContent();
+  // Also clear the retired legacy input cells defensively.
   sheet.getRange("D5:D6").clearContent();
   sheet.getRange("B8").setValue(0);
   sheet.getRange("B9").setValue(false);
