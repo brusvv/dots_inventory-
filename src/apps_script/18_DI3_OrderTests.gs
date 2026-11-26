@@ -297,7 +297,7 @@ function di3RunOrderDomainUnitTests() {
   test("prepared dispatch retry rejects a changed immutable timestamp", function () {
     var originals = {
       millis: di3ToMillis_, items: di3GetOrderItems_,
-      pending: typeof di3AssertNoOtherPendingStockOperations_ === "function" ? di3AssertNoOtherPendingStockOperations_ : null,
+      pending: typeof globalThis.di3AssertNoOtherPendingStockOperations_ === "function" ? globalThis.di3AssertNoOtherPendingStockOperations_ : null,
       getOperation: di3GetOrderOperationByKey_,
       readPayload: di3ReadVerifiedOperationPayload_, complete: di3CompleteOrderDispatch_
     };
@@ -307,7 +307,7 @@ function di3RunOrderDomainUnitTests() {
     try {
       di3ToMillis_ = function (value) { return new Date(value).getTime(); };
       di3GetOrderItems_ = function () { return [{ order_item_id: "I1", product_id: "P1", quantity: 1 }]; };
-      di3AssertNoOtherPendingStockOperations_ = function () { return true; };
+      globalThis.di3AssertNoOtherPendingStockOperations_ = function () { return true; };
       di3GetOrderOperationByKey_ = function () { return { values: ["OP-1", "KEY", "ORDER_DISPATCH", "ORDER", "RETRY-ORDER", "PREPARED"] }; };
       di3ReadVerifiedOperationPayload_ = function () { return { dispatched_at: savedAt, historical_mode: false }; };
       di3CompleteOrderDispatch_ = function () { return { status: "COMMITTED" }; };
@@ -315,7 +315,8 @@ function di3RunOrderDomainUnitTests() {
     } finally {
       di3ToMillis_ = originals.millis;
       di3GetOrderItems_ = originals.items;
-      di3AssertNoOtherPendingStockOperations_ = originals.pending;
+      if (originals.pending) globalThis.di3AssertNoOtherPendingStockOperations_ = originals.pending;
+      else delete globalThis.di3AssertNoOtherPendingStockOperations_;
       di3GetOrderOperationByKey_ = originals.getOperation;
       di3ReadVerifiedOperationPayload_ = originals.readPayload;
       di3CompleteOrderDispatch_ = originals.complete;
