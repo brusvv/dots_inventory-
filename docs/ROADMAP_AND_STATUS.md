@@ -448,3 +448,13 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Recovery now distinguishes explicit integrity/input failures (which quarantine) from unexpected execution/service failures (which leave the immutable replay PREPARED and report that it can be retried).
 - Added a FIFO regression for a transient failure during product-state update; it asserts no QUARANTINED event is written. Existing changed-input fingerprint regression still asserts quarantine before projection writes.
 - **Source CI passed:** GitHub Actions run `45854606470` (run #237): syntax 50/50; 146/146 tests (FIFO 42, Order Domain 22, Supply UX 17, Catalog/Order UX 14, System Safety 38, Warehouse Dashboard 9, Finance 4). Runtime fault injection and disposable-workbook recovery remain required.
+
+
+## N-03 follow-up hardening — populated managed workspaces — 26.11.2026
+
+- A focused source audit found one remaining clean-adoption edge case: a known application-owned workspace (for example, `Продукты`) could contain user-entered content while the core system tables were absent/empty. Because those workspaces are derived views and setup may rebuild them from the system tables, treating such a workbook as a clean empty install could overwrite data.
+- `di3GetCleanBaselineState_()` now blocks first-time clean adoption when any managed workspace contains cells or charts before a `CLEAN_FINAL_BASELINE_ADOPTION` identity exists. A genuinely empty managed tab remains allowed; after a completed baseline, normal workspace content is expected and does not block reruns.
+- Added a regression case covering both a populated managed workspace (BLOCKED) and an empty managed workspace (eligible).
+- Latest PR quality-gates run: [45864597621](https://github.com/brusvv/dots_inventory-/actions/runs/45864597621), run #240, completed successfully on head `5698e8321f255055f7472a8374e8ca4b846184e5`.
+- Apps Script syntax: **50/50 .gs files PASS**. Regression suites: **147/147 PASS** — FIFO 42, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 39, Warehouse Dashboard 9, Finance Schema 4.
+- This is source/Node CI only. Google Sheets Dry Run, clean setup/rerun, interruption recovery, and backup/restore-as-new still require runtime acceptance on a disposable empty workbook. PR #1 remains Draft and unmerged; main and the existing RC8 workbook remain unchanged.
