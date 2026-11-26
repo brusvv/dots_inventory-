@@ -243,6 +243,15 @@ function di3GetAppsScriptProjectContent_() {
   if (!Array.isArray(content.files) || !content.files.length) {
     throw new Error("Apps Script API вернул пустой список файлов; резервирование и сравнение остановлены.");
   }
+  if (content.scriptId && String(content.scriptId) !== scriptId) {
+    throw new Error("Apps Script API вернул содержимое другого Script ID; операция остановлена.");
+  }
+  var hasManifest = content.files.some(function (file) {
+    return file && file.type === "JSON" && file.name === "appsscript";
+  });
+  if (!hasManifest) {
+    throw new Error("Apps Script API не вернул appsscript.json. Неполное содержимое проекта нельзя сравнивать или резервировать.");
+  }
   return { script_id: scriptId, content: content };
 }
 
@@ -358,6 +367,10 @@ function di3BuildAppsScriptSourceBackupEnvelope_(project, spreadsheetId, created
   if (!project || !project.script_id || !project.content || !Array.isArray(project.content.files) || !project.content.files.length) {
     throw new Error("Нельзя создать backup: данные Apps Script проекта неполны.");
   }
+  var hasManifest = project.content.files.some(function (file) {
+    return file && file.type === "JSON" && file.name === "appsscript";
+  });
+  if (!hasManifest) throw new Error("Source backup остановлен: в содержимом проекта отсутствует appsscript.json.");
   var files = project.content.files.map(function (file) {
     var name = String(file.name || "");
     var type = String(file.type || "");
