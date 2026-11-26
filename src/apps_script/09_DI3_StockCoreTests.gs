@@ -1123,9 +1123,11 @@ function di3RunStockCoreUnitTests() {
       readRows: di3ReadRowsByColumnValue_, archive: di3ReadFifoReplayArchiveSnapshots_,
       allocationFingerprint: di3BuildFifoAllocationSnapshotFingerprint_, fingerprint: di3BuildFifoFingerprint_,
       append: di3AppendFifoReplayEvent_, updateRun: di3UpdateFifoRunStatus_,
-      findOperation: di3FindRowByFirstColumn_, attempts: di3GetOperationAttemptRows_,
-      registry: di3GetOperationHandlerRegistry_, readPayload: di3ReadVerifiedOperationPayload_,
-      requeue: di3RequeueQuarantinedOperation
+      findOperation: typeof di3FindRowByFirstColumn_ === "function" ? di3FindRowByFirstColumn_ : null,
+      attempts: typeof di3GetOperationAttemptRows_ === "function" ? di3GetOperationAttemptRows_ : null,
+      registry: typeof di3GetOperationHandlerRegistry_ === "function" ? di3GetOperationHandlerRegistry_ : null,
+      readPayload: typeof di3ReadVerifiedOperationPayload_ === "function" ? di3ReadVerifiedOperationPayload_ : null,
+      requeue: typeof di3RequeueQuarantinedOperation === "function" ? di3RequeueQuarantinedOperation : null
     };
     var event = ["event-2", "OP:op-1:PRODUCT:p1", 2, "QUARANTINED", "run-1", "op-1",
       "PRODUCT", '["p1"]', "input-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
@@ -1166,10 +1168,12 @@ function di3RunStockCoreUnitTests() {
       di3ReadFifoReplayArchiveSnapshots_ = originals.archive;
       di3BuildFifoAllocationSnapshotFingerprint_ = originals.allocationFingerprint;
       di3BuildFifoFingerprint_ = originals.fingerprint; di3AppendFifoReplayEvent_ = originals.append;
-      di3UpdateFifoRunStatus_ = originals.updateRun; di3FindRowByFirstColumn_ = originals.findOperation;
-      di3GetOperationAttemptRows_ = originals.attempts; di3GetOperationHandlerRegistry_ = originals.registry;
-      di3ReadVerifiedOperationPayload_ = originals.readPayload;
-      di3RequeueQuarantinedOperation = originals.requeue;
+      di3UpdateFifoRunStatus_ = originals.updateRun;
+      if (originals.findOperation) di3FindRowByFirstColumn_ = originals.findOperation; else delete di3FindRowByFirstColumn_;
+      if (originals.attempts) di3GetOperationAttemptRows_ = originals.attempts; else delete di3GetOperationAttemptRows_;
+      if (originals.registry) di3GetOperationHandlerRegistry_ = originals.registry; else delete di3GetOperationHandlerRegistry_;
+      if (originals.readPayload) di3ReadVerifiedOperationPayload_ = originals.readPayload; else delete di3ReadVerifiedOperationPayload_;
+      if (originals.requeue) di3RequeueQuarantinedOperation = originals.requeue; else delete di3RequeueQuarantinedOperation;
     }
   });
 
