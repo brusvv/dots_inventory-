@@ -20,7 +20,7 @@ function listAppsScriptFiles(sourceDir) {
   if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) throw new Error("Имена .gs файлов не должны различаться только регистром.");
   return names;
 }
-function buildManifest({ repository, commit, tag, sourceDir }) {
+function buildManifest({ repository, commit, tag, sourceDir, channel, sourceBranch }) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository || "")) throw new Error("GITHUB_REPOSITORY должен иметь формат owner/repository.");
   if (!/^[0-9a-f]{40}$/i.test(commit || "")) throw new Error("GITHUB_SHA должен содержать полный 40-символьный commit SHA.");
   const version = String(tag || "").match(/^dots-inventory-v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/);
@@ -54,7 +54,7 @@ function writeReleaseArtifacts(options) {
 if (require.main === module) {
   try {
     const manifest = writeReleaseArtifacts({ repository: process.env.GITHUB_REPOSITORY, commit: process.env.GITHUB_SHA,
-      tag: process.env.GITHUB_REF_NAME, sourceDir: path.resolve(process.env.SOURCE_DIR || "src/apps_script"),
+      tag: process.env.GITHUB_REF_NAME, channel: process.env.RELEASE_CHANNEL, sourceBranch: process.env.RELEASE_SOURCE_BRANCH, sourceDir: path.resolve(process.env.SOURCE_DIR || "src/apps_script"),
       outputDir: path.resolve(process.env.OUTPUT_DIR || "dist/release-metadata") });
     process.stdout.write("Release manifest ready: " + manifest.git_tag + " | schema v" + manifest.target_schema_version + " | " + manifest.files.length + " Apps Script files\n");
   } catch (error) { process.stderr.write((error && error.stack) || String(error)); process.stderr.write("\n"); process.exitCode = 1; }
