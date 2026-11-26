@@ -24,6 +24,18 @@ test("bootstrap is pinned to the reviewed immutable commit", () => {
   assert.doesNotMatch(source, /raw\.githubusercontent\.com\/.+\/main\//);
 });
 
+test("GitHub fetch safely follows same-host redirects and exposes real HTTP diagnostics", () => {
+  assert.match(source, /"User-Agent": "DotsInventoryBrowserBootstrap\/1\.0"/);
+  assert.match(source, /followRedirects: false/);
+  assert.match(source, /\[301, 302, 303, 307, 308\]/);
+  assert.match(source, /maxRedirects = 5/);
+  assert.match(source, /getAllHeaders/);
+  assert.match(source, /x-ratelimit-remaining/);
+  assert.match(source, /Ответ GitHub:/);
+  assert.match(source, /недоверенный адрес/);
+  assert.doesNotMatch(source, /Перенаправления не принимаются/);
+});
+
 test("bootstrap rejects non-empty or unexpected Apps Script projects", () => {
   assert.match(source, /function di3BootstrapAssertBlankProject_/);
   assert.match(source, /file\.name === "DI3_GitHubBootstrap"/);
