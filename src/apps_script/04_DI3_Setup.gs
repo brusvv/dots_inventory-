@@ -120,6 +120,7 @@ function di3FinalizeWorkbookLayout_() {
     { name: "Реестр поставок v3", color: "#64748B" },
     { name: "Калькулятор заказа v3", color: "#3478C8" },
     { name: "Реестр заказов v3", color: "#64748B" },
+    { name: "Историческая продажа", color: "#D69E36" },
     { name: "Журнал склада", color: "#0F766E" },
     { name: "История FIFO", color: "#7C3AED" }
   ];
