@@ -20,6 +20,12 @@ var DI3_APP_CONFIG = Object.freeze({
     VERIFY_CHUNK_ROWS: 100,
     FULL_HASH_MAX_CELLS_PER_SHEET: 250000,
     FULL_HASH_MAX_CELLS_TOTAL: 750000
+  }),
+  GITHUB_RELEASE: Object.freeze({
+    REPOSITORY: "brusvv/dots_inventory-",
+    TOKEN_PROPERTY: "DI3_GITHUB_READ_TOKEN",
+    SOURCE_BACKUP_PREFIX: "DotsInventory_AppsScript_Source_",
+    MAX_SOURCE_BACKUP_BYTES: 10000000
   })
 });
 
