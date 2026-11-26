@@ -46,6 +46,19 @@
 
 Если релиза нет, зафиксировать D-07 как BLOCKED: RELEASE_NOT_PUBLISHED. Не подменять release веткой или вручную созданным manifest.
 
+### 1.4 Дополнительная проверка Preview-канала
+
+Для отдельного Preview acceptance-прогона на той же disposable-копии (либо на новой восстановленной копии с отдельным Script ID):
+
+1. Убедиться, что опубликован GitHub prerelease с тегом `dots-inventory-vX.Y.Z-preview.N`.
+2. Проверить, что manifest содержит `release_channel: preview`, `source_branch` и полный `git_commit`; исходная ветка должна содержать tagged commit.
+3. В `00_DI3_AppConfig.gs` установить `DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL = "preview"`, сохранить и авторизовать изменения.
+4. Выполнить D-03, D-04, D-05 preview/confirm и D-06 по основному протоколу.
+5. Проверить, что Stable-релиз не предлагается при выбранном Preview, а Preview не принимается при `RELEASE_CHANNEL = "stable"`.
+6. Вернуть `RELEASE_CHANNEL = "stable"` после тестирования.
+
+Не переключать канал в production Apps Script проекте ради тестирования Preview. Успешная source CI не является runtime acceptance.
+
 ## 2. Протокол исходного состояния
 
 Перед первым запуском заполнить:
