@@ -7,7 +7,7 @@
  * read this value; setup also synchronizes the spreadsheet timezone.
  */
 var DI3_APP_CONFIG = Object.freeze({
-  TIME_ZONE: "Europe/Helsinki",
+  TIME_ZONE: "Europe/Moscow",
   OPERATION_RECOVERY: Object.freeze({
     MAX_ATTEMPTS: 5,
     RETRY_BASE_DELAY_MS: 30000,
@@ -33,7 +33,7 @@ var DI3_APP_CONFIG = Object.freeze({
 
 function di3GetConfiguredTimeZone_() {
   var value = String(DI3_APP_CONFIG && DI3_APP_CONFIG.TIME_ZONE || "").trim();
-  if (!value) throw new Error("DI3_APP_CONFIG.TIME_ZONE не задан. Укажи часовой пояс IANA, например Europe/Helsinki.");
+  if (!value) throw new Error("DI3_APP_CONFIG.TIME_ZONE не задан. Укажи часовой пояс IANA, например Europe/Moscow.");
   try {
     Utilities.formatDate(new Date(), value, "yyyy-MM-dd HH:mm:ss");
   } catch (error) {
