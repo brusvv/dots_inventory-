@@ -45,10 +45,9 @@ function di3GitHubBootstrapInstall() {
   di3BootstrapAssertBlankProject_(project.content.files);
   var manifest = di3BootstrapReadAndValidateManifest_(project.content.files);
   var sources = di3BootstrapDownloadPinnedSources_(githubToken);
-  // Remove the credential immediately after the authenticated API reads and
-  // source integrity checks have completed successfully.
-  PropertiesService.getScriptProperties().deleteProperty(DI3_GITHUB_BOOTSTRAP_CONFIG.GITHUB_TOKEN_PROPERTY);
-  githubToken = null;
+  // Keep the token available until the entire installation is verified.
+  // A timeout during backup creation or a user cancellation must not strand
+  // the operator without credentials needed for a safe retry.
   var targetFiles = di3BootstrapBuildTargetFiles_(project.content.files, sources);
   var sourceFingerprint = di3BootstrapFingerprint_(project.content.files);
 
@@ -111,6 +110,11 @@ function di3GitHubBootstrapInstall() {
       "Не запускай установку повторно. Исходная резервная копия: " + backup.url
     );
   }
+
+  // Credentials are removed only after the installed source has been read
+  // back and its complete fingerprint has matched the expected content.
+  PropertiesService.getScriptProperties().deleteProperty(DI3_GITHUB_BOOTSTRAP_CONFIG.GITHUB_TOKEN_PROPERTY);
+  githubToken = null;
 
   var result = {
     status: "INSTALLED_AND_VERIFIED",
@@ -255,9 +259,9 @@ function di3BootstrapDownloadPinnedSources_(githubToken) {
  * Setup: Apps Script → Project Settings → Script Properties:
  *   DI3_GITHUB_TOKEN = <fine-grained PAT with Contents: Read-only>
  *
- * The install flow deletes this property immediately after successful source
- * download and Git blob verification. If download fails, it remains available
- * for retry; remove it manually after troubleshooting if no longer needed.
+ * The install flow deletes this property only after the full project write
+ * and post-write fingerprint verification succeed. If any earlier stage fails
+ * or the operator cancels, it remains available for a safe retry.
  */
 function di3BootstrapGetGitHubToken_() {
   var token = String(
