@@ -16,7 +16,7 @@ const context = vm.createContext({
   },
   DI3_APP_CONFIG: { GITHUB_RELEASE: { REPOSITORY: "brusvv/dots_inventory-" } }
 });
-for (const file of ["43_DI3_GitHubDeploymentManager.gs", "44_DI3_GitHubInstallPreview.gs"]) {
+for (const file of ["43_DI3_GitHubDeploymentManager.gs", "44_DI3_GitHubInstallPreview.gs", "45_DI3_GitHubConfirmedInstaller.gs"]) {
   const source = fs.readFileSync(path.join(root, "src/apps_script", file), "utf8");
   vm.runInContext(source, context, { filename: file, timeout: 5000 });
 }
@@ -166,6 +166,43 @@ test("refuses redirects while downloading a pinned release source", () => {
   context.UrlFetchApp = { fetch: () => ({ getResponseCode: () => 302, getContentText: () => "" }) };
   assert.throws(() => vm.runInContext("di3FetchPinnedGitHubSource_(" + JSON.stringify(m.files[0]) + ")", context), /Перенаправления не принимаются/);
   delete context.UrlFetchApp;
+});
+
+
+test("fingerprints complete Apps Script files independent of API order", () => {
+  const a = [installFile("Code", "SERVER_JS", "function a() {}\\n"), installFile("appsscript", "JSON", '{"timeZone":"Europe/Helsinki"}')];
+  const b = [a[1], a[0]];
+  const left = vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(a) + ")", context);
+  const right = vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(b) + ")", context);
+  assert.equal(left, right);
+});
+test("fingerprint changes when any project source or manifest changes", () => {
+  const a = [installFile("Code", "SERVER_JS", "function a() {}\\n"), installFile("appsscript", "JSON", '{}')];
+  const b = [installFile("Code", "SERVER_JS", "function b() {}\\n"), installFile("appsscript", "JSON", '{}')];
+  assert.notEqual(vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(a) + ")", context),
+    vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(b) + ")", context));
+});
+test("refuses duplicate project files when fingerprinting", () => {
+  const files = [installFile("Code", "SERVER_JS", "a"), installFile("Code", "SERVER_JS", "b")];
+  assert.throws(() => vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(files) + ")", context), /дублирующийся файл/);
+});
+test("requires the verified source backup to match the exact pre-install project", () => {
+  const project = { script_id: "script-123", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function x() {}\\n" },
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki"}' }
+  ] } };
+  const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')", context);
+  const fingerprint = vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(project.content.files) + ")", context);
+  const verified = vm.runInContext("di3VerifyInstallBackupMatches_(" + JSON.stringify(envelope) + ", 'script-123', '" + fingerprint + "')", context);
+  assert.equal(verified.status, "VERIFIED");
+  assert.throws(() => vm.runInContext("di3VerifyInstallBackupMatches_(" + JSON.stringify(envelope) + ", 'other-script', '" + fingerprint + "')", context), /другому Script ID/);
+  assert.throws(() => vm.runInContext("di3VerifyInstallBackupMatches_(" + JSON.stringify(envelope) + ", 'script-123', '" + "0".repeat(64) + "')", context), /не совпадает с исходным проектом/);
+});
+test("post-write verification accepts only an exact complete file set", () => {
+  const expected = [installFile("Code", "SERVER_JS", "function x() {}\\n"), installFile("appsscript", "JSON", '{}')];
+  assert.equal(vm.runInContext("di3AssertAppsScriptContentMatches_(" + JSON.stringify(expected) + ", " + JSON.stringify(expected) + ")", context).status, "VERIFIED");
+  const changed = [expected[0], installFile("appsscript", "JSON", '{"timeZone":"UTC"}')];
+  assert.throws(() => vm.runInContext("di3AssertAppsScriptContentMatches_(" + JSON.stringify(expected) + ", " + JSON.stringify(changed) + ")", context), /отличается от подготовленного/);
 });
 
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
