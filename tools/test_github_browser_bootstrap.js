@@ -31,7 +31,7 @@ test("GitHub API uses an operator-supplied token without persisting or leaking i
   assert.match(source, /Contents: Read-only/);
   assert.match(source, /Bearer /);
   assert.match(source, /api\\\.github\\\.com/);
-  assert.match(source, /replace\(token, "\\[REDACTED\\]"\)/);
+  assert.ok(source.includes("replace(token, \"[REDACTED]\")"));
   assert.match(source, /function di3BootstrapDownloadPinnedSources_\(githubToken\)/);
   assert.match(source, /rawUrl, "text\/plain"\);/);
   assert.doesNotMatch(source, /PropertiesService|ScriptProperties|UserProperties|DocumentProperties/);
