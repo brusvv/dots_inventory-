@@ -359,3 +359,15 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Canonical event timestamps remain single timestamps; `recorded_at`/`created_at` remain system times. No supply/StockLedger schema migration is introduced solely for UI separation.
 - Shared parser must combine the pair in the configured spreadsheet timezone, reject missing/invalid time, preserve time across date-picker changes, normalize seconds to `00`, and feed the same canonical timestamp into confirmation, idempotency hash and operation payload.
 - This is a design freeze only. Source implementation and regression tests remain pending; PR #1 remains Draft/unmerged and no workbook/runtime changes are authorized by this documentation update.
+
+
+## F-02 — conservative historical dispatch timestamp decision — 26.11.2026
+
+- Confirmed date-only dispatch fallback: use the beginning of the local dispatch date (`00:00:00`) in `DI3_APP_CONFIG.TIME_ZONE`; do not use noon, end-of-day or entry time.
+- If an optional time window is supplied, use its start as the conservative FIFO boundary. A zero-width window (`from = to`) represents one exact minute.
+- To prevent ambiguous same-product FIFO ordering, block dispatch when another StockLedger event for any sold product falls inside or on the boundary of the supplied uncertainty interval. The user must narrow the interval or supply a more precise time. For date-only input, any same-product event on that local date makes the date-only entry ambiguous.
+- Added `dispatch_time_precision` to the planned v4 order schema so the order register/audit does not present an approximation as an exact time. Values: `EXACT_MINUTE`, `WINDOW_START_APPROXIMATE`, `DATE_START_APPROXIMATE`, `LEGACY_UNKNOWN`. The v3→v4 compatibility migration backfills old rows as `LEGACY_UNKNOWN`.
+- The configured project timezone was source-verified as `Europe/Helsinki` in `src/apps_script/00_DI3_AppConfig.gs`; implementation must continue to read the config, not hardcode this value.
+- Updated `docs/F02_HISTORICAL_SALES_DESIGN.md` and `docs/OPERATION_DATE_TIME_UX_DESIGN.md` to remove the earlier contradiction. This is documentation/design only: no Apps Script source, schema registry, workbook, or runtime data changed.
+- **Still requires owner confirmation before implementation:** completion chronology must be validated against the latest possible dispatch instant (window end, or end of local dispatch date for date-only input). A date-only dispatch may therefore require completion on the following date. This user-visible consequence is not yet approved.
+- F-02 remains blocked from source implementation until the completion chronology rule is confirmed and the v4/F-06 clean-baseline schema contracts are frozen together.
