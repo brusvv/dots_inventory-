@@ -115,3 +115,17 @@ Validation for the confirmed installer increment: GitHub Actions run [4588354924
 
 
 Final D-05 installer CI after the guarded error-reporting fixes: [run 45883794490](https://github.com/brusvv/dots_inventory-/actions/runs/45883794490) passed — 53 Apps Script syntax files, 151 existing regression tests, 9 release-manifest tests and 21 deployment-manager tests (181 automated tests total). This does not replace live Apps Script runtime acceptance.
+
+
+## D-06 verified code rollback
+
+The menu adds **Система → GitHub и обновления → Откатить код из резервной копии…**.
+
+- Prompts for the Drive file ID of a verified D-04 Apps Script source backup.
+- Accepts only files with the configured source-backup filename prefix, VERIFIED description metadata, matching Script ID, matching payload checksum and membership in the Dots Inventory backup folder.
+- Reopens and verifies the full backup envelope and every per-file SHA-256/byte length before preparing rollback.
+- Restores the exact backed-up project files but deliberately preserves the current target `appsscript.json` so the currently authorized OAuth scopes and runtime manifest are not silently downgraded.
+- Creates and verifies a second source backup of the current project before showing a separate YES/NO confirmation.
+- Rechecks the current project fingerprint immediately before writing, calls `projects.updateContent` only after YES, then reads the project back and compares every file exactly.
+- Reports `ROLLED_BACK_AND_VERIFIED` only after exact verification. Ambiguous write/read-back outcomes include the backup of the pre-rollback state; no automatic retry or nested rollback occurs.
+- This restores Apps Script source files only. It does not restore spreadsheet data, triggers, Script Properties, versioned deployments or deployment pointers.
