@@ -444,8 +444,11 @@ function di3RefreshOrderRegister(preservedDateTimesOverride) {
     sheet.getRange(4, 1, rows.length, 19).setValues(rows);
     sheet.getRange(4, 2, rows.length, 1).setNumberFormat("dd.mm.yyyy hh:mm");
     sheet.getRange(4, 4, rows.length, 10).setNumberFormat("#,##0.00 ₽");
-    sheet.getRange(4, 16, rows.length, 1).setNumberFormat("dd.mm.yyyy");
-    sheet.getRange(4, 17, rows.length, 1).setNumberFormat("@");
+    sheet.getRange(4, 16, rows.length, 1).setDataValidation(
+      SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build()
+    ).setNumberFormat("dd.mm.yyyy").setNote("Календарная дата следующего этапа заказа. Время укажи отдельно в соседней колонке Q.");
+    sheet.getRange(4, 17, rows.length, 1).setNumberFormat("@")
+      .setNote("Обязательное время следующего этапа в формате HH:mm (24 часа).");
     sheet.getRange(4, 19, rows.length, 1).setNumberFormat("dd.mm.yyyy");
     sheet.getBandings().forEach(function (banding) { banding.remove(); });
     di3ApplyLightBandingWithDarkText_(sheet.getRange(4, 1, rows.length, 19));
