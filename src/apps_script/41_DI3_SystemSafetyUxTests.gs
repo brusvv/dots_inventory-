@@ -84,7 +84,7 @@ function di3RunSystemSafetyUxUnitTests() {
   });
   test("mutating system menu items visibly indicate confirmation or deliberate action", function () {
     var source = di3BuildMenus_.toString();
-    ["Восстановить незавершённые операции…", "Снять карантин после ручной сверки…", "Пересчитать FIFO в копейках…", "Перестроить FIFO полностью…", "Открыть последний закрытый месяц…", "Восстановить в новую таблицу…"].forEach(function (label) {
+    ["Восстановить незавершённые операции…", "Снять карантин операции после ручной сверки…", "Разрешить FIFO quarantine после ручной сверки…", "Пересчитать FIFO в копейках…", "Перестроить FIFO полностью…", "Открыть последний закрытый месяц…", "Восстановить в новую таблицу…"].forEach(function (label) {
       includes(source, label);
     });
   });
