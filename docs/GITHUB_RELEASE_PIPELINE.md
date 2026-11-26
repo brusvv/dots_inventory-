@@ -74,3 +74,18 @@ The source backup includes every file returned by `projects.getContent` (SERVER_
 - No schema migration, setup, FIFO rebuild, restore or stock operation is triggered.
 - The actual target `appsscript.json` is included in the source snapshot and is never synthesized by this repository.
 - No release installation or code rollback is implemented in this stage.
+
+
+## D-05 staged phase — read-only installation preview
+
+The first D-05 increment adds **Система → GitHub и обновления → Предварительно собрать обновление (без установки)**.
+
+- Downloads each release .gs from its full-commit-pinned raw URL with redirects disabled.
+- Rechecks source byte length and SHA-256 against the validated release manifest.
+- Builds the complete Apps Script replacement set in memory, using Apps Script API file naming (SERVER_JS names without the .gs suffix for newly added files).
+- Preserves the exact target appsscript.json, every non-SERVER_JS file (HTML/JSON and other types), and every unmanaged local SERVER_JS module absent from the release.
+- Replaces matching release SERVER_JS files; appends missing release modules; reports additions, changes, unchanged modules and preserved local files.
+- Fails closed on missing/duplicate manifest, duplicate project file identity, missing source, hash/size mismatch, file-type name collision or unexpected file set.
+- Reports zero deletions and performs no Drive writes or Apps Script project writes.
+
+**Hard boundary:** preview only. It does not call projects.updateContent, save a pending install payload, migrate schema, run setup, rebuild FIFO or alter spreadsheet data. Confirmed install and post-write verification remain unimplemented and require separate review and runtime acceptance.
