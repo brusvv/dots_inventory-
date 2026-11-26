@@ -242,25 +242,77 @@ function di3BootstrapDownloadPinnedSources_() {
 }
 
 function di3BootstrapFetchText_(url, accept) {
-  if (!/^https:\/\/(?:api\.github\.com|raw\.githubusercontent\.com)\//i.test(url)) {
-    throw new Error("Bootstrap заблокировал неожиданный URL: " + url);
-  }
-  var response;
-  try {
-    response = UrlFetchApp.fetch(url, {
-      method: "get",
-      headers: { Accept: accept || "text/plain" },
-      muteHttpExceptions: true,
-      followRedirects: false
+  var initial = String(url || "");
+  var allowed = /^https:\/\/(api\.github\.com|raw\.githubusercontent\.com)\//i.exec(initial);
+  if (!allowed) throw new Error("Bootstrap заблокировал неожиданный URL: " + initial);
+
+  // Keep redirects manual: only the original, explicitly approved GitHub host
+  // may receive the follow-up request. This avoids forwarding requests to an
+  // arbitrary Location supplied by an intermediary.
+  var origin = "https://" + allowed[1].toLowerCase();
+  var currentUrl = initial;
+  var maxRedirects = 5;
+  for (var attempt = 0; attempt <= maxRedirects; attempt++) {
+    var response;
+    try {
+      response = UrlFetchApp.fetch(currentUrl, {
+        method: "get",
+        headers: {
+          Accept: accept || "text/plain",
+          "User-Agent": "DotsInventoryBrowserBootstrap/1.0"
+        },
+        muteHttpExceptions: true,
+        followRedirects: false
+      });
+    } catch (error) {
+      throw new Error("Не удалось получить данные GitHub: " + (error.message || String(error)));
+    }
+
+    var code = Number(response.getResponseCode());
+    if (code === 200) {
+      return String(response.getContentText() == null ? "" : response.getContentText());
+    }
+
+    if ([301, 302, 303, 307, 308].indexOf(code) !== -1) {
+      if (attempt === maxRedirects) {
+        throw new Error("GitHub превысил лимит перенаправлений (" + maxRedirects + ") для " + initial);
+      }
+      var headers = response.getAllHeaders ? response.getAllHeaders() : {};
+      var location = "";
+      Object.keys(headers || {}).some(function (key) {
+        if (String(key).toLowerCase() === "location") {
+          location = String(headers[key] || "");
+          return true;
+        }
+        return false;
+      });
+      if (!location) throw new Error("GitHub вернул HTTP " + code + " без заголовка Location для " + currentUrl);
+      if (location.charAt(0) === "/") location = origin + location;
+      if (!new RegExp("^" + origin.replace(/[.*+?^{}()|[\]\\]/g, "\\$&") + "/?", "i").test(location)) {
+        throw new Error("Bootstrap заблокировал перенаправление на недоверенный адрес: " + location);
+      }
+      currentUrl = location;
+      continue;
+    }
+
+    var body = "";
+    try { body = String(response.getContentText() || ""); } catch (ignored) {}
+    var responseHeaders = response.getAllHeaders ? response.getAllHeaders() : {};
+    var diagnostic = [];
+    Object.keys(responseHeaders || {}).forEach(function (key) {
+      var lower = String(key).toLowerCase();
+      if (lower === "x-ratelimit-limit" || lower === "x-ratelimit-remaining" ||
+          lower === "x-ratelimit-reset" || lower === "retry-after") {
+        diagnostic.push(key + "=" + responseHeaders[key]);
+      }
     });
-  } catch (error) {
-    throw new Error("Не удалось получить данные GitHub: " + (error.message || String(error)));
+    throw new Error(
+      "GitHub вернул HTTP " + code + " для " + currentUrl +
+      (diagnostic.length ? ". Rate-limit headers: " + diagnostic.join("; ") : "") +
+      (body ? ". Ответ GitHub: " + body.slice(0, 1200) : ". Тело ответа пустое.")
+    );
   }
-  var code = Number(response.getResponseCode());
-  if (code !== 200) {
-    throw new Error("GitHub вернул HTTP " + code + " для " + url + ". Перенаправления не принимаются.");
-  }
-  return String(response.getContentText() == null ? "" : response.getContentText());
+  throw new Error("Bootstrap остановлен: недостижимое состояние загрузчика GitHub.");
 }
 
 function di3BootstrapGitBlobSha1_(source) {
