@@ -34,11 +34,14 @@ The order register may continue displaying stored event timestamps as one readab
 ### Historical sales — F-02
 
 - Business date remains date-only.
-- Dispatch date and dispatch time are separate mandatory inputs.
-- Completion date and completion time are separate mandatory inputs.
+- Dispatch date is mandatory; a dispatch time window (`from` / `to`) is optional and is entered in separate 24-hour controls.
+- If no time window is supplied, dispatch `effective_at` uses local midnight (`00:00:00`) in `DI3_APP_CONFIG.TIME_ZONE`; precision is `DATE_START_APPROXIMATE`.
+- If a non-zero time window is supplied, dispatch `effective_at` uses the window start; precision is `WINDOW_START_APPROXIMATE`. Equal start/end values represent one exact minute and use `EXACT_MINUTE`.
+- The start of the date/window is a conservative FIFO boundary, not a claim about the actual physical minute. Same-product StockLedger events inside or on the boundary of the uncertainty interval block dispatch until the interval is narrowed or a more precise time is supplied.
+- Completion date and exact completion time remain mandatory. Before implementation, validate completion against the latest possible dispatch instant (window end, or end of local dispatch date for date-only input); this may require completion on the following date.
 - Actual order `created_at` remains the system-recorded creation time.
-- Dispatch `effective_at` is the physical stock-out time; stock movement `recorded_at` is when it was entered.
-- Preserve the F-02 v3→v4 additive migration for `business_date`; no date/time split columns are added to `V3_Orders`.
+- Dispatch `effective_at` is the conservative/known physical stock-out timestamp; stock movement `recorded_at` is when it was entered.
+- The F-02 v3→v4 additive schema appends `business_date` and `dispatch_time_precision`; no date/time split columns are added to `V3_Orders`.
 
 ## 4. Supplies
 
@@ -74,7 +77,7 @@ Do not add a time field to values whose business meaning is a calendar date rath
 - order `business_date` (F-02);
 - accounting business-period keys and other date-only filters.
 
-Do not invent midnight as an event time from these date-only fields. Where a date-only value is used as a lower-bound validation rule, preserve that rule explicitly rather than pretending it is a timestamped event.
+Do not invent midnight as an event time from these date-only fields. The only explicit exception is the approved F-02 historical-dispatch fallback: when the user supplies no time window, use local midnight as a conservative FIFO boundary and mark its precision as approximate. Where a date-only value is used as a lower-bound validation rule, preserve that rule explicitly rather than pretending it is a timestamped event.
 
 ## 7. Shared validation and tests
 
@@ -95,6 +98,7 @@ Regression coverage must include:
 - blank, malformed and impossible times fail closed;
 - timezone conversion and daylight-saving transitions;
 - same-day FIFO receipt/dispatch ordering at minute precision;
+- F-02 date-only and window-start fallback semantics, precision markers, and rejection when another same-product stock event intersects the uncertainty interval;
 - supply sent ≤ awaiting ≤ received;
 - order created/business/dispatch/completion chronology;
 - manual IN/OUT event timestamp versus recorded_at;
@@ -106,6 +110,6 @@ Regression coverage must include:
 
 This contract does not by itself add columns to `V3_Supplies`, `StockLedger`, `StockLots`, or `V3_OrderItems`. Existing timestamp fields are retained.
 
-F-02 still requires its separately designed `V3_Orders.business_date` v3→v4 migration. Do not increment the target schema version until the F-02 field contract and F-06 archive table contract are frozen together.
+F-02 requires its separately designed v3→v4 migration appending `V3_Orders.business_date` and `V3_Orders.dispatch_time_precision`. Do not increment the target schema version until the F-02 field contract and F-06 archive table contract are frozen together.
 
 Implement the date/time controls and shared parser as one coordinated source patch across the order, supply, historical-supply and warehouse workspaces. Add source/Node regression tests and CI. Keep PR #1 Draft and unmerged; runtime acceptance must occur on a restored disposable workbook after backup and Dry Run. Never modify the production RC8 workbook during implementation or acceptance.
