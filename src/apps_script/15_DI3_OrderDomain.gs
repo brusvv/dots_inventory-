@@ -149,8 +149,9 @@ function di3UpgradeOrderSettlementSchema_() {
   ];
   var newHeaders = DI3_TABLE_SCHEMAS.V3_Orders;
   var settlementWidth = legacyHeaders.length + 5;
-  var targetWidth = newHeaders.length;
-  if (targetWidth !== legacyHeaders.length + 6 || newHeaders[targetWidth - 1] !== "commission_payer") {
+  var targetWidth = legacyHeaders.length + 6;
+  var settlementHeaders = newHeaders.slice(0, targetWidth);
+  if (newHeaders[targetWidth - 1] !== "commission_payer" || newHeaders[targetWidth] !== "business_date") {
     throw new Error("Неожиданная версия схемы V3_Orders.");
   }
   if (sheet.getMaxColumns() < targetWidth) {
@@ -158,18 +159,18 @@ function di3UpgradeOrderSettlementSchema_() {
   }
   var actual = sheet.getRange(1, 1, 1, targetWidth).getDisplayValues()[0].map(di3NormalizeHeader_);
   var hasLegacyPrefix = legacyHeaders.every(function (header, index) { return actual[index] === header; });
-  var isSettlementVersion = newHeaders.slice(0, settlementWidth).every(function (header, index) {
+  var isSettlementVersion = settlementHeaders.slice(0, settlementWidth).every(function (header, index) {
     return actual[index] === header;
   });
   var isLegacy = hasLegacyPrefix && !isSettlementVersion;
-  var isCurrent = newHeaders.every(function (header, index) { return actual[index] === header; });
+  var isCurrent = settlementHeaders.every(function (header, index) { return actual[index] === header; });
   if (isCurrent) return { upgraded: false, reason: "ALREADY_CURRENT" };
   if (!isLegacy && !isSettlementVersion) {
     throw new Error("Нельзя обновить V3_Orders: заголовки не соответствуют ни старой, ни промежуточной схеме.");
   }
 
   var appendStart = isLegacy ? legacyHeaders.length : settlementWidth;
-  var expectedTail = newHeaders.slice(appendStart);
+  var expectedTail = settlementHeaders.slice(appendStart);
   var tailActual = actual.slice(appendStart, targetWidth);
   var tailBlank = tailActual.every(function (value) { return !value; });
   var tailCurrent = tailActual.join("|") === expectedTail.join("|");
