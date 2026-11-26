@@ -112,3 +112,6 @@ The actual target `appsscript.json` must already contain the write scope `https:
 
 
 Validation for the confirmed installer increment: GitHub Actions run [45883549244](https://github.com/brusvv/dots_inventory-/actions/runs/45883549244) passed. It checked syntax for 53 Apps Script modules, all 151 existing regression cases, 9 release-manifest tests and 21 deployment-manager tests (181 automated tests total). The CI validates source and pure logic; it does not authorize or perform a live Apps Script installation.
+
+
+Final D-05 installer CI after the guarded error-reporting fixes: [run 45883794490](https://github.com/brusvv/dots_inventory-/actions/runs/45883794490) passed — 53 Apps Script syntax files, 151 existing regression tests, 9 release-manifest tests and 21 deployment-manager tests (181 automated tests total). This does not replace live Apps Script runtime acceptance.
