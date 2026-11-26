@@ -16,7 +16,7 @@ const context = vm.createContext({
   },
   DI3_APP_CONFIG: { GITHUB_RELEASE: { REPOSITORY: "brusvv/dots_inventory-" } }
 });
-for (const file of ["43_DI3_GitHubDeploymentManager.gs", "44_DI3_GitHubInstallPreview.gs", "45_DI3_GitHubConfirmedInstaller.gs"]) {
+for (const file of ["43_DI3_GitHubDeploymentManager.gs", "44_DI3_GitHubInstallPreview.gs", "45_DI3_GitHubConfirmedInstaller.gs", "46_DI3_GitHubCodeRollback.gs"]) {
   const source = fs.readFileSync(path.join(root, "src/apps_script", file), "utf8");
   vm.runInContext(source, context, { filename: file, timeout: 5000 });
 }
@@ -203,6 +203,50 @@ test("post-write verification accepts only an exact complete file set", () => {
   assert.equal(vm.runInContext("di3AssertAppsScriptContentMatches_(" + JSON.stringify(expected) + ", " + JSON.stringify(expected) + ")", context).status, "VERIFIED");
   const changed = [expected[0], installFile("appsscript", "JSON", '{"timeZone":"UTC"}')];
   assert.throws(() => vm.runInContext("di3AssertAppsScriptContentMatches_(" + JSON.stringify(expected) + ", " + JSON.stringify(changed) + ")", context), /отличается от подготовленного/);
+});
+
+
+test("rollback restores the verified snapshot while preserving the current target manifest", () => {
+  const backupProject = { script_id: "script-123", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function oldCode() {}\\n" },
+    { name: "Index", type: "HTML", source: "<p>old</p>" },
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki","oauthScopes":["old"]}' }
+  ] } };
+  const currentProject = { script_id: "script-123", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function newCode() {}\\n" },
+    { name: "Index", type: "HTML", source: "<p>new</p>" },
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Berlin","oauthScopes":["current"]}' }
+  ] } };
+  const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(backupProject) + ", '', '2026-11-26T00:00:00.000Z')", context);
+  const preview = vm.runInContext("di3BuildRollbackTargetFiles_(" + JSON.stringify(envelope) + ", " + JSON.stringify(currentProject) + ")", context);
+  assert.equal(preview.status, "ROLLBACK_PREVIEW_READY");
+  assert.equal(preview.preserved_current_manifest, true);
+  assert.equal(preview.target_files.find(f => f.name === "Code").source, "function oldCode() {}\\n");
+  assert.equal(preview.target_files.find(f => f.name === "Index").source, "<p>old</p>");
+  assert.equal(preview.target_files.find(f => f.name === "appsscript").source, '{"timeZone":"Europe/Berlin","oauthScopes":["current"]}');
+});
+test("rollback refuses a backup from a different Apps Script project", () => {
+  const backupProject = { script_id: "other-script", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function oldCode() {}\\n" },
+    { name: "appsscript", type: "JSON", source: '{}' }
+  ] } };
+  const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(backupProject) + ", '', '2026-11-26T00:00:00.000Z')", context);
+  const currentProject = { script_id: "script-123", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function newCode() {}\\n" },
+    { name: "appsscript", type: "JSON", source: '{}' }
+  ] } };
+  assert.throws(() => vm.runInContext("di3BuildRollbackTargetFiles_(" + JSON.stringify(envelope) + ", " + JSON.stringify(currentProject) + ")", context), /другому Script ID/);
+});
+test("rollback refuses a backup without appsscript manifest", () => {
+  const project = { script_id: "script-123", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function oldCode() {}\\n" }
+  ] } };
+  const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')", context);
+  const currentProject = { script_id: "script-123", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function currentCode() {}\\n" },
+    { name: "appsscript", type: "JSON", source: '{}' }
+  ] } };
+  assert.throws(() => vm.runInContext("di3BuildRollbackTargetFiles_(" + JSON.stringify(envelope) + ", " + JSON.stringify(currentProject) + ")", context), /backup и целевом проекте/);
 });
 
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
