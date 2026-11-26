@@ -620,7 +620,21 @@ function di3ReadHistoricalSaleFormCommand_() {
 }
 
 function di3SaveHistoricalSaleForm() {
-  var result = di3CreateHistoricalSale(di3ReadHistoricalSaleFormCommand_());
+  var command = di3ReadHistoricalSaleFormCommand_();
+  var timezone = di3GetConfiguredTimeZone_();
+  var units = command.lines.reduce(function (sum, line) { return sum + Number(line.quantity || 0); }, 0);
+  var ui = SpreadsheetApp.getUi();
+  var confirmation = ui.alert(
+    "Подтвердить историческую продажу?",
+    "Дата оформления: " + command.business_date + "\\n" +
+    "Фактическая отправка: " + Utilities.formatDate(command.historical_dispatched_at, timezone, "dd.MM.yyyy HH:mm") + "\\n" +
+    "Фактическое завершение: " + Utilities.formatDate(command.historical_completed_at, timezone, "dd.MM.yyyy HH:mm") + "\\n" +
+    "Товарных строк: " + command.lines.length + "; количество единиц: " + units + "\\n\\n" +
+    "Будет создан заказ, выполнено FIFO-списание по указанному времени отправки и завершена продажа. Проверь даты и резервную копию перед подтверждением.",
+    ui.ButtonSet.YES_NO
+  );
+  if (confirmation !== ui.Button.YES) return { status: "CANCELLED_BY_USER", created: false };
+  var result = di3CreateHistoricalSale(command);
   var sheet = di3GetSheetOrThrow_("Историческая продажа");
   sheet.getRange("B4:B6").clearContent();
   sheet.getRange("D5:D6").clearContent();
