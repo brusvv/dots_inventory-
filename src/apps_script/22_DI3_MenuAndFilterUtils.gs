@@ -216,6 +216,7 @@ function di3BuildMenus_() {
       .addItem("Создать заказ", "di3SaveOrderForm")
       .addSeparator()
       .addItem("Открыть форму исторической продажи", "di3OpenHistoricalSaleForm")
+      .addItem("Рассчитать историческую продажу", "di3PreviewHistoricalSaleForm")
       .addItem("Провести историческую продажу", "di3SaveHistoricalSaleForm")
       .addItem("Обновить списки исторической формы", "di3RefreshHistoricalSaleFormValidations")
       .addSeparator()
