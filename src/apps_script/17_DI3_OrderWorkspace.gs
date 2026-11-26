@@ -656,6 +656,7 @@ function di3PreviewHistoricalSaleForm() {
 
 function di3SaveHistoricalSaleForm() {
   var command = di3ReadHistoricalSaleFormCommand_();
+  var plan = di3PreviewHistoricalSaleForm();
   var timezone = di3GetConfiguredTimeZone_();
   var units = command.lines.reduce(function (sum, line) { return sum + Number(line.quantity || 0); }, 0);
   var ui = SpreadsheetApp.getUi();
@@ -664,7 +665,8 @@ function di3SaveHistoricalSaleForm() {
     "Дата оформления: " + command.business_date + "\n" +
     "Фактическая отправка: " + Utilities.formatDate(command.historical_dispatched_at, timezone, "dd.MM.yyyy HH:mm") + "\n" +
     "Фактическое завершение: " + Utilities.formatDate(command.historical_completed_at, timezone, "dd.MM.yyyy HH:mm") + "\n" +
-    "Товарных строк: " + command.lines.length + "; количество единиц: " + units + "\n\n" +
+    "Товарных строк: " + command.lines.length + "; количество единиц: " + units + "\n" +
+    "Сумма покупателя: " + plan.payable_total + " ₽; выручка продавца: " + plan.seller_revenue_estimate + " ₽.\n\n" +
     "Будет создан заказ, выполнено FIFO-списание по указанному времени отправки и завершена продажа. Проверь даты и резервную копию перед подтверждением.",
     ui.ButtonSet.YES_NO
   );
