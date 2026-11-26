@@ -109,3 +109,6 @@ The menu adds **Система → GitHub и обновления → Устан
 Cancel leaves the Apps Script project untouched (the verified source backup remains in Drive). A post-write verification mismatch reports the backup link and does not attempt an automatic rollback; code rollback is a separate D-06 operation. The installer never creates or updates a versioned deployment and never runs setup, schema migration, FIFO rebuild or spreadsheet-data operations.
 
 The actual target `appsscript.json` must already contain the write scope `https://www.googleapis.com/auth/script.projects` in addition to the read-only and external-request scopes. The repository does not fabricate or overwrite the target manifest. The live project must be tested separately before production use.
+
+
+Validation for the confirmed installer increment: GitHub Actions run [45883549244](https://github.com/brusvv/dots_inventory-/actions/runs/45883549244) passed. It checked syntax for 53 Apps Script modules, all 151 existing regression cases, 9 release-manifest tests and 21 deployment-manager tests (181 automated tests total). The CI validates source and pure logic; it does not authorize or perform a live Apps Script installation.
