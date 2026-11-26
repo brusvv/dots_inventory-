@@ -529,8 +529,8 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - GitHub release assets are fetched through the repository's API asset endpoint. Redirects are accepted only for GitHub-owned asset hosts; the optional GitHub token is not forwarded to the signed asset URL.
 - D-04 reads the complete Apps Script project content, including the required actual `appsscript.json`, writes a JSON source snapshot into the existing Dots Inventory Drive backup folder and verifies the saved file after reading it back. The envelope and each file have SHA-256/byte-length checks.
 - Uses least-privilege Apps Script API scope `script.projects.readonly` plus `script.external_request`; private GitHub repository access can use a fine-grained Contents: read token in Script Properties. No token is hard-coded.
-- Added 10 deployment-manager unit tests covering manifest validation, safe redirect hosts, file comparison, manifest preservation and backup tamper detection.
-- CI run [45881718258](https://github.com/brusvv/dots_inventory-/actions/runs/45881718258) passed: 51/51 Apps Script syntax files; 151/151 existing regression tests; 9/9 release-manifest tests; 10/10 deployment-manager tests.
+- Added 11 deployment-manager unit tests covering manifest validation, safe redirect hosts, file comparison, manifest preservation and backup tamper detection.
+- CI run [45881868014](https://github.com/brusvv/dots_inventory-/actions/runs/45881868014) passed: 51/51 Apps Script syntax files; 151/151 existing regression tests; 9/9 release-manifest tests; 11/11 deployment-manager tests.
 - PR #3: [D-03/D-04 GitHub release check and source backup](https://github.com/brusvv/dots_inventory-/pull/3), Draft, based on PR #2's feature branch. PR #2 remains Draft; neither PR has been merged.
 - **Not implemented yet:** D-05 confirmed install/post-write verification, D-06 code rollback and D-07 live runtime acceptance.
 - No live Apps Script project, Google Sheet, RC8 workbook, source code, deployment or spreadsheet data was accessed or modified. Actual OAuth consent and Drive backup test must be performed separately in a disposable/test Apps Script project.
