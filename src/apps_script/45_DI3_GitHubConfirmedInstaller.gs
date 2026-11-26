@@ -153,10 +153,42 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
     throw new Error("Установка отменена: Apps Script проект изменился после подтверждения резервной копии. Повтори preview и подтверждение.");
   }
 
-  var updateResult = di3UpdateAppsScriptProjectContent_(baseline.script_id, preview.target_files);
-  var after = di3GetAppsScriptProjectContent_();
+  var updateResult;
+  try {
+    updateResult = di3UpdateAppsScriptProjectContent_(baseline.script_id, preview.target_files);
+  } catch (updateError) {
+    var updateFailure = {
+      status: "UPDATE_RESULT_UNCERTAIN",
+      write_performed: "UNKNOWN",
+      backup: verifiedBackup,
+      release_tag: preview.release_tag,
+      error: updateError.message || String(updateError)
+    };
+    try { ui.alert("GitHub · результат записи не подтверждён", updateFailure.error +
+      "\nНе запускай установку повторно, пока не проверишь текущее содержимое проекта.\nРезервная копия: " +
+      verifiedBackup.url, ui.ButtonSet.OK); } catch (ignoreUpdateAlert) {}
+    return updateFailure;
+  }
+
+  var after;
+  try {
+    after = di3GetAppsScriptProjectContent_();
+  } catch (readAfterError) {
+    var readFailure = {
+      status: "POST_WRITE_VERIFICATION_UNAVAILABLE",
+      write_performed: true,
+      backup: verifiedBackup,
+      release_tag: preview.release_tag,
+      error: readAfterError.message || String(readAfterError)
+    };
+    try { ui.alert("GitHub · не удалось проверить результат", readFailure.error +
+      "\nЗапись была принята API, но повторное чтение не удалось. Резервная копия: " +
+      verifiedBackup.url, ui.ButtonSet.OK); } catch (ignoreReadAfterAlert) {}
+    return readFailure;
+  }
   if (after.script_id !== baseline.script_id) {
-    throw new Error("После записи API вернул другой Script ID. Резервная копия: " + verifiedBackup.url);
+    return { status: "POST_WRITE_VERIFICATION_FAILED", write_performed: true, backup: verifiedBackup,
+      release_tag: preview.release_tag, error: "После записи API вернул другой Script ID." };
   }
   var verification;
   try { verification = di3AssertAppsScriptContentMatches_(preview.target_files, after.content.files); }
