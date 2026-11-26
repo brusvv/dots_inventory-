@@ -299,7 +299,8 @@ function di3RunOrderDomainUnitTests() {
       millis: di3ToMillis_, items: di3GetOrderItems_,
       pending: typeof globalThis.di3AssertNoOtherPendingStockOperations_ === "function" ? globalThis.di3AssertNoOtherPendingStockOperations_ : null,
       getOperation: di3GetOrderOperationByKey_,
-      readPayload: di3ReadVerifiedOperationPayload_, complete: di3CompleteOrderDispatch_
+      readPayload: typeof globalThis.di3ReadVerifiedOperationPayload_ === "function" ? globalThis.di3ReadVerifiedOperationPayload_ : null,
+      complete: di3CompleteOrderDispatch_
     };
     var savedAt = "2026-01-02T10:00:00.000Z";
     var order = { order_id: "RETRY-ORDER", order_number: "R-1", status: DI3_ORDER_STATUS.NEW,
@@ -309,7 +310,7 @@ function di3RunOrderDomainUnitTests() {
       di3GetOrderItems_ = function () { return [{ order_item_id: "I1", product_id: "P1", quantity: 1 }]; };
       globalThis.di3AssertNoOtherPendingStockOperations_ = function () { return true; };
       di3GetOrderOperationByKey_ = function () { return { values: ["OP-1", "KEY", "ORDER_DISPATCH", "ORDER", "RETRY-ORDER", "PREPARED"] }; };
-      di3ReadVerifiedOperationPayload_ = function () { return { dispatched_at: savedAt, historical_mode: false }; };
+      globalThis.di3ReadVerifiedOperationPayload_ = function () { return { dispatched_at: savedAt, historical_mode: false }; };
       di3CompleteOrderDispatch_ = function () { return { status: "COMMITTED" }; };
       throws(function () { di3DispatchOrder_(order, new Date("2026-01-02T10:01:00.000Z")); }, /другим временем/);
     } finally {
@@ -318,7 +319,8 @@ function di3RunOrderDomainUnitTests() {
       if (originals.pending) globalThis.di3AssertNoOtherPendingStockOperations_ = originals.pending;
       else delete globalThis.di3AssertNoOtherPendingStockOperations_;
       di3GetOrderOperationByKey_ = originals.getOperation;
-      di3ReadVerifiedOperationPayload_ = originals.readPayload;
+      if (originals.readPayload) globalThis.di3ReadVerifiedOperationPayload_ = originals.readPayload;
+      else delete globalThis.di3ReadVerifiedOperationPayload_;
       di3CompleteOrderDispatch_ = originals.complete;
     }
   });
