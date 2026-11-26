@@ -3,7 +3,7 @@ name: Release pipeline checks
 on:
   push:
     branches:
-      - feature/github-release-pipeline
+      - feature/github-deployment-manager
     paths:
       - "src/apps_script/**"
       - "tools/build_release_manifest.js"
@@ -11,7 +11,7 @@ on:
       - ".github/workflows/release-pipeline-tests.yml"
   pull_request:
     branches:
-      - feature/clean-final-baseline
+      - feature/github-release-pipeline
 
 permissions:
   contents: read
