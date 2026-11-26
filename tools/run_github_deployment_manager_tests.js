@@ -26,7 +26,7 @@ function validManifest() {
   const code = "function alpha() { return 1; }\n";
   const hash = crypto.createHash("sha256").update(code).digest("hex");
   return {
-    format: "dots-inventory-release/v1", git_tag: "dots-inventory-v4.0.0",
+    format: "dots-inventory-release/v1", git_tag: "dots-inventory-v4.0.0", release_channel: "stable", source_branch: "main",
     git_commit: "a".repeat(40), target_schema_version: 4, application_time_zone: "Europe/Helsinki",
     manifest_policy: "PRESERVE_TARGET_PROJECT_MANIFEST", source_policy: "PINNED_COMMIT_RAW_FILES",
     files: [{ name: "01_Module.gs", type: "SERVER_JS", source_path: "src/apps_script/01_Module.gs",
@@ -45,6 +45,26 @@ test("accepts valid pinned release manifest", () => {
   const r = vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.0.0')", context);
   assert.equal(r.status, "VALID");
   assert.equal(r.file_count, 1);
+});
+test("rejects Preview manifest when Stable channel is selected", () => {
+  const m = validManifest(); m.git_tag = "dots-inventory-v4.1.0-preview.1";
+  m.release_channel = "preview"; m.source_branch = "feature/work";
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.1.0-preview.1')", context), /не совпадает с выбранным каналом/);
+});
+test("accepts a feature-branch Preview manifest when Preview channel is selected", () => {
+  const m = validManifest(); m.git_tag = "dots-inventory-v4.1.0-preview.1";
+  m.release_channel = "preview"; m.source_branch = "feature/work";
+  context.DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL = "preview";
+  const result = vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.1.0-preview.1')", context);
+  assert.equal(result.status, "VALID");
+  context.DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL = "stable";
+});
+test("rejects Preview claiming main as its source branch", () => {
+  const m = validManifest(); m.git_tag = "dots-inventory-v4.1.0-preview.1";
+  m.release_channel = "preview"; m.source_branch = "main";
+  context.DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL = "preview";
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.1.0-preview.1')", context), /исходную ветку/);
+  context.DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL = "stable";
 });
 test("rejects release tag mismatch", () => {
   const m = validManifest();
