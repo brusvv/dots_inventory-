@@ -260,7 +260,7 @@ function di3RunOrderDomainUnitTests() {
           return "";
         },
         parseDate: function (value) {
-          var match = String(value).match(/^(\\d{4})-(\\d{2})-(\\d{2}) (\\d{2}):(\\d{2})$/);
+          var match = String(value).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
           if (!match) return new Date(NaN);
           return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), 0, 0));
         }
