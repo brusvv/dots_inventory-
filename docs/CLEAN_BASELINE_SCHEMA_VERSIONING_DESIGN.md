@@ -54,7 +54,7 @@ The final schema must be designed as one coherent release and include:
 - StockLedger.ledger_sequence (F-07).
 - FifoProductState.last_processed_ledger_sequence (F-07).
 - FifoAllocationArchive, FifoLotCacheArchive and FifoReplayEvents, with replay identity, source allocation identity, provenance and PREPARED/COMMITTED/QUARANTINED events (F-06 schema is now defined in `00_DI3_SchemaRegistry.gs`).
-- V3_Orders.business_date and any required historical-sale fields (F-02; exact field semantics depend on the unresolved date/time decision).
+- V3_Orders.business_date and any required historical-sale fields (F-02; exact dispatch date/time is confirmed, with separate date-picker and mandatory HH:mm time inputs).
 - Existing commission_payer and money-minor-unit fields.
 - All metadata keys and version gates for FIFO, money calculations, application version and configured timezone.
 
