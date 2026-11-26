@@ -14,6 +14,10 @@ Only .gs files directly under src/apps_script are included. Runtime probes, test
 
 The manifest has a detached SHA-256 sidecar. Source checksums are in SHA256SUMS.txt. The release ZIP contains the same manifest and all source modules.
 
+## Release tag policy implementation
+
+The tag gate is implemented in `tools/validate_release_tag.sh` and is shared by the tag-push workflow. CI runs `tools/test_release_tag_policy.sh` against temporary local Git repositories. The tests cover Stable from main, Preview from its declared feature branch, missing source branch, a commit outside the declared branch, lightweight tags, Stable commits outside main, and unsupported prerelease suffixes. The test harness writes only inside its temporary directory.
+
 ## Publishing channels
 
 ### Stable
