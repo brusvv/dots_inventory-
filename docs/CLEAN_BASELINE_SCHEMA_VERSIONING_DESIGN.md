@@ -102,3 +102,10 @@ The current clean-final target is frozen at schema v4: F-02 business-date semant
 ## Shared operational date/time input contract — 26.11.2026
 
 The final schema contract retains one canonical timestamp for each event. Separate date and time controls are a UI concern across orders, supplies and manual warehouse movements; they do not add split date/time columns to V3_Supplies or StockLedger. Date-only business/planning values remain date-only. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md`. The clean-final target is now v4 with F-02 and F-06 contracts represented. Any further schema change must increment the target through a separately reviewed migration; do not mutate the frozen v4 contract in place.
+
+
+## Follow-up guard — populated managed workspaces — 26.11.2026
+
+The clean-baseline eligibility check also rejects a first-time unversioned workbook when any known application-owned workspace already contains cells or charts. This closes the case where a populated visible workspace (such as the product register) exists while its backing system table is absent/empty: setup could otherwise adopt a clean baseline and rebuild the derived workspace from empty source data. An existing but genuinely empty managed tab remains eligible. Once the clean-baseline journal identity exists, normal business rows and populated workspaces are expected and do not invalidate subsequent setup runs.
+
+Regression coverage verifies both the blocking populated-workspace case and the allowed empty-workspace case. Latest PR CI run [45864597621](https://github.com/brusvv/dots_inventory-/actions/runs/45864597621) passed syntax checks for 50 `.gs` files and 147/147 Node tests (FIFO 42, Order Domain 22, Supply UX 17, Catalog/Order UX 14, System Safety UX 39, Warehouse Dashboard 9, Finance 4). Runtime acceptance in Google Sheets remains pending.
