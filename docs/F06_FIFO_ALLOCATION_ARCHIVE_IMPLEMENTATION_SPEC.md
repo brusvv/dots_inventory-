@@ -13,7 +13,7 @@
 
 **Implemented in source:** deterministic allocation IDs for product/full replay; idempotent append-only allocation and lot-cache snapshots; PREPARED/COMMITTED/QUARANTINED event transitions; stable per-product replay IDs; pending run reuse; manual product-set run reuse by exact scope and input fingerprint; source restoration when active projection is neither source nor target; recovery before tail processing; read-only archive/event integrity diagnostics; backup full-hash priority for all FIFO archive tables; rollback tests for failures during allocation and lot-cache writes; and a mutation gate while FIFO runs remain unresolved. Archive snapshots are written before active projection replacement.
 
-**Source verification:** Latest GitHub Actions run `45721449653` passed syntax checks for 50 `.gs` files and all seven Node suites (118/118: FIFO 41, Order Domain 17, Supply Workspace UX 15, Catalog/Order UX 12, System Safety UX 20, Warehouse Dashboard 9, Finance Schema 4). This validates the source/test harness only; Apps Script runtime fault-injection at every write boundary, full backup/restore acceptance and operator quarantine-resolution UX remain pending.
+**Source verification:** Latest GitHub Actions run `45853092868` (run #225) passed syntax checks for 50 `.gs` files and all seven Node suites (145/145: FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 38, Warehouse Dashboard 9, Finance Schema 4). This validates the source/test harness only; Apps Script runtime fault-injection at every write boundary, full backup/restore acceptance and operator quarantine-resolution UX remain pending.
 ## 1. Цель и границы
 
 F-06 должен сохранять каждую вытесненную версию активных FIFO-распределений и обеспечивать восстановление после остановки Apps Script между отдельными записями Google Sheets.
@@ -319,3 +319,8 @@ Runtime acceptance проводить на disposable empty workbook после 
 ## 10. Ограничения текущего этапа
 
 Этот документ фиксирует архитектуру по текущему исходному коду. Код приложения, таблицы Google Sheets, схема установленной таблицы и данные не изменялись. Source tests и runtime fault-injection не запускались. Реализация F-06 не считается завершённой.
+
+
+## Current branch verification — 26.11.2026
+
+The F-06 source implementation is present on `feature/clean-final-baseline` and passes the current 145-test source CI. The earlier design-only statement in section 321 is historical and superseded by the implementation status at the top of this document. No Google Sheets runtime fault-injection, full backup/restore acceptance or operator quarantine-resolution UX has been executed. Do not treat source CI as runtime sign-off.
