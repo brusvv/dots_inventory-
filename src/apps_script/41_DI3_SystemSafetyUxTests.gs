@@ -507,6 +507,31 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("clean baseline rejects populated columns outside the target table schema", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      var headers = DI3_TABLE_SCHEMAS.Products.slice();
+      var productSheet = {
+        getLastRow: function () { return 1; },
+        getLastColumn: function () { return headers.length + 1; },
+        getMaxColumns: function () { return headers.length + 1; },
+        getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
+      };
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) { return name === "Products" ? productSheet : null; } };
+      };
+      di3GetSchemaVersion_ = function () { return 0; };
+      di3GetSchemaMigrationRows_ = function () { return []; };
+      equal(di3GetCleanBaselineState_().eligible, false);
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
     ["StockLedger", "StockAllocations", "FifoAllocationRuns", "FifoAllocationArchive",
       "FifoLotCacheArchive", "FifoReplayEvents"].forEach(function (sheetName) {
