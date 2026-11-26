@@ -33,15 +33,11 @@ The order register may continue displaying stored event timestamps as one readab
 
 ### Historical sales — F-02
 
-- Business date remains date-only.
-- Dispatch date is mandatory; a dispatch time window (`from` / `to`) is optional and is entered in separate 24-hour controls.
-- If no time window is supplied, dispatch `effective_at` uses local midnight (`00:00:00`) in `DI3_APP_CONFIG.TIME_ZONE`; precision is `DATE_START_APPROXIMATE`.
-- If a non-zero time window is supplied, dispatch `effective_at` uses the window start; precision is `WINDOW_START_APPROXIMATE`. Equal start/end values represent one exact minute and use `EXACT_MINUTE`.
-- The start of the date/window is a conservative FIFO boundary, not a claim about the actual physical minute. Same-product StockLedger events inside or on the boundary of the uncertainty interval block dispatch until the interval is narrowed or a more precise time is supplied.
-- Completion date and exact completion time remain mandatory. Before implementation, validate completion against the latest possible dispatch instant (window end, or end of local dispatch date for date-only input); this may require completion on the following date.
-- Actual order `created_at` remains the system-recorded creation time.
-- Dispatch `effective_at` is the conservative/known physical stock-out timestamp; stock movement `recorded_at` is when it was entered.
-- The F-02 v3→v4 additive schema appends `business_date` and `dispatch_time_precision`; no date/time split columns are added to `V3_Orders`.
+- The customer-order `business_date` is entered manually as a date-only value. It represents when the buyer placed the order, not when the user saw or entered it.
+- Actual order `created_at` remains automatically recorded by the system. Example: an order placed at 23:00 on 25 November and entered at 08:00 on 26 November stores business_date = 25 November and created_at = 26 November 08:00.
+- Business date is included in the immutable order payload/request hash and is validated as a business date; it does not become a StockLedger event timestamp.
+- Physical dispatch and completion remain separate lifecycle transitions and use their actual date + exact time inputs. Existing FIFO preflight/replay uses the actual dispatch event timestamp.
+- The F-02 v3→v4 additive schema appends only `business_date`; no dispatch precision/window fields or date/time split columns are added to `V3_Orders`.
 
 ## 4. Supplies
 
@@ -77,7 +73,7 @@ Do not add a time field to values whose business meaning is a calendar date rath
 - order `business_date` (F-02);
 - accounting business-period keys and other date-only filters.
 
-Do not invent midnight as an event time from these date-only fields. The only explicit exception is the approved F-02 historical-dispatch fallback: when the user supplies no time window, use local midnight as a conservative FIFO boundary and mark its precision as approximate. Where a date-only value is used as a lower-bound validation rule, preserve that rule explicitly rather than pretending it is a timestamped event.
+Do not invent midnight as an event time from these date-only fields. F-02 `business_date` is a calendar date describing when the customer placed the order; it is not a timestamp and is never converted to a FIFO event. Physical dispatch continues to require its own actual date/time input.
 
 ## 7. Shared validation and tests
 
