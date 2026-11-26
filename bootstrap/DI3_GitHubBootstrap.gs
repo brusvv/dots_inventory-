@@ -11,11 +11,11 @@
  */
 var DI3_GITHUB_BOOTSTRAP_CONFIG = Object.freeze({
   REPOSITORY: "brusvv/dots_inventory-",
-  COMMIT: "2631969aa256fbf077e9f5356f35d45a9f647a76",
+  COMMIT: "1ff4c9869364222793ff1c8fe01fa6d42517d41a",
   EXPECTED_FILE_COUNT: 47,
   BACKUP_PREFIX: "DotsInventory_AppsScript_Source_",
   MAX_BACKUP_BYTES: 10000000,
-  TIME_ZONE: "Europe/Helsinki",
+  TIME_ZONE: "Europe/Moscow",
   REQUIRED_SCOPES: [
     "https://www.googleapis.com/auth/script.projects",
     "https://www.googleapis.com/auth/script.projects.readonly",
