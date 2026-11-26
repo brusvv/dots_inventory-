@@ -1861,6 +1861,7 @@ function di3GetFifoIntegrityDiagnostics_() {
       fifo_pending_replays: replayArchiveDiagnostics.summary.pending_replays,
       fifo_committed_replays: replayArchiveDiagnostics.summary.committed_replays,
       fifo_quarantined_replays: replayArchiveDiagnostics.summary.quarantined_replays,
+      fifo_manually_resolved_replays: replayArchiveDiagnostics.summary.manually_resolved_replays,
       fifo_state_version: String(version || ""),
       fifo_ledger_sequence_cursor: cursor,
       max_ledger_sequence: maxLedgerSequence,
