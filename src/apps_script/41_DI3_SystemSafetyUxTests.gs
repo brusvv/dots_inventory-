@@ -632,6 +632,17 @@ function di3RunSystemSafetyUxUnitTests() {
       equal(records.length, 1, "Rerun must not append another baseline record");
       equal(createCount, 1, "Rerun must not recreate the baseline");
       equal(statusWriteCount, 1, "Rerun must not rewrite a completed journal row");
+
+      // Simulate interruption after schema_version was written but before
+      // the clean-baseline journal row was marked COMPLETED.
+      records[0].status = "STARTED";
+      var resumed = di3EnsureSchemaVersioning_(null);
+      equal(resumed.status, "RESUMED_CLEAN_BASELINE");
+      equal(version, DI3_SCHEMA_VERSION, "Recovery must not rewrite an already-correct version");
+      equal(records.length, 1, "Recovery must reuse the original baseline row");
+      equal(createCount, 1, "Recovery must not create a duplicate baseline row");
+      equal(records[0].status, "COMPLETED");
+      equal(statusWriteCount, 2, "Recovery must complete the existing journal row once");
     } finally {
       di3GetSchemaVersioningReport_ = originals.report;
       di3ValidateExistingCoreSchemas_ = originals.validate;
