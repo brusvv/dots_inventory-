@@ -7,14 +7,14 @@ Status: clean-baseline source path implemented on `feature/clean-final-baseline`
 
 The current setup flow is designed to adopt an existing RC8 baseline and then apply ordered additive migrations:
 
-- `DI3_SCHEMA_VERSION = 3`;
-- baseline adoption advances schema version 0 to 1;
-- migration definitions advance 1 → 2 and 2 → 3;
-- `di3EnsureSchemaVersioning_` expects exactly those migration records when version 3 is current.
+- `DI3_SCHEMA_VERSION = 4`;
+- clean-baseline adoption advances schema version 0 directly to 4;
+- the recognized RC8 path retains baseline v1 and ordered migrations 1 → 2 → 3 → 4, with F-02 adding `RC8_ORDER_BUSINESS_DATE_V4` (3 → 4);
+- `di3EnsureSchemaVersioning_` validates the complete migration journal when a legacy workbook is at v4.
 
-At the same time, `DI3_TABLE_SCHEMAS` already describes the current final v3 column layouts. On an empty workbook, setup creates those final headers first and then the versioning routine records the historical migration chain. That approach is workable for RC8, but it becomes increasingly misleading when the next clean release includes new FIFO and historical-sale structures.
+At the same time, `DI3_TABLE_SCHEMAS` describes the current final v4 column layouts. On an empty workbook, setup creates those final headers first and then the versioning routine records the historical migration chain. That approach is workable for RC8, but it becomes increasingly misleading when the next clean release includes new FIFO and historical-sale structures.
 
-Simply changing `DI3_SCHEMA_VERSION` to 5 is unsafe: the current versioning report and migration runner assume a v1 baseline and a complete sequential chain. A blank final workbook should not pretend that it was migrated through every historical intermediate schema.
+Simply changing `DI3_SCHEMA_VERSION` without a matching migration definition and clean-baseline contract is unsafe: the versioning report and migration runner require a complete sequential legacy chain, while a clean workbook must adopt the final target directly. A blank final workbook should not pretend that it was migrated through every historical intermediate schema.
 
 ## Recommended model: two explicit installation paths
 
@@ -41,7 +41,7 @@ If execution is interrupted:
 Used only when a workbook contains a recognized earlier application schema or business data.
 
 - Keep the existing sequential migration definitions for the versions they actually represent.
-- Add separately reviewed migration steps for F-02, F-06 and F-07 only if continued support for RC8 workbooks is required.
+- The RC8 compatibility path now includes the additive F-02 v3 → v4 business-date migration. F-06/F-07 legacy migration is not implied: the 13-column sequence-based StockLedger baseline is intentionally not made compatible with the old 12-column RC8 ledger unless a separate migration is designed and explicitly approved.
 - Require verified backup, no pending stock operations, schema/header validation, FIFO integrity diagnostics and a documented rollback/recovery path.
 - Never apply the clean-baseline shortcut to a workbook with existing business data.
 
@@ -58,7 +58,7 @@ The final schema must be designed as one coherent release and include:
 - Existing commission_payer and money-minor-unit fields.
 - All metadata keys and version gates for FIFO, money calculations, application version and configured timezone.
 
-Do not freeze the final schema version number until F-02 field semantics and F-06 archive table contract are settled. The release should have one target schema version, not an accidental chain of intermediate migrations for a workbook that never contained those intermediate states.
+The current clean-final target is frozen at schema v4: F-02 business-date semantics and F-06 archive tables are represented in the final schema. Any later structural change must receive a separately reviewed version/migration. A clean workbook still receives one 0 → 4 adoption record, not a fabricated chain of intermediate migrations.
 
 ## Setup and backup/restore requirements
 
@@ -85,20 +85,20 @@ Do not freeze the final schema version number until F-02 field semantics and F-0
 
 - `di3DryRunInstallation()` now inventories every workbook tab. Known system tables, current/legacy managed workspaces and the default blank tab names are allowlisted. Any other tab containing cells or charts is reported as a blocking issue; the preflight does not rename, clear or delete it. This is source-implemented and covered by the System Safety UX Node suite, but still needs a real Google Sheets Dry Run check.
 - Backup hashing priority now explicitly includes `FifoAllocationArchive`, `FifoLotCacheArchive` and `FifoReplayEvents`; a regression test protects that priority. Backup snapshots still enumerate all spreadsheet tabs.
-- The setup flow in `04_DI3_Setup.gs` still runs schema versioning after `di3EnsureCoreFoundationSchemas_(true)` has created/initialized the current schema. `33_DI3_SchemaVersioning.gs` now distinguishes a clean final baseline from the RC8 upgrade path. A clean workbook receives one `CLEAN_FINAL_BASELINE_ADOPTION` record (0 → current target version) after exact final-header validation; the legacy RC8 baseline and ordered v1→v2→v3 chain remain separate. The clean path is recognized on subsequent setup runs even after ordinary business rows have been created, and interrupted STARTED records can resume after revalidation.
+- The setup flow in `04_DI3_Setup.gs` still runs schema versioning after `di3EnsureCoreFoundationSchemas_(true)` has created/initialized the current schema. `33_DI3_SchemaVersioning.gs` distinguishes a clean final baseline from the RC8 upgrade path. A clean workbook receives one `CLEAN_FINAL_BASELINE_ADOPTION` record (0 → v4) after exact final-header validation; the legacy RC8 baseline and ordered v1→v2→v3→v4 chain remain separate. The clean path is recognized on subsequent setup runs even after ordinary business rows have been created, and interrupted STARTED records can resume after revalidation.
 - Latest GitHub Actions PR run `45728640689` (run #98, merge commit `903b546`) passed syntax checks for 50 `.gs` files and 130/130 Node tests: FIFO 41, Order Domain 17, Supply UX 15, Catalog/Order UX 12, System Safety 32, Warehouse Dashboard 9, Finance 4. The 32 System Safety tests include the added fail-closed regression for a fully cleared header row after baseline adoption. This validates source-level behavior only, not Google Sheets runtime acceptance.
 
 
 ## Implementation note — clean baseline branch
 
 - Branch: `feature/clean-final-baseline`.
-- The clean path currently adopts target schema **v3**, because F-02 historical-sale fields have not yet been implemented or frozen. If F-02 is included before the first production install, update the target schema and include its fields in the clean baseline directly; do not simulate v4 history in a never-migrated workbook.
+- The clean path adopts target schema **v4**, including `V3_Orders.business_date` at AD. A new workbook records one 0 → 4 clean-baseline adoption; it does not simulate RC8 v1→v2→v3→v4 history.
 - Eligibility is fail-closed: the workbook must be unversioned, have no legacy migration records, contain no business rows before the first baseline record, and have only absent/blank/exact-current system headers. Once the clean baseline record exists, it remains the identity anchor for later setup reruns. An unversioned populated workbook without a recognized legacy migration identity is BLOCKED rather than silently adopted as either clean or legacy.
 - The legacy path is preserved for recognized earlier workbooks; the clean path does not adopt RC8 data or execute RC8 migrations.
 - Added twelve targeted System Safety UX tests for empty workbook eligibility, rejection of unversioned business rows, rejection of legacy/mismatched headers, and recognition after normal business rows exist.
-- The latest PR validation is GitHub Actions run `45728640689` (run #98): syntax check for 50 `.gs` files and 130/130 Node tests (FIFO 41, Order Domain 17, Supply UX 15, Catalog/Order UX 12, System Safety 32, Warehouse Dashboard 9, Finance 4). This run includes clean-baseline recovery, duplicate/mismatched journal, missing-table, out-of-schema and fully-cleared-header rejection checks. Real Apps Script Dry Run/setup/interruption acceptance remains pending.
+- The latest PR validation is GitHub Actions run `45847110942` (run #146): syntax check for 50 `.gs` files and 133/133 Node tests (FIFO 41, Order Domain 20, Supply UX 15, Catalog/Order UX 12, System Safety 32, Warehouse Dashboard 9, Finance 4). This run includes clean-baseline recovery, duplicate/mismatched journal, missing-table, out-of-schema and fully-cleared-header rejection checks, plus the three F-02 regression cases. Real Apps Script Dry Run/setup/interruption acceptance remains pending.
 
 
 ## Shared operational date/time input contract — 26.11.2026
 
-The final schema contract retains one canonical timestamp for each event. Separate date and time controls are a UI concern across orders, supplies and manual warehouse movements; they do not add split date/time columns to V3_Supplies or StockLedger. Date-only business/planning values remain date-only. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md`. Do not freeze or increment the final target schema version until F-02 and F-06 schema contracts are jointly frozen.
+The final schema contract retains one canonical timestamp for each event. Separate date and time controls are a UI concern across orders, supplies and manual warehouse movements; they do not add split date/time columns to V3_Supplies or StockLedger. Date-only business/planning values remain date-only. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md`. The clean-final target is now v4 with F-02 and F-06 contracts represented. Any further schema change must increment the target through a separately reviewed migration; do not mutate the frozen v4 contract in place.
