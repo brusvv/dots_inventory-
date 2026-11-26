@@ -153,7 +153,7 @@ The following issues have source changes and local regression coverage. They are
 ### Still open or only partially mitigated
 
 - **F-01:** code-fixed and locally tested; end-to-end return after a newer unrelated FIFO run still needs runtime acceptance.
-- **F-02:** v3→v4 source implementation is on PR #1: `business_date`, separate historical-sale form, guarded historical FIFO dispatch/completion, immutable retry checks and order-register date display. Source CI passed 134/134 (run #160); disposable-workbook runtime acceptance remains pending. See `docs/F02_HISTORICAL_SALES_DESIGN.md`. Exact dispatch date/time is confirmed. UI decision: use separate adjacent calendar-date and mandatory 24-hour `HH:mm` controls so selecting a date cannot reset the time; completion uses the same pair, business date is date-only. Remaining F-02 implementation/design review is open.
+- **F-02:** v3→v4 source implementation is on PR #1: `business_date`, separate historical-sale form, guarded historical FIFO dispatch/completion, immutable retry checks and order-register date display. Source CI passed 134/134 (current-head run #163; final source patch also passed in run #160); disposable-workbook runtime acceptance remains pending. See `docs/F02_HISTORICAL_SALES_DESIGN.md`. Exact dispatch date/time is confirmed. UI decision: use separate adjacent calendar-date and mandatory 24-hour `HH:mm` controls so selecting a date cannot reset the time; completion uses the same pair, business date is date-only. Remaining F-02 implementation/design review is open.
 - **F-04:** payload-size guard only; chunking/compaction remains a future design task.
 - **F-06/F-07:** FIFO allocation archival and stable cursors remain open; require a migration/replay design.
 - **F-09:** per-view isolation and journal warning are added, but O(N) read cost and scoped refresh remain open.
@@ -383,7 +383,7 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Added three F-02 source regression tests: request-hash timestamp/date binding, historical-only backdate permission, and immutable dispatch timestamp mismatch rejection.
 - **Runtime not accepted:** no Google Sheets migration, form submission, FIFO replay, PeriodGuard, commission settlement or Finance Dashboard runtime test has been executed. Run these only on a restored disposable workbook after backup and Dry Run. Production RC8 remains untouched; PR #1 remains Draft/unmerged.
 
-- **F-02 source CI verification:** GitHub Actions run `45847938650` (run #160) passed syntax for 50 Apps Script files and 134/134 regression tests (FIFO 41, Order Domain 21, Supply UX 15, Catalog/Order UX 12, System Safety 32, Warehouse Dashboard 9, Finance 4). Later commits after that run changed documentation only. Google Sheets runtime acceptance remains open.
+- **F-02 source CI verification:** GitHub Actions run `45848104778` (run #163) passed syntax for 50 Apps Script files and 134/134 regression tests (FIFO 41, Order Domain 21, Supply UX 15, Catalog/Order UX 12, System Safety 32, Warehouse Dashboard 9, Finance 4). Later commits after that run changed documentation only. Google Sheets runtime acceptance remains open.
 
 ## F-02 — historical dispatch recovery hardening — 26.11.2026
 
