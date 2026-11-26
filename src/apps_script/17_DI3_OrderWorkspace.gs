@@ -341,11 +341,11 @@ function di3SetupOrderRegister() {
   var sheet = ss.getSheetByName(DI3_ORDER_REGISTER_SHEET);
   var created = false;
   var preservedDates = {};
-  if (!sheet) { sheet = ss.insertSheet(DI3_ORDER_REGISTER_SHEET); di3PrepareNewSheet_(sheet, 3, 17); created = true; }
+  if (!sheet) { sheet = ss.insertSheet(DI3_ORDER_REGISTER_SHEET); di3PrepareNewSheet_(sheet, 3, 18); created = true; }
   if (created || sheet.getLastRow() === 0) {
-    sheet.getRange("A1:Q1").merge();
+    sheet.getRange("A1:R1").merge();
     sheet.getRange("A1").setValue("РЕЕСТР ЗАКАЗОВ");
-    sheet.getRange("A2:Q2").merge();
+    sheet.getRange("A2:R2").merge();
     sheet.getRange("A2").setValue("Комиссия — доплата покупателя площадке. Выручка и прибыль продавца учитываются отдельно. Выбери строку заказа для смены статуса; дату укажи в колонке P.");
   } else {
     var currentWidth = Math.max(17, sheet.getLastColumn());
@@ -359,7 +359,7 @@ function di3SetupOrderRegister() {
       if (typeof sheet.getFilter === "function" && sheet.getFilter()) sheet.getFilter().remove();
       if (typeof sheet.getRange("A1:M1").breakApart === "function") sheet.getRange("A1:M1").breakApart();
       if (typeof sheet.getRange("A2:M2").breakApart === "function") sheet.getRange("A2:M2").breakApart();
-      if (sheet.getLastRow() >= 4) sheet.getRange(4, 1, sheet.getLastRow() - 3, 17).clearContent();
+      if (sheet.getLastRow() >= 4) sheet.getRange(4, 1, sheet.getLastRow() - 3, 18).clearContent();
       sheet.getRange("A1:Q1").merge();
       sheet.getRange("A2:Q2").merge();
     } else if (newHeader.slice(0, 17).join("|") !== previousCurrentHeader.join("|") ||
@@ -405,7 +405,7 @@ function di3RefreshOrderRegister(preservedDatesOverride) {
     sheet.getRange(4, 16, rows.length, 1).setNumberFormat("dd.mm.yyyy hh:mm");
     sheet.getRange(4, 18, rows.length, 1).setNumberFormat("dd.mm.yyyy");
     sheet.getBandings().forEach(function (banding) { banding.remove(); });
-    di3ApplyLightBandingWithDarkText_(sheet.getRange(4, 1, rows.length, 17));
+    di3ApplyLightBandingWithDarkText_(sheet.getRange(4, 1, rows.length, 18));
     var filter = sheet.getFilter();
     var filterRange = sheet.getRange(3, 1, rows.length + 1, 18);
     if (filter) di3SetFilterRangePreservingCriteria_(sheet, filterRange); else filterRange.createFilter();
@@ -507,19 +507,19 @@ function di3SetupHistoricalSaleForm() {
   if (created || sheet.getLastRow() === 0) {
     sheet.getRange("A1:G1").merge().setValue("ВНЕСТИ ИСТОРИЧЕСКУЮ ПРОДАЖУ");
     sheet.getRange("A2:G2").merge().setValue("Создаёт заказ и проводит фактическое FIFO-списание по указанной дате отправки, затем завершает продажу по фактической дате. Используй только для уже состоявшихся продаж.");
-    sheet.getRange("A4:A13").setValues([
-      ["Дата оформления покупателем"], ["Фактическая дата отправки"], ["Время отправки (HH:mm)"],
-      ["Фактическая дата завершения"], ["Время завершения (HH:mm)"],
+    sheet.getRange("A4:A12").setValues([
+      ["Дата оформления покупателем"], ["Фактическая дата отправки"], ["Фактическая дата завершения"],
       ["Комиссию оплачивает покупатель"], ["Комиссия площадки, %"], ["Учитывать скидку продавца"],
-      ["Скидка покупателю, %"], ["Метод доставки"]
+      ["Скидка покупателю, %"], ["Метод доставки"], ["Комментарий"]
     ]);
-    sheet.getRange("B9").insertCheckboxes().setValue(true);
-    sheet.getRange("B11").insertCheckboxes().setValue(false);
+    sheet.getRange("C5").setValue("Время отправки (HH:mm)");
+    sheet.getRange("C6").setValue("Время завершения (HH:mm)");
+    sheet.getRange("B7").insertCheckboxes().setValue(true);
+    sheet.getRange("B9").insertCheckboxes().setValue(false);
+    sheet.getRange("B8").setValue(0);
     sheet.getRange("B10").setValue(0);
-    sheet.getRange("B12").setValue(0);
-    sheet.getRange("B13").setValue("");
-    sheet.getRange("A14").setValue("Комментарий");
-    sheet.getRange("B14").setValue("");
+    sheet.getRange("B11").setValue("");
+    sheet.getRange("B12").setValue("");
     sheet.getRange("A16:C16").merge().setValue("ТОВАРНЫЕ ПОЗИЦИИ");
     sheet.getRange("A17:C17").setValues([["Товар", "Количество, шт.", "Цена продажи, ₽ / шт. (пусто = цена каталога)"]]);
     sheet.getRange("F3:G3").merge().setValue("ПРОВЕРКА СУММ");
@@ -540,13 +540,11 @@ function di3SetupHistoricalSaleForm() {
       throw new Error("Лист «Историческая продажа» имеет несовместимые заголовки.");
     }
   }
-  sheet.getRange("B4:B7").setNumberFormat("dd.mm.yyyy");
+  sheet.getRange("B4:B6").setNumberFormat("dd.mm.yyyy");
   sheet.getRange("D5:D6").setNumberFormat("@");
+  sheet.getRange("B8").setNumberFormat('0.00"%"');
   sheet.getRange("B10").setNumberFormat('0.00"%"');
-  sheet.getRange("B12").setNumberFormat('0.00"%"');
-  sheet.getRange("B4:B7").setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build());
-  sheet.getRange("C5").setValue("Время отправки");
-  sheet.getRange("C6").setValue("Время завершения");
+  sheet.getRange("B4:B6").setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build());
   sheet.getRange("D5:D6").setNote("Укажи точное местное время в формате HH:mm.");
   if (created) di3GetFormRequestToken_("HISTORICAL_ORDER");
   else di3GetFormRequestToken_("HISTORICAL_ORDER");
@@ -565,10 +563,10 @@ function di3RefreshHistoricalSaleFormValidations() {
     );
   } else sheet.getRange("A18:A36").clearDataValidations();
   var methods = di3GetDeliveryMethodNames_();
-  if (methods.length) sheet.getRange("B13").setDataValidation(
+  if (methods.length) sheet.getRange("B11").setDataValidation(
     SpreadsheetApp.newDataValidation().requireValueInList(methods, true).setAllowInvalid(false).build()
   );
-  else sheet.getRange("B13").clearDataValidations();
+  else sheet.getRange("B11").clearDataValidations();
   sheet.getRange("B18:B36").setDataValidation(di3BuildOptionalPositiveIntegerValidation_("B18")).setNumberFormat("0");
   sheet.getRange("C18:C36").setDataValidation(di3BuildOptionalNonnegativeNumberValidation_()).setNumberFormat("#,##0.00 ₽");
   return { products: products.options.length, delivery_methods: methods.length };
@@ -577,7 +575,7 @@ function di3RefreshHistoricalSaleFormValidations() {
 function di3BuildHistoricalDateTime_(dateValue, timeValue, label) {
   if (!(dateValue instanceof Date) || !Number.isFinite(dateValue.getTime())) throw new Error(label + ": укажи дату.");
   var time = String(timeValue == null ? "" : timeValue).trim();
-  if (!/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(time)) throw new Error(label + ": время должно быть в формате HH:mm.");
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error(label + ": время должно быть в формате HH:mm.");
   var timezone = di3GetConfiguredTimeZone_();
   var value = Utilities.formatDate(dateValue, timezone, "yyyy-MM-dd") + " " + time;
   var parsed = Utilities.parseDate(value, timezone, "yyyy-MM-dd HH:mm");
@@ -602,12 +600,12 @@ function di3ReadHistoricalSaleFormCommand_() {
     business_date: di3FormatBusinessDate_(sheet.getRange("B4").getValue()),
     historical_dispatched_at: di3BuildHistoricalDateTime_(sheet.getRange("B5").getValue(), sheet.getRange("D5").getDisplayValue(), "Отправка"),
     historical_completed_at: di3BuildHistoricalDateTime_(sheet.getRange("B6").getValue(), sheet.getRange("D6").getDisplayValue(), "Завершение"),
-    commission_paid_by_buyer: sheet.getRange("B9").getValue() === true,
-    commission_rate: di3NormalizeOrderPercentInput_(sheet.getRange("B10").getValue(), sheet.getRange("B10").getNumberFormat(), "Комиссия"),
-    discount_enabled: sheet.getRange("B11").getValue() === true,
-    discount_rate: di3NormalizeOrderPercentInput_(sheet.getRange("B12").getValue(), sheet.getRange("B12").getNumberFormat(), "Скидка"),
-    delivery_method: sheet.getRange("B13").getValue(),
-    notes: sheet.getRange("B14").getValue(),
+    commission_paid_by_buyer: sheet.getRange("B7").getValue() === true,
+    commission_rate: di3NormalizeOrderPercentInput_(sheet.getRange("B8").getValue(), sheet.getRange("B8").getNumberFormat(), "Комиссия"),
+    discount_enabled: sheet.getRange("B9").getValue() === true,
+    discount_rate: di3NormalizeOrderPercentInput_(sheet.getRange("B10").getValue(), sheet.getRange("B10").getNumberFormat(), "Скидка"),
+    delivery_method: sheet.getRange("B11").getValue(),
+    notes: sheet.getRange("B12").getValue(),
     lines: lines,
     request_token: di3GetFormRequestToken_("HISTORICAL_ORDER")
   };
@@ -616,12 +614,12 @@ function di3ReadHistoricalSaleFormCommand_() {
 function di3SaveHistoricalSaleForm() {
   var result = di3CreateHistoricalSale(di3ReadHistoricalSaleFormCommand_());
   var sheet = di3GetSheetOrThrow_("Историческая продажа");
-  sheet.getRange("B4:B7").clearContent();
+  sheet.getRange("B4:B6").clearContent();
   sheet.getRange("D5:D6").clearContent();
+  sheet.getRange("B8").setValue(0);
+  sheet.getRange("B9").setValue(false);
   sheet.getRange("B10").setValue(0);
-  sheet.getRange("B11").setValue(false);
-  sheet.getRange("B12").setValue(0);
-  sheet.getRange("B13:B14").clearContent();
+  sheet.getRange("B11:B12").clearContent();
   sheet.getRange("A18:C36").clearContent();
   sheet.getRange("G4:G8").clearContent();
   di3RotateFormRequestToken_("HISTORICAL_ORDER");
