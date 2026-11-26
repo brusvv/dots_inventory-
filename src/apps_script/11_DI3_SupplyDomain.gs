@@ -412,30 +412,12 @@ function di3EnsureSupplyDatePanelLayout_(sheet) {
       existingNote !== previousOrderDateSemanticsNote && existingNote.indexOf("Вводи фактические даты по очереди") !== 0) || unexpectedContent) {
     throw new Error("Область D2:J8 листа «Поставка v3» содержит неизвестную структуру или данные. Размещение панели дат остановлено без перезаписи.");
   }
-  // Preserve legacy combined timestamps as separate visible inputs. A legacy
-  // midnight value has no provable time precision, so leave H blank for re-entry.
-  var legacyStageDates = sheet.getRange("G5:G7").getValues().map(function (row) { return row[0]; });
-  var legacyStageTimes = sheet.getRange("H5:H7").getDisplayValues().map(function (row) { return String(row[0] || "").trim(); });
-  var migratedDates = [], migratedTimes = [];
-  legacyStageDates.forEach(function (value, index) {
-    if (value === "" || value == null) {
-      migratedDates.push([""]); migratedTimes.push([legacyStageTimes[index] || ""]); return;
-    }
-    if (!(value instanceof Date) || isNaN(value.getTime())) {
-      throw new Error("Поле G" + (index + 5) + " содержит некорректную старую дату. Исправь её вручную до обновления панели.");
-    }
-    var parts = di3SplitEffectiveDateTime_(value, "Старый этап поставки");
-    migratedDates.push([parts.date]);
-    migratedTimes.push([legacyStageTimes[index] || (parts.time === "00:00" ? "" : parts.time)]);
-  });
   [["D2:F2", "G2:J2"], ["D3:F3", "G3:J3"], ["D4:F4", "G4:J4"],
     ["D5:F5", "G5:J5"], ["D6:F6", "G6:J6"], ["D7:F7", "G7:J7"]].forEach(function (pair) {
     sheet.getRange(pair[0]).breakApart().merge();
     sheet.getRange(pair[1]).breakApart();
   });
   sheet.getRange("D2:D7").setValues(labels.map(function (label) { return [label]; }));
-  sheet.getRange("G5:G7").setValues(migratedDates);
-  sheet.getRange("H5:H7").setValues(migratedTimes);
   sheet.getRange("D8:J8").breakApart().merge();
   sheet.getRange("D8").setValue(knownNote);
   sheet.getRange("D2:F7").setBackground("#EEF2F7").setFontWeight("bold");
@@ -531,7 +513,7 @@ function di3SetupSupplyForm() {
   }
   di3EnsureSupplyDatePanelLayout_(sheet);
   sheet.getRange("A2").setValue("Выбрать поставку");
-  sheet.getRange("B2").setNote("Выбери номер поставки. Если форма не изменена, документ загрузится автоматически. Если есть несохранённые изменения, выбор будет временно отменён: запусти «Поставки → Выбор и просмотр → Загрузить выбранную поставку» и подтверди замену. Для новой поставки используй «Новая поставка», для уже полученной, но ещё не оприходованной поставки — «Внести старую поставку». Фактические даты и время обычной поставки применяются по очереди: дата G5:G7, время H5:H7.");
+  sheet.getRange("B2").setNote("Выбери номер поставки. Если форма не изменена, документ загрузится автоматически. Если есть несохранённые изменения, выбор будет временно отменён: запусти «Поставки → Выбор и просмотр → Загрузить выбранную поставку» и подтверди замену. Для новой поставки используй «Новая поставка», для уже полученной, но ещё не оприходованной поставки — «Внести старую поставку». Фактические даты обычной поставки применяются по очереди.");
   sheet.getRange("B3").setNote("Номер документа. Для новой или старой поставки формируется системой по дате заказа в G2.");
   sheet.getRange("L2").setValue("Режим:").setBackground("#EEF2F7").setFontWeight("bold");
   sheet.getRange("L9").setValue("Причина корректировки").setBackground("#EEF2F7").setFontWeight("bold");
@@ -545,7 +527,7 @@ function di3SetupSupplyForm() {
   var editSupplyId = String(sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "").trim();
   var historicalMode = String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") === "HISTORICAL_CREATE";
   if (historicalMode) {
-    sheet.getRange("D8").setValue("Режим «Внести старую поставку»: заполни G2, при необходимости G3, а также фактические даты G5:G7 и время HH:mm в H5:H7. После проверки и отдельного подтверждения создаётся документ и выполняется одна складская приёмка. G4 остаётся системным временем внесения записи.");
+    sheet.getRange("D8").setValue("Режим «Внести старую поставку»: заполни G2, при необходимости G3, а также фактические даты G5:G7. После проверки и отдельного подтверждения создаётся документ и выполняется одна складская приёмка. G4 остаётся системным временем внесения записи.");
   }
   if (editSupplyId) {
     var editSupply = di3GetSupplyById_(editSupplyId);
