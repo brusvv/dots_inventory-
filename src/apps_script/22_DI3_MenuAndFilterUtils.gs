@@ -214,6 +214,11 @@ function di3BuildMenus_() {
     menu.addItem("Новый заказ", "di3NewOrderForm")
       .addItem("Рассчитать заказ", "di3PreviewOrderForm")
       .addItem("Создать заказ", "di3SaveOrderForm")
+      .addSeparator()
+      .addItem("Открыть форму исторической продажи", "di3OpenHistoricalSaleForm")
+      .addItem("Провести историческую продажу", "di3SaveHistoricalSaleForm")
+      .addItem("Обновить списки исторической формы", "di3RefreshHistoricalSaleFormValidations")
+      .addSeparator()
       .addItem("Обновить списки формы", "di3RefreshOrderFormValidations")
       .addSeparator()
       .addItem("Открыть реестр заказов", "di3OpenOrderRegister")
@@ -287,4 +292,12 @@ function di3OpenOrderRegister() {
   if (!sheet) throw new Error('Лист «Реестр заказов v3» не найден. Запусти setupDotsInventoryV3().');
   di3GetSpreadsheet_().setActiveSheet(sheet);
   return { opened: true, sheet: DI3_ORDER_REGISTER_SHEET };
+}
+
+
+function di3OpenHistoricalSaleForm() {
+  var sheet = di3GetSpreadsheet_().getSheetByName("Историческая продажа");
+  if (!sheet) throw new Error("Лист «Историческая продажа» не найден. Запусти setupDotsInventoryV3().");
+  di3GetSpreadsheet_().setActiveSheet(sheet);
+  return { opened: true, sheet: "Историческая продажа" };
 }
