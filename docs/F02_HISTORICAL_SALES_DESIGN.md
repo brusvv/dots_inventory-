@@ -21,9 +21,16 @@ PeriodGuard already blocks backdated dispatch/completion events in locked period
 
 ## 2. Proposed data model — schema v3 → v4
 
-Append one field to the end of `V3_Orders` (after current column AC):
+Append two fields to the end of `V3_Orders` (after current column AC):
 
 - `business_date` — the effective business date of the sale/order, distinct from when the record was entered into the system.
+- `dispatch_time_precision` — explicit precision/provenance for the dispatch timestamp:
+  - `EXACT_MINUTE` — an exact minute was supplied;
+  - `WINDOW_START_APPROXIMATE` — a non-zero time window was supplied and its start is used conservatively;
+  - `DATE_START_APPROXIMATE` — only the dispatch date was supplied and local midnight is used;
+  - `LEGACY_UNKNOWN` — a pre-v4 row whose original time precision cannot be proven.
+
+The entered time-window bounds remain in the immutable order/dispatch payload and request hash.
 
 Do not repurpose `created_at`:
 - `created_at` remains the real timestamp when the order record was created in this workbook.
@@ -33,8 +40,9 @@ Do not repurpose `created_at`:
 - `Operations.started_at`, `OperationPayloads.created_at`, and stock movement `recorded_at` preserve actual system-recording time.
 
 Migration `RC8_ORDER_BUSINESS_DATE_V4` (3 → 4):
-- append `business_date` as column AD; never insert or move existing columns;
-- backfill existing rows from `created_at` (the only current source value representing the order's effective date);
+- append `business_date` as column AD and `dispatch_time_precision` as column AE; never insert or move existing columns;
+- backfill `business_date` from `created_at` (the only current source value representing the order's effective date);
+- backfill `dispatch_time_precision` as `LEGACY_UNKNOWN`; never infer precision from whether an old timestamp happens to be midnight;
 - preserve every existing row/ID and all 29 existing columns;
 - validate the complete v3 prefix, blank/occupied tail, and every existing date before writing;
 - be resumable and fail closed on unknown headers or non-date legacy values;
@@ -49,20 +57,26 @@ Recommended UX: a separate menu command **«Внести старую прода
 
 The command collects and confirms:
 - business date (date only);
-- physical dispatch date plus a separately entered exact dispatch time;
-- completion date plus a separately entered completion time;
+- required physical dispatch date plus an optional separately entered time window (`from` / `to`);
+- required completion date and exact completion time;
 - current calculator request token and exact form fingerprint.
 
 ### Date/time input UX — updated decision 26.11.2026
 
-The physical dispatch date is required; an additional time window is optional. The user may enter a time window to narrow down when the sale occurred, but must be able to save a historical sale using the date alone.
+The physical dispatch date is required; the time window is optional. The user may save a historical sale with the date alone.
 
-- date control: required calendar picker, displayed as `ДД.ММ.ГГГГ`;
-- optional time window: two 24-hour time inputs, `с` / `по`, minute precision (`ЧЧ:ММ`); when supplied, validate that the start does not exceed the end and use the interval when determining/validating the dispatch timestamp;
-- completion date/time remains separately validated; whether its time is mandatory or may also be omitted should follow the same explicit timestamp policy;
+- dispatch date: required calendar picker, displayed as `ДД.ММ.ГГГГ`;
+- optional time window: two separate 24-hour inputs, `с` / `по`, minute precision (`ЧЧ:ММ`); both values must be supplied together, and the start must not exceed the end;
+- if only a date is supplied, the canonical dispatch `effective_at` is the beginning of that local calendar day (`00:00:00`) in `DI3_APP_CONFIG.TIME_ZONE`; precision is `DATE_START_APPROXIMATE`;
+- if a non-zero time window is supplied, the canonical dispatch `effective_at` is the beginning of the window; precision is `WINDOW_START_APPROXIMATE`;
+- if the window start equals its end, treat it as one exact minute; precision is `EXACT_MINUTE`;
+- the selected timestamp is the earliest possible instant in the supplied uncertainty interval. It is a conservative FIFO boundary, not a claim that dispatch physically happened at that exact minute;
+- before registering `ORDER_DISPATCH`, inspect existing StockLedger events for each product in the sale. If another stock event for that product falls inside or on the boundary of the uncertainty interval, fail closed and ask the user to narrow the window or supply a more precise time. With date-only input, the uncertainty interval is the entire local calendar day, so any same-product event on that date makes the date-only entry ambiguous;
+- when no same-product event intersects the uncertainty interval, using its start preserves the event's order relative to all known events for that product. Normal full FIFO replay remains authoritative and must still reject insufficient historical stock;
+- completion date and exact completion time remain separately required and validated;
 - business date remains date-only.
 
-Do **not** combine date and time in one date-picker-controlled cell: a Sheets date picker can replace the time portion with midnight. Keep date and optional time-window values in separate controls/columns, and combine them only in the workflow layer using the configured spreadsheet timezone.
+Do not combine date and time in one date-picker-controlled cell: a Sheets date picker can replace the time portion with midnight. Keep date and optional time-window values in separate controls/columns, and combine them only in the workflow layer using the configured spreadsheet timezone.
 
 **Still to decide before implementation:** what deterministic `effective_at` value should be assigned when the user supplies only a dispatch date and no time window. FIFO needs a single timestamp, and any date-only convention is necessarily an approximation of within-day ordering. Do not silently choose midnight, noon, end-of-day or current time. The same issue must be resolved for completion if its time is optional.
 
@@ -92,34 +106,39 @@ No new operation type is required if the orchestration can safely resume the exi
 
 ## 5. Precision rule and remaining timestamp decision
 
-The FIFO comparator orders same-day events by `recorded_at` after `effective_at`. A historical sale entered later with only a date cannot reveal its true within-day position relative to receipts and other sales.
+The FIFO comparator orders same-day events by `recorded_at` after `effective_at`. A date-only historical sale cannot reveal its true within-day position relative to same-product receipts and other sales.
 
-Decision confirmed 26.11.2026: **the dispatch time window is optional**. The user may provide a date only or narrow the dispatch time using a from/to window. The UI must keep date and time-window inputs separate so a date picker cannot erase time values.
+Decision confirmed 26.11.2026: **use the beginning of the uncertainty interval as the FIFO timestamp** — local midnight for date-only input, or the window start for a supplied interval. This is intentionally conservative with respect to receipts that may have happened later. Same-product ledger events inside or on the interval boundary make the order ambiguous and must block dispatch until the user narrows the interval or supplies a more precise time. Do not silently substitute noon, end-of-day or the current time.
 
-Implementation remains blocked on one deterministic fallback rule: the timestamp to use when no time window is provided. Any fallback (start, midpoint or end of day) is an approximation and can change historical FIFO lot attribution or stock sufficiency. Do not silently choose one. Also decide whether completion time is required or follows the same optional-time policy.
+The selected precision (`DATE_START_APPROXIMATE`, `WINDOW_START_APPROXIMATE`, or `EXACT_MINUTE`) must be stored in the order row and included, together with the entered window bounds, in the immutable operation payload and request hash. Existing v3 orders migrate as `LEGACY_UNKNOWN`.
+
+**Still to confirm before implementation:** completion chronology must be checked against the *latest possible dispatch instant* (window end, or end of the local dispatch date for date-only input), not only against the conservative FIFO timestamp. This can require completion to be on the following date when dispatch was entered date-only. Confirm this user-visible consequence before implementing F-02.
 
 ## 6. Required regression and acceptance coverage
 
 Pure/domain tests:
 1. Normal order with no business_date preserves existing v3 behavior before migration and defaults business_date to created_at after v4.
 2. Historical order stores actual created_at separately from business_date.
-3. Business date ≤ dispatch timestamp ≤ completion timestamp ≤ current time; date and time are combined using the configured spreadsheet timezone.
+3. Business date ≤ dispatch uncertainty interval; completion timestamp must be after the latest possible dispatch instant (window end, or end of local dispatch day for date-only input) and no later than now; date/time is combined using the configured spreadsheet timezone.
 4. Dispatch before business date, completion before dispatch, future dates and invalid dates fail closed.
 5. Historical stock is sufficient at dispatch even if later sales consumed the current stock: preflight passes and replay allocates correct historical lots.
 6. Historical stock is insufficient at dispatch even if a later receipt makes current stock sufficient: preflight rejects.
-7. Same-day receipt/sale ordering respects an entered dispatch time window; missing time follows the separately approved fallback convention, while malformed or inverted windows fail closed.
-8. UNKNOWN/FREE lots preserve cost status and no invented COGS.
-9. Existing F-01 return-after-unrelated-FIFO-run scenario still returns the original dispatch lots.
-10. Request-token retry with identical dates is idempotent; changed dates or form payload are rejected.
-11. Fault/retry after ORDER_CREATE, after ORDER_DISPATCH, and before completion never duplicates order, ledger, details, lots or allocations.
-12. PeriodGuard rejects any historical business/dispatch/completion date in a locked period.
-13. v3→v4 migration preserves 29-column prefix, IDs, row count, timestamps and backfills business_date exactly from created_at; Dry Run is read-only and rerun is safe.
+7. Date-only dispatch uses local midnight and `DATE_START_APPROXIMATE`; a non-zero window uses its start and `WINDOW_START_APPROXIMATE`; equal boundaries use `EXACT_MINUTE`; malformed, partial or inverted windows fail closed.
+8. Any same-product StockLedger event inside or on the boundary of the dispatch uncertainty interval blocks dispatch; narrowing the interval to exclude the event permits deterministic ordering.
+9. A later same-day receipt never becomes available to a date-only dispatch at the beginning of that day.
+10. UNKNOWN/FREE lots preserve cost status and no invented COGS.
+11. Existing F-01 return-after-unrelated-FIFO-run scenario still returns the original dispatch lots.
+12. Request-token retry with identical dates/windows is idempotent; changed dates, window bounds or form payload are rejected.
+13. Fault/retry after ORDER_CREATE, after ORDER_DISPATCH, and before completion never duplicates order, ledger, details, lots or allocations.
+14. PeriodGuard rejects any historical business/dispatch/completion date in a locked period.
+15. v3→v4 migration preserves the 29-column prefix, IDs, row count and timestamps; backfills business_date from created_at and dispatch_time_precision as LEGACY_UNKNOWN; Dry Run is read-only and rerun is safe.
 
 Runtime acceptance on a restored disposable workbook:
 - backup + schema Dry Run before migration;
 - migrate v3→v4 and verify manifest/SchemaMigrations;
-- enter a historical sale with known stock lots and exact dispatch time;
-- verify StockLedger effective_at vs recorded_at, FIFO allocations and OrderCostSnapshots;
+- enter historical sales with date-only dispatch, a non-zero time window, and a single-minute window;
+- verify that date-only dispatch cannot consume a same-day receipt and that overlapping same-product events block dispatch until the interval is narrowed;
+- verify StockLedger effective_at vs recorded_at, the precision marker, FIFO allocations and OrderCostSnapshots;
 - verify buyer-paid and seller-paid commission settlement;
 - verify Finance Dashboard period/filter totals;
 - test insufficient historical stock, locked period, same-day event ordering and recovery;
@@ -132,4 +151,4 @@ This document is a design only. No schema, order, stock, FIFO, migration, menu o
 
 ## 8. Cross-workspace date/time contract
 
-The confirmed F-02 date/time UX is now shared with supply lifecycle events and manual warehouse movements. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md` for the complete contract, including the date-only exceptions, supply G5:G7 and register M/N controls, order transition P/Q controls, warehouse date/time pair, shared timezone-aware parser, and regression coverage. This broadens the UI/domain implementation only; it does not add timestamp-split schema columns to supplies or StockLedger.
+The common date/time UX remains shared with supply lifecycle events and manual warehouse movements, with one explicit F-02 exception: historical dispatch accepts a date without a time window and uses the conservative interval-start rule above. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md` for mandatory-time controls elsewhere and the F-02 exception. This does not add timestamp-split schema columns to supplies or StockLedger.
