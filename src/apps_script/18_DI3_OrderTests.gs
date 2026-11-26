@@ -315,7 +315,7 @@ function di3RunOrderDomainUnitTests() {
     var originals = {
       parseBusinessDate: di3ParseBusinessDate_,
       toDate: di3ToDate_,
-      timezone: di3GetConfiguredTimeZone_,
+      timezone: typeof globalThis.di3GetConfiguredTimeZone_ === "function" ? globalThis.di3GetConfiguredTimeZone_ : null,
       utilities: typeof globalThis.Utilities === "undefined" ? null : globalThis.Utilities
     };
     try {
@@ -347,7 +347,8 @@ function di3RunOrderDomainUnitTests() {
     } finally {
       di3ParseBusinessDate_ = originals.parseBusinessDate;
       di3ToDate_ = originals.toDate;
-      di3GetConfiguredTimeZone_ = originals.timezone;
+      if (originals.timezone) globalThis.di3GetConfiguredTimeZone_ = originals.timezone;
+      else delete globalThis.di3GetConfiguredTimeZone_;
       if (originals.utilities) globalThis.Utilities = originals.utilities;
       else delete globalThis.Utilities;
     }
