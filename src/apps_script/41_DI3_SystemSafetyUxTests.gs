@@ -693,6 +693,31 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("F-13 backup flushes before snapshot/copy and records phase timings", function () {
+    var internal = di3CreateSpreadsheetBackupInternal_.toString();
+    var flush = internal.indexOf("SpreadsheetApp.flush()");
+    var snapshot = internal.indexOf("di3GetSpreadsheetBackupSnapshot_(spreadsheet)");
+    var copy = internal.indexOf("sourceFile.makeCopy(backupName, folder)");
+    var verify = internal.indexOf("di3VerifySpreadsheetBackupSnapshot_(copiedSpreadsheet, sourceSheets)");
+    equal(flush >= 0 && snapshot > flush && copy > snapshot && verify > copy, true,
+      "flush must complete before snapshot/copy, and verification must inspect the copy");
+    includes(internal, "typeof SpreadsheetApp.flush !== \"function\"");
+    includes(internal, "flush_ms: flushMs");
+    includes(internal, "source_snapshot_ms: snapshotMs");
+    includes(internal, "drive_copy_ms: copyMs");
+    includes(internal, "verification_ms: verificationMs");
+    includes(internal, "created_at_utc: backupCreatedAt.toISOString()");
+  });
+
+  test("F-13 manual backup reports lock wait/hold duration and toasts after lock release", function () {
+    var source = di3CreateSpreadsheetBackup.toString();
+    var lock = source.indexOf("di3WithLock_(");
+    var toast = source.indexOf(".toast(");
+    equal(lock >= 0 && toast > lock, true);
+    includes(source, "lock_wait_ms");
+    includes(source, "lock_held_ms");
+  });
+
   test("manual warehouse movement uses separate date and required HH:mm inputs", function () {
     equal(DI3_WAREHOUSE_MANAGER_CELLS.effective_at, "B4");
     equal(DI3_WAREHOUSE_MANAGER_CELLS.effective_time, "C4");
