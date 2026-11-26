@@ -106,7 +106,7 @@ The menu adds **Система → GitHub и обновления → Устан
 6. Calls `projects.updateContent` with the complete prepared file set. This API replaces the project's complete content.
 7. Reads the project again and compares every file's name, type and exact source. Only an exact match reports `INSTALLED_AND_VERIFIED`.
 
-Cancel leaves the Apps Script project untouched (the verified source backup remains in Drive). A post-write verification mismatch reports the backup link and does not attempt an automatic rollback; code rollback is a separate D-06 operation. The installer never creates or updates a versioned deployment and never runs setup, schema migration, FIFO rebuild or spreadsheet-data operations.
+Cancel leaves the Apps Script project untouched (the verified source backup remains in Drive). A post-write verification mismatch or unavailable read-back reports the backup link and does not attempt an automatic rollback; an ambiguous update response is explicitly marked `UPDATE_RESULT_UNCERTAIN` and the user is told not to retry before checking the live project. Code rollback is a separate D-06 operation. The installer never creates or updates a versioned deployment and never runs setup, schema migration, FIFO rebuild or spreadsheet-data operations.
 
 The actual target `appsscript.json` must already contain the write scope `https://www.googleapis.com/auth/script.projects` in addition to the read-only and external-request scopes. The repository does not fabricate or overwrite the target manifest. The live project must be tested separately before production use.
 
