@@ -39,9 +39,18 @@ jobs:
             fi
             SOURCE_BRANCH="main"
           else
-            SOURCE_BRANCH="$(git branch -r --contains "$GITHUB_SHA" | sed 's#^[ *]*origin/##' | grep -Ev '^(HEAD|main|master)$' | sort | head -n 1 || true)"
-            if [[ -z "$SOURCE_BRANCH" ]]; then
-              echo "::error::Preview commit must be reachable from a non-main remote branch."
+            TAG_MESSAGE="$(git for-each-ref --format='%(contents)' "refs/tags/$TAG")"
+            SOURCE_BRANCH="$(printf '%s\\n' "$TAG_MESSAGE" | sed -n 's/^source-branch: //p' | head -n 1)"
+            if [[ ! "$SOURCE_BRANCH" =~ ^(feature|release|hotfix)/[A-Za-z0-9._/-]+$ ]]; then
+              echo "::error::Preview annotated tag message must include: source-branch: feature/your-branch"
+              exit 1
+            fi
+            if ! git show-ref --verify --quiet "refs/remotes/origin/$SOURCE_BRANCH"; then
+              echo "::error::Preview source branch does not exist on origin: $SOURCE_BRANCH"
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$SOURCE_BRANCH"; then
+              echo "::error::Tagged commit is not contained in declared source branch: $SOURCE_BRANCH"
               exit 1
             fi
             echo "Preview source branch: $SOURCE_BRANCH"
