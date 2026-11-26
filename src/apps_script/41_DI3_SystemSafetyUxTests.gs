@@ -313,6 +313,39 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("clean baseline rejects populated managed workspaces before first adoption", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      var workspaceSheet = {
+        getLastRow: function () { return 8; },
+        getLastColumn: function () { return 5; },
+        getCharts: function () { return []; }
+      };
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) { return name === "Продукты" ? workspaceSheet : null; } };
+      };
+      di3GetSchemaVersion_ = function () { return 0; };
+      di3GetSchemaMigrationRows_ = function () { return []; };
+      var populatedState = di3GetCleanBaselineState_();
+      equal(populatedState.eligible, false);
+      equal(populatedState.issues.some(function (issue) { return issue.indexOf("пользовательского листа") >= 0; }), true);
+
+      workspaceSheet = {
+        getLastRow: function () { return 0; },
+        getLastColumn: function () { return 0; },
+        getCharts: function () { return []; }
+      };
+      equal(di3GetCleanBaselineState_().eligible, true,
+        "An existing but genuinely empty managed workspace must not block clean installation");
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
   test("clean baseline rejects legacy or partially mismatched system headers", function () {
     var originalSpreadsheet = di3GetSpreadsheet_;
     var originalVersion = di3GetSchemaVersion_;
