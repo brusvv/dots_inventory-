@@ -187,8 +187,11 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
     return readFailure;
   }
   if (after.script_id !== baseline.script_id) {
+    var wrongProjectError = "После записи API вернул другой Script ID.";
+    try { ui.alert("GitHub · требуется проверка", wrongProjectError +
+      "\\nРезервная копия: " + verifiedBackup.url, ui.ButtonSet.OK); } catch (ignoreWrongProjectAlert) {}
     return { status: "POST_WRITE_VERIFICATION_FAILED", write_performed: true, backup: verifiedBackup,
-      release_tag: preview.release_tag, error: "После записи API вернул другой Script ID." };
+      release_tag: preview.release_tag, error: wrongProjectError };
   }
   var verification;
   try { verification = di3AssertAppsScriptContentMatches_(preview.target_files, after.content.files); }
