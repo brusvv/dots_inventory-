@@ -209,26 +209,52 @@ function di3ApplyOrderDispatchOperation_(operationRecord, payload) {
 function di3DispatchOrder_(order, effectiveAt, options) {
   options = options || {};
   var allowHistoricalBackdate = options.allowHistoricalBackdate === true;
-  var date = effectiveAt ? di3ToDate_(effectiveAt, "Дата отправки") : new Date();
+  var hasExplicitEffectiveAt = effectiveAt !== "" && effectiveAt != null;
+  var date = hasExplicitEffectiveAt ? di3ToDate_(effectiveAt, "Дата отправки") : new Date();
   if (date.getTime() > Date.now() + 5 * 60 * 1000) throw new Error("Дата отправки не может быть в будущем.");
+  var key = "ORDER_DISPATCH:" + order.order_id;
+
+  // The dispatch operation writes the order status before its journal row is
+  // marked COMMITTED. A crash in that interval leaves IN_TRANSIT + PREPARED.
+  // Recover that immutable operation instead of treating the status as proof
+  // that the stock movement was fully committed.
   if (String(order.status) === DI3_ORDER_STATUS.IN_TRANSIT) {
-    if (effectiveAt && order.dispatched_at && di3ToMillis_(order.dispatched_at) !== date.getTime()) {
+    var inTransitOperation = di3GetOrderOperationByKey_(key);
+    if (inTransitOperation) {
+      di3AssertNoOtherPendingStockOperations_(key);
+      var inTransitPayload = di3ReadVerifiedOperationPayload_(inTransitOperation);
+      if (!hasExplicitEffectiveAt) date = di3ToDate_(inTransitPayload.dispatched_at, "Сохранённая дата отправки");
+      if (String(inTransitPayload.dispatched_at || "") !== date.toISOString()) {
+        throw new Error("Заказ уже отправлен с другим временем. Историческую дату отправки изменить нельзя.");
+      }
+      if (Boolean(inTransitPayload.historical_mode) !== allowHistoricalBackdate) {
+        throw new Error("Режим повторной отправки не совпадает с исходной операцией. Автоматическое продолжение остановлено.");
+      }
+      if (String(inTransitOperation.values[5]) === "COMMITTED") {
+        return { status: "ALREADY_DISPATCHED", order_number: order.order_number };
+      }
+      if (String(inTransitOperation.values[5]) === "REJECTED") {
+        throw new Error("Предыдущая операция отправки отклонена. Проверь журнал Operations.");
+      }
+      return di3CompleteOrderDispatch_(inTransitOperation, null);
+    }
+    if (hasExplicitEffectiveAt && order.dispatched_at && di3ToMillis_(order.dispatched_at) !== date.getTime()) {
       throw new Error("Заказ уже отправлен с другим временем. Историческую дату отправки изменить нельзя.");
     }
     return { status: "ALREADY_DISPATCHED", order_number: order.order_number };
   }
+
   if (String(order.status) !== DI3_ORDER_STATUS.NEW) throw new Error("Отправить можно только заказ со статусом «Новый».");
   if (!allowHistoricalBackdate && date.getTime() < di3ToMillis_(order.created_at)) {
     throw new Error("Дата отправки не может быть раньше создания заказа.");
   }
   var items = di3GetOrderItems_(order.order_id);
   if (!items.length) throw new Error("У заказа нет товарных позиций.");
-  var key = "ORDER_DISPATCH:" + order.order_id;
   di3AssertNoOtherPendingStockOperations_(key);
   var existing = di3GetOrderOperationByKey_(key);
   if (existing) {
     var savedPayload = di3ReadVerifiedOperationPayload_(existing);
-    if (effectiveAt === "" || effectiveAt == null) date = di3ToDate_(savedPayload.dispatched_at, "Сохранённая дата отправки");
+    if (!hasExplicitEffectiveAt) date = di3ToDate_(savedPayload.dispatched_at, "Сохранённая дата отправки");
     if (String(savedPayload.dispatched_at || "") !== date.toISOString()) {
       throw new Error("Для этого заказа уже зарегистрирована операция отправки с другим временем. Повтор с изменённой датой запрещён.");
     }
