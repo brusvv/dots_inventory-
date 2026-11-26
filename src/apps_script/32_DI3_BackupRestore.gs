@@ -477,7 +477,7 @@ function di3CreateSpreadsheetBackup() {
   try {
     di3GetSpreadsheet_().toast(
       "Резервная копия: " + result.backup_file_name + " · " + result.verification_level +
-      " · lock " + result.timing.lock_held_ms + " ms",
+      " · wait " + result.timing.lock_wait_ms + " ms · held " + result.timing.lock_held_ms + " ms",
       "Backup · VERIFIED", 10
     );
   } catch (ignoreToast) {}
