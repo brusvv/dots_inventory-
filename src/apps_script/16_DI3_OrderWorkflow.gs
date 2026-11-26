@@ -209,7 +209,7 @@ function di3ApplyOrderDispatchOperation_(operationRecord, payload) {
 function di3DispatchOrder_(order, effectiveAt, options) {
   options = options || {};
   var allowHistoricalBackdate = options.allowHistoricalBackdate === true;
-  var date = di3ParseSupplyEffectiveDate_(effectiveAt, new Date());
+  var date = effectiveAt ? di3ToDate_(effectiveAt, "Дата отправки") : new Date();
   if (date.getTime() > Date.now() + 5 * 60 * 1000) throw new Error("Дата отправки не может быть в будущем.");
   if (String(order.status) === DI3_ORDER_STATUS.IN_TRANSIT) {
     if (effectiveAt && order.dispatched_at && di3ToMillis_(order.dispatched_at) !== date.getTime()) {
