@@ -16,13 +16,13 @@ function fixture(fn) {
   fs.writeFileSync(path.join(sourceDir, "02_Module.gs"), "function beta() { return 2; }\n");
   try { fn({ root, sourceDir }); } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
-const base = { repository: "brusvv/dots_inventory-", commit: "a".repeat(40), tag: "dots-inventory-v4.0.0" };
+const base = { repository: "brusvv/dots_inventory-", commit: "a".repeat(40), tag: "dots-inventory-v4.0.0", channel: "stable", sourceBranch: "main" };
 let passed = 0;
 function test(name, fn) { fn(); passed++; process.stdout.write("PASS " + name + "\n"); }
 fixture(({ sourceDir }) => {
   test("deterministic pinned manifest and release metadata", () => {
     const a = buildManifest({ ...base, sourceDir }), b = buildManifest({ ...base, sourceDir });
-    assert.deepEqual(a, b); assert.equal(a.format, "dots-inventory-release/v1"); assert.equal(a.target_schema_version, 4);
+    assert.deepEqual(a, b); assert.equal(a.format, "dots-inventory-release/v1"); assert.equal(a.target_schema_version, 4);\n    assert.equal(a.release_channel, "stable"); assert.equal(a.source_branch, "main");
     assert.equal(a.application_time_zone, "Europe/Helsinki"); assert.equal(a.manifest_policy, "PRESERVE_TARGET_PROJECT_MANIFEST");
     assert.equal(a.files.length, 4); assert.ok(a.files.every((f) => f.raw_url.includes(base.commit)));
   });
@@ -39,6 +39,23 @@ fixture(({ sourceDir }) => {
 });
 fixture(({ sourceDir }) => {
   test("rejects non-release tag", () => assert.throws(() => buildManifest({ ...base, tag: "main", sourceDir }), /Тег релиза/));
+  test("builds a Preview manifest from a feature branch", () => {
+    const m = buildManifest({ ...base, tag: "dots-inventory-v4.1.0-preview.1", channel: "preview",
+      sourceBranch: "feature/new-dashboard", sourceDir });
+    assert.equal(m.release_channel, "preview");
+    assert.equal(m.source_branch, "feature/new-dashboard");
+    assert.equal(m.release_version, "4.1.0-preview.1");
+  });
+  test("rejects Preview without a non-main source branch", () => {
+    assert.throws(() => buildManifest({ ...base, tag: "dots-inventory-v4.1.0-preview.1",
+      channel: "preview", sourceBranch: "main", sourceDir }), /исходную feature\/release ветку/);
+  });
+  test("rejects stable release from a feature branch", () => {
+    assert.throws(() => buildManifest({ ...base, sourceBranch: "feature/work", sourceDir }), /из main/);
+  });
+  test("rejects channel/tag mismatch", () => {
+    assert.throws(() => buildManifest({ ...base, channel: "preview", sourceBranch: "feature/work", sourceDir }), /не соответствует суффиксу/);
+  });
   test("rejects abbreviated commit SHA", () => assert.throws(() => buildManifest({ ...base, commit: "abc123", sourceDir }), /полный 40-символьный/));
   test("rejects invalid repository identifier", () => assert.throws(() => buildManifest({ ...base, repository: "bad", sourceDir }), /owner\/repository/));
   test("rejects missing config", () => { fs.unlinkSync(path.join(sourceDir, "00_DI3_AppConfig.gs")); assert.throws(() => buildManifest({ ...base, sourceDir }), /ENOENT/); });
