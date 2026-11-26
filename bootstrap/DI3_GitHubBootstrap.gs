@@ -190,18 +190,30 @@ function di3BootstrapAssertBlankProject_(files) {
 
 function di3BootstrapDownloadPinnedSources_() {
   var config = DI3_GITHUB_BOOTSTRAP_CONFIG;
-  var treeUrl = "https://api.github.com/repos/" + config.REPOSITORY + "/git/trees/" + config.COMMIT + "?recursive=1";
+  var apiBase = "https://api.github.com/repos/" + config.REPOSITORY;
+  var commitUrl = apiBase + "/git/commits/" + config.COMMIT;
+  var commitResponse = di3BootstrapFetchText_(commitUrl, "application/vnd.github+json");
+  var commit;
+  try { commit = JSON.parse(commitResponse); }
+  catch (error) { throw new Error("GitHub вернул некорректный commit object: " + (error.message || String(error))); }
+  if (commit.sha !== config.COMMIT || !commit.tree || !/^[0-9a-f]{40}$/i.test(String(commit.tree.sha || ""))) {
+    throw new Error("GitHub commit object не совпал с закреплённым commit SHA/tree SHA; установка остановлена.");
+  }
+
+  // Resolve the tree SHA from the immutable commit object instead of treating
+  // the commit SHA itself as a tree identifier.
+  var treeUrl = apiBase + "/git/trees/" + commit.tree.sha + "?recursive=1";
   var treeResponse = di3BootstrapFetchText_(treeUrl, "application/vnd.github+json");
   var tree;
   try { tree = JSON.parse(treeResponse); }
   catch (error) { throw new Error("GitHub вернул некорректное дерево репозитория: " + (error.message || String(error))); }
-  if (tree.sha !== config.COMMIT || tree.truncated === true || !Array.isArray(tree.tree)) {
+  if (tree.sha !== commit.tree.sha || tree.truncated === true || !Array.isArray(tree.tree)) {
     throw new Error("GitHub tree не прошёл проверку SHA/truncated; установка остановлена.");
   }
 
   var entries = tree.tree.filter(function (item) {
     return item && item.type === "blob" &&
-      /^src\/apps_script\/[A-Za-z0-9_.-]+\.gs$/.test(String(item.path || ""));
+      /^src\\/apps_script\\/[A-Za-z0-9_.-]+\\.gs$/.test(String(item.path || ""));
   }).sort(function (a, b) { return a.path.localeCompare(b.path); });
 
   if (entries.length !== config.EXPECTED_FILE_COUNT) {
@@ -225,7 +237,7 @@ function di3BootstrapDownloadPinnedSources_() {
     if (gitBlobSha.toLowerCase() !== String(entry.sha).toLowerCase()) {
       throw new Error("Git blob SHA-1 не совпал: " + fileName + ". Исходник не будет установлен.");
     }
-    return { name: fileName.replace(/\.gs$/i, ""), type: "SERVER_JS", source: source };
+    return { name: fileName.replace(/\\.gs$/i, ""), type: "SERVER_JS", source: source };
   });
 }
 
