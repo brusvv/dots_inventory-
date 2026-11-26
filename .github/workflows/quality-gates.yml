@@ -1,5 +1,4 @@
 name: Apps Script quality gates
-
 on:
   push:
     branches: [main]
@@ -9,11 +8,9 @@ on:
       - "tools/**"
       - ".github/workflows/**"
   pull_request:
-    branches: [main]
-
+    branches: [main, feature/clean-final-baseline]
 permissions:
   contents: read
-
 jobs:
   source-and-regression-tests:
     runs-on: ubuntu-latest
@@ -27,6 +24,8 @@ jobs:
           node-version: "24"
       - name: Check Apps Script syntax
         run: bash tools/check_syntax.sh
+      - name: Release manifest contract tests
+        run: node tools/test_release_manifest.js
       - name: FIFO replay and sequence tests
         run: node tools/run_fifo_replay_tests.js
       - name: Order domain tests
