@@ -48,7 +48,7 @@ function buildManifest({ repository, commit, tag, sourceDir, channel, sourceBran
       size_bytes: bytes.length, sha256: sha256(bytes) };
   });
   return { format: FORMAT, product: "Dots Inventory", release_version: version[1], git_tag: tag,
-    git_commit: commit.toLowerCase(), target_schema_version: schemaVersion, application_time_zone: timeZone,
+    release_channel: releaseChannel, source_branch: branch || "main", git_commit: commit.toLowerCase(), target_schema_version: schemaVersion, application_time_zone: timeZone,
     minimum_updater_version: MIN_UPDATER, manifest_policy: "PRESERVE_TARGET_PROJECT_MANIFEST",
     source_policy: "PINNED_COMMIT_RAW_FILES", files };
 }
