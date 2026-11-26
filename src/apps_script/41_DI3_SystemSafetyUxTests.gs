@@ -693,6 +693,30 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("F-02 freezes business_date as the final v4 order column and a 3-to-4 migration", function () {
+    equal(DI3_SCHEMA_VERSION, 4);
+    equal(DI3_TABLE_SCHEMAS.V3_Orders.length, 30);
+    equal(DI3_TABLE_SCHEMAS.V3_Orders[28], "commission_payer");
+    equal(DI3_TABLE_SCHEMAS.V3_Orders[29], "business_date");
+    var migration = DI3_SCHEMA_MIGRATION_DEFINITIONS.filter(function (item) {
+      return item.key === "RC8_ORDER_BUSINESS_DATE_V4";
+    })[0];
+    equal(!!migration, true);
+    equal(migration.from, 3);
+    equal(migration.to, 4);
+  });
+
+  test("F-02 migration writes only column AD and preflight blocks ambiguous tail data", function () {
+    var migrationSource = di3ApplyOrderBusinessDateMigration_.toString();
+    includes(migrationSource, 'sheet.getRange(2, 30, updates.length, 1).setValues(updates)');
+    includes(migrationSource, 'sheet.getRange(1, 30).setValue(targetHeader)');
+    equal(migrationSource.indexOf('getRange(2, 1,') === -1, true,
+      "Business-date backfill must not rewrite the existing order row prefix");
+    var preflightSource = di3PreflightCoreSchemas_.toString();
+    includes(preflightSource, "business_date");
+    includes(preflightSource, "column AD");
+  });
+
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
     ["StockLedger", "StockAllocations", "FifoAllocationRuns", "FifoAllocationArchive",
       "FifoLotCacheArchive", "FifoReplayEvents"].forEach(function (sheetName) {
