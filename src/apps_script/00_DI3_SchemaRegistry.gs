@@ -452,6 +452,15 @@ function di3EnsureCoreFoundationSchemas_(allowPlannedSchemaMigrations) {
       di3CompactSheet_(sheet, DI3_TABLE_MIN_ROWS[name] || 1, headers.length);
       return;
     }
+    // During the explicit setup/migration path only, permit the validated v3 order prefix
+    // to reach Schema Versioning. The v4 migration itself journals and fills column AD.
+    if (name === "V3_Orders" && allowPlannedSchemaMigrations === true &&
+        headers.length === 30 && headers[29] === "business_date" &&
+        headers.slice(0, 29).every(function (header, index) { return actual[index] === header; }) &&
+        actual[29] === "") {
+      di3CompactSheet_(sheet, Math.max(DI3_TABLE_MIN_ROWS[name] || 1, sheet.getLastRow() || 0), 30);
+      return;
+    }
     for (var i = 0; i < headers.length; i++) {
       if (actual[i] !== headers[i]) {
         throw new Error(name + '! строка 1 не соответствует схеме. Ожидался заголовок "' +
