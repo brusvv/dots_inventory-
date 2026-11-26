@@ -440,3 +440,11 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Added a System Safety regression proving the probe uses ScriptLock + ScriptProperties only and does not reference business tables.
 - **Source CI:** run #231 ([45853915962](https://github.com/brusvv/dots_inventory-/actions/runs/45853915962)) passed syntax for 50 `.gs` files and 145/145 tests: FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 38, Warehouse Dashboard 9, Finance Schema 4.
 - **Runtime acceptance:** on a restored disposable copy, start Session A with a 25-second hold, then start Session B within the first few seconds using the same probe ID. Expected B result is `CONTENDED` with `callback_entered=false`. Repeat with a 5–15 second hold; B should return `ACQUIRED_AFTER_RELEASE`. Any `OVERLAP_DETECTED` fails the test. Starting B only after A has completed does not test contention.
+
+
+## F-06 — retryable recovery failure classification — 26.11.2026
+
+- Source audit found that the recovery catch previously appended QUARANTINED for every exception, including transient Google Sheets write failures after the target projection had already been applied. That made a recoverable PREPARED replay terminal.
+- Recovery now distinguishes explicit integrity/input failures (which quarantine) from unexpected execution/service failures (which leave the immutable replay PREPARED and report that it can be retried).
+- Added a FIFO regression for a transient failure during product-state update; it asserts no QUARANTINED event is written. Existing changed-input fingerprint regression still asserts quarantine before projection writes.
+- Source CI is pending for this patch. Runtime fault injection and disposable-workbook recovery remain required.
