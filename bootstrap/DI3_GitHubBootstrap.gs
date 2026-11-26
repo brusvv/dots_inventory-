@@ -21,7 +21,7 @@ var DI3_GITHUB_BOOTSTRAP_CONFIG = Object.freeze({
     "https://www.googleapis.com/auth/script.projects.readonly",
     "https://www.googleapis.com/auth/script.external_request",
     "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/spreadsheets.currentonly",
+    "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/script.container.ui",
     "https://www.googleapis.com/auth/script.scriptapp"
   ]
