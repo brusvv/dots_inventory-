@@ -568,6 +568,7 @@ function di3BuildSupplyFormStatePayload_(fields) {
   return {
     document: di3NormalizeSupplyFormStateValue_(fields.document || []), // B3:B8
     dates: di3NormalizeSupplyFormStateValue_(fields.dates || []),       // G2:G7
+    times: di3NormalizeSupplyFormStateValue_(fields.times || []),       // H5:H7
     lines: di3NormalizeSupplyFormStateValue_(fields.lines || []),       // A12:D31
     reason: di3NormalizeSupplyFormStateValue_(fields.reason == null ? "" : fields.reason) // M9
   };
@@ -581,6 +582,7 @@ function di3GetSupplyFormStateHash_(sheet) {
   var payload = di3BuildSupplyFormStatePayload_({
     document: sheet.getRange("B3:B8").getValues(),
     dates: sheet.getRange("G2:G7").getValues(),
+    times: sheet.getRange("H5:H7").getDisplayValues(),
     lines: sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues(),
     reason: sheet.getRange("M9").getValue()
   });
@@ -599,10 +601,12 @@ function di3HasSupplyFormUserData_(sheet) {
   function hasValue(value) { return value !== "" && value !== null && value !== undefined; }
   var documentValues = sheet.getRange("B3:B8").getValues();
   var stageDates = sheet.getRange("G3:G7").getValues();
+  var stageTimes = sheet.getRange("H5:H7").getDisplayValues();
   var lines = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues();
   var reason = sheet.getRange("M9").getValue();
   if (documentValues.some(function (row) { return hasValue(row[0]); })) return true;
   if (stageDates.some(function (row) { return hasValue(row[0]); })) return true;
+  if (stageTimes.some(function (row) { return hasValue(row[0]); })) return true;
   if (lines.some(function (row) { return row.some(hasValue); })) return true;
   if (hasValue(reason)) return true;
   // G2 is prefilled with today's date for a new blank supply. Treat another date
@@ -654,6 +658,7 @@ function di3NewSupplyForm(options) {
   }
   sheet.getRange("B2:B8").clearContent();
   sheet.getRange("G2:G7").clearContent();
+  sheet.getRange("H5:H7").clearContent();
   sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent();
   sheet.getRange("M4:M8").clearContent();
   sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).clearContent();
