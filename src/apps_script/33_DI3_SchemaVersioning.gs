@@ -123,6 +123,21 @@ function di3GetCleanBaselineState_() {
   if (record && (!metaSheet || !ss.getSheetByName("SchemaMigrations"))) {
     issues.push("После регистрации clean baseline отсутствует обязательная таблица _AppMeta или SchemaMigrations.");
   }
+  // Before the first baseline record, even a known application workspace with
+  // content is evidence that this is not a genuinely empty workbook. Setup can
+  // rebuild these derived views from system tables, so adopting them as clean
+  // while they contain user data could silently discard that data.
+  if (!record && typeof DI3_MANAGED_WORKSPACE_SHEET_NAMES !== "undefined") {
+    DI3_MANAGED_WORKSPACE_SHEET_NAMES.forEach(function (name) {
+      var workspace = ss.getSheetByName(name);
+      if (!workspace) return;
+      var hasCells = Number(workspace.getLastRow()) > 0 || Number(workspace.getLastColumn()) > 0;
+      var hasCharts = !!(workspace.getCharts && workspace.getCharts().length);
+      if (hasCells || hasCharts) {
+        issues.push(name + ": обнаружено содержимое пользовательского листа без clean-baseline identity. Автоматическая чистая установка заблокирована; данные не будут перезаписаны.");
+      }
+    });
+  }
   DI3_CORE_TABLE_NAMES.forEach(function (name) {
     var sheet = ss.getSheetByName(name);
     if (!sheet) {
