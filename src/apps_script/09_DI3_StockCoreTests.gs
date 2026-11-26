@@ -1105,8 +1105,9 @@ function di3RunStockCoreUnitTests() {
         [run], [], [],
         [event("e1", 1, "PREPARED"), event("e2", 2, "QUARANTINED"), event("e3", 3, "MANUALLY_RESOLVED")]
       );
-      equal(report.ok, true, JSON.stringify(report.errors));
-      equal(report.summary.pending_runs, 0);
+      if (!report.ok) throw new Error("Unexpected FIFO archive diagnostics errors: " + JSON.stringify(report.errors));
+      equal(report.summary.pending_runs, 0, "MANUALLY_RESOLVED run must not block the warehouse");
+
       equal(report.summary.quarantined_replays, 0);
       equal(report.summary.manually_resolved_replays, 1);
       equal(report.warnings.some(function (item) { return item.indexOf("MANUALLY_RESOLVED") >= 0; }), true);
