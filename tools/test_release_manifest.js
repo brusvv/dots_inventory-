@@ -22,7 +22,8 @@ function test(name, fn) { fn(); passed++; process.stdout.write("PASS " + name + 
 fixture(({ sourceDir }) => {
   test("deterministic pinned manifest and release metadata", () => {
     const a = buildManifest({ ...base, sourceDir }), b = buildManifest({ ...base, sourceDir });
-    assert.deepEqual(a, b); assert.equal(a.format, "dots-inventory-release/v1"); assert.equal(a.target_schema_version, 4);\n    assert.equal(a.release_channel, "stable"); assert.equal(a.source_branch, "main");
+    assert.deepEqual(a, b); assert.equal(a.format, "dots-inventory-release/v1"); assert.equal(a.target_schema_version, 4);
+    assert.equal(a.release_channel, "stable"); assert.equal(a.source_branch, "main");
     assert.equal(a.application_time_zone, "Europe/Helsinki"); assert.equal(a.manifest_policy, "PRESERVE_TARGET_PROJECT_MANIFEST");
     assert.equal(a.files.length, 4); assert.ok(a.files.every((f) => f.raw_url.includes(base.commit)));
   });
