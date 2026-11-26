@@ -90,8 +90,8 @@ function di3ValidateGitHubReleaseManifest_(manifest, releaseTag) {
   var channel = String(manifest && manifest.release_channel || "");
   var sourceBranch = String(manifest && manifest.source_branch || "");
   if (channel !== "stable" && channel !== "preview") issues.push("Некорректный release_channel в манифесте.");
-  if (channel === "stable" && (sourceBranch !== "main" || /-preview\\./.test(String(releaseTag || "")))) issues.push("Stable-релиз должен иметь source_branch=main и стабильный тег.");
-  if (channel === "preview" && (!sourceBranch || sourceBranch === "main" || !/-preview\\.\\d+$/.test(String(releaseTag || "")))) issues.push("Preview должен иметь preview-тег и исходную ветку, отличную от main.");
+  if (channel === "stable" && (sourceBranch !== "main" || String(releaseTag || "").indexOf("-preview.") !== -1)) issues.push("Stable-релиз должен иметь source_branch=main и стабильный тег.");
+  if (channel === "preview" && (!sourceBranch || sourceBranch === "main" || !/-preview[.][0-9]+$/.test(String(releaseTag || "")))) issues.push("Preview должен иметь preview-тег и исходную ветку, отличную от main.");
   if (channel && channel !== config.release_channel) issues.push("Канал манифеста (" + channel + ") не совпадает с выбранным каналом установки (" + config.release_channel + ").");
   var repository = config.repository;
   var commit = String(manifest && manifest.git_commit || "").toLowerCase();
@@ -186,7 +186,7 @@ function di3GetLatestGitHubReleaseManifest_() {
   } else {
     var listResult = di3FetchGitHubJson_(apiBase + "/releases?per_page=100");
     if (listResult.status === "NOT_FOUND" || !Array.isArray(listResult.data)) return { status: "NO_RELEASE", message: "Список GitHub Releases недоступен или Preview-релизов пока нет." };
-    var previews = listResult.data.filter(function (item) {
+    var previews = listResult.data.filter(function (item) { return item && !item.draft && item.prerelease && /^dots-inventory-v[0-9]+[.][0-9]+[.][0-9]+-preview[.][0-9]+$/.test(String(item.tag_name || "")); });
       return item && !item.draft && item.prerelease && /^dots-inventory-v\\d+\\.\\d+\\.\\d+-preview\\.\\d+$/.test(String(item.tag_name || ""));
     });
     if (!previews.length) return { status: "NO_RELEASE", message: "Опубликованный Preview-релиз не найден." };
@@ -200,7 +200,7 @@ function di3GetLatestGitHubReleaseManifest_() {
   }
   var manifestText = di3FetchGitHubAsset_(asset("release-manifest.json"), "release-manifest.json");
   var checksumText = di3FetchGitHubAsset_(asset("release-manifest.asset.sha256"), "release-manifest.asset.sha256");
-  var checksumMatch = checksumText.trim().match(/^([0-9a-f]{64})\\s+\\*?(?:.*\\/)?release-manifest\\.json$/i);
+  var checksumMatch = checksumText.trim().match(/^([0-9a-f]{64})\s+\*?.*release-manifest[.]json$/i);
   if (!checksumMatch) throw new Error("Файл release-manifest.asset.sha256 имеет неизвестный формат.");
   if (di3Sha256Hex_(manifestText).toLowerCase() !== checksumMatch[1].toLowerCase()) throw new Error("SHA-256 release-manifest.json не совпадает с контрольной суммой из релиза.");
   var manifest;
