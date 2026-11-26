@@ -43,3 +43,34 @@ No release tag is created by this change. Draft/feature branch commits cannot pu
 - D-06 code rollback: not implemented.
 - D-07 Apps Script runtime acceptance: pending.
 - No live Apps Script project, Google Sheet, RC8 workbook or deployment was modified.
+
+
+## D-03 / D-04 — read-only release inspection and code backup
+
+The Apps Script menu adds **Система → GitHub и обновления**:
+
+- **Проверить опубликованный релиз и сравнить код** calls GitHub Releases `/releases/latest`, downloads `release-manifest.json` and its detached checksum, verifies the checksum and manifest policy, then reads the current Apps Script project with `projects.getContent`. It compares each published `.gs` checksum against the current `SERVER_JS` file source. New and changed files are reported; local extra `SERVER_JS` files and all non-`SERVER_JS` files are reported as preserved. It does not fetch replacement source files or write to the project.
+- **Создать резервную копию кода Apps Script** reads the complete Apps Script project content (including the actual `appsscript.json` file when present), stores a JSON source snapshot in the existing Dots Inventory Drive backup folder, then reopens and verifies the payload and every per-file SHA-256 before reporting `VERIFIED`.
+
+### Required setup and permissions
+
+1. In the Google Cloud project associated with the Apps Script project, enable **Google Apps Script API**.
+2. Ensure the actual Apps Script project manifest contains the OAuth scopes:
+   - `https://www.googleapis.com/auth/script.projects`
+   - `https://www.googleapis.com/auth/script.external_request`
+   - Existing Drive scope must permit creating and reading files in the configured backup folder.
+3. Save the manifest in the actual Apps Script project. This repository deliberately does not contain a fabricated `appsscript.json`; do not replace the target manifest with a guessed one.
+4. If the GitHub repository is private, create a fine-grained read-only token restricted to this repository with **Contents: read**, then store it in Script Properties as `DI3_GITHUB_READ_TOKEN`. Do not put the token in source code or spreadsheet cells. Script editors can read Script Properties, so only trusted editors should have project access. For a public repository no GitHub token is required.
+5. Authorize the new scopes by running either menu command. If the API is unavailable or authorization is insufficient, the command fails closed and does not alter project code.
+
+### Backup contents and limits
+
+The source backup includes every file returned by `projects.getContent` (SERVER_JS, HTML, JSON and other supported project files), exact file source, type, size and SHA-256. The envelope has its own SHA-256. The initial configured size ceiling is 10 MB; increase it only after checking Apps Script execution and Drive constraints. This is a code snapshot, not a backup of installable triggers, deployments, Script Properties or spreadsheet data. The existing full-spreadsheet backup remains a separate workflow.
+
+### Safety boundaries
+
+- D-03 is a read-only check. It never installs, deletes, renames or edits project files.
+- D-04 creates a Drive file only; it never calls `projects.updateContent`.
+- No schema migration, setup, FIFO rebuild, restore or stock operation is triggered.
+- The actual target `appsscript.json` is included in the source snapshot and is never synthesized by this repository.
+- No release installation or code rollback is implemented in this stage.
