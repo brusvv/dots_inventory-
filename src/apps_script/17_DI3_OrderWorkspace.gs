@@ -581,14 +581,7 @@ function di3RefreshHistoricalSaleFormValidations() {
 }
 
 function di3BuildHistoricalDateTime_(dateValue, timeValue, label) {
-  if (!(dateValue instanceof Date) || !Number.isFinite(dateValue.getTime())) throw new Error(label + ": укажи дату.");
-  var time = String(timeValue == null ? "" : timeValue).trim();
-  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) throw new Error(label + ": время должно быть в формате HH:mm.");
-  var timezone = di3GetConfiguredTimeZone_();
-  var value = Utilities.formatDate(dateValue, timezone, "yyyy-MM-dd") + " " + time;
-  var parsed = Utilities.parseDate(value, timezone, "yyyy-MM-dd HH:mm");
-  if (Utilities.formatDate(parsed, timezone, "yyyy-MM-dd HH:mm") !== value) throw new Error(label + ": некорректные дата или время.");
-  return parsed;
+  return di3BuildEffectiveDateTime_(dateValue, timeValue, "Историческая продажа — " + String(label || "этап"));
 }
 
 function di3ReadHistoricalSaleFormCommand_() {
