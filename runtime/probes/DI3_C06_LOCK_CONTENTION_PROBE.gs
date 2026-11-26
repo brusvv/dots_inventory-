@@ -7,14 +7,15 @@
  * Session A:
  *   di3TmpC06HoldScriptLock(25000, "C06-2026-11-26", "TEST_COPY_ONLY")
  *
- * After Session A returns LOCK_HELD_AND_RELEASED, Session B (or a separate
- * execution started while A is sleeping):
+ * Start Session B in a separate Apps Script execution while A is sleeping:
  *   di3TmpC06ProbeContendedLock("C06-2026-11-26", "TEST_COPY_ONLY")
  *
  * With a 25s hold, di3WithLock_ (20s timeout) should return CONTENDED and must
- * not enter its callback. With a 5–15s hold, it may return ACQUIRED_AFTER_RELEASE.
- * OVERLAP_DETECTED is a hard failure: the callback entered while Session A's
- * active marker was still present.
+ * not enter its callback. With a 5–15s hold, it should enter only after A
+ * releases and return ACQUIRED_AFTER_RELEASE. Starting B after A has finished
+ * also returns ACQUIRED_AFTER_RELEASE, but does not test contention.
+ * OVERLAP_DETECTED is a hard failure: the callback entered before A marked
+ * release while still holding ScriptLock.
  */
 function di3TmpC06LockProbeKey_(probeId) {
   var id = String(probeId || "").trim();
@@ -82,10 +83,19 @@ function di3TmpC06HoldScriptLock(durationMs, probeId, confirmation) {
     try {
       var current = properties.getProperty(key);
       var currentRecord = current ? JSON.parse(current) : null;
-      if (currentRecord && currentRecord.token === token) properties.deleteProperty(key);
+      if (currentRecord && currentRecord.token === token) {
+        currentRecord.release_requested_at_ms = Date.now();
+        currentRecord.release_requested_at_utc = new Date(currentRecord.release_requested_at_ms).toISOString();
+        properties.setProperty(key, JSON.stringify(currentRecord));
+      }
     } finally {
       lock.releaseLock();
     }
+    try {
+      var afterRelease = properties.getProperty(key);
+      var afterReleaseRecord = afterRelease ? JSON.parse(afterRelease) : null;
+      if (afterReleaseRecord && afterReleaseRecord.token === token) properties.deleteProperty(key);
+    } catch (ignoreCleanup) {}
   }
 }
 
