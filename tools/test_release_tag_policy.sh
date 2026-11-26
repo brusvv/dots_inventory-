@@ -66,6 +66,14 @@ git -C "$WORK" tag -a dots-inventory-v1.1.0-preview.3 -m "Wrong ancestry" -m "so
 git -C "$WORK" push origin refs/tags/dots-inventory-v1.1.0-preview.3 >/dev/null 2>&1
 run_fail dots-inventory-v1.1.0-preview.3 "$UNRELATED_SHA" "Preview commit outside declared branch"
 
+git -C "$WORK" tag -a dots-inventory-v1.1.0-preview.4 -m "Missing branch declaration"
+git -C "$WORK" push origin refs/tags/dots-inventory-v1.1.0-preview.4 >/dev/null 2>&1
+run_fail dots-inventory-v1.1.0-preview.4 "$PREVIEW_SHA" "Preview without source branch declaration"
+
+git -C "$WORK" tag -a dots-inventory-v1.1.0-preview.5 -m "Duplicate branch declarations" -m "source-branch: feature/preview" -m "source-branch: feature/unrelated"
+git -C "$WORK" push origin refs/tags/dots-inventory-v1.1.0-preview.5 >/dev/null 2>&1
+run_fail dots-inventory-v1.1.0-preview.5 "$PREVIEW_SHA" "Preview with duplicate source branch declarations"
+
 git -C "$WORK" tag dots-inventory-v1.0.1 "$MAIN_SHA"
 git -C "$WORK" push origin refs/tags/dots-inventory-v1.0.1 >/dev/null 2>&1
 run_fail dots-inventory-v1.0.1 "$MAIN_SHA" "lightweight tag"
