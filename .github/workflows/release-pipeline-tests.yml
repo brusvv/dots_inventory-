@@ -22,6 +22,7 @@ permissions:
   contents: read
 
 # D-05 confirmed installer and D-06 verified source rollback are covered by this workflow.
+# Pull-request checks are enabled by the feature/github-install-preview base workflow.
 
 jobs:
   release-contract:
