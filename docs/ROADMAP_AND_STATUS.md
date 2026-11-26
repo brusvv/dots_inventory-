@@ -544,4 +544,17 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Menu: Система → GitHub и обновления → Предварительно собрать обновление (без установки).
 - The candidate file set exists only in memory and is shown as a summary. No Apps Script project content, Drive file, deployment, spreadsheet, schema, FIFO or stock data is written or changed.
 - CI [45882939657](https://github.com/brusvv/dots_inventory-/actions/runs/45882939657) passed: 52/52 syntax files, 151/151 existing regressions, 9/9 release-manifest tests, 16/16 deployment-manager tests (176/176 total).
-- Still pending: separately confirmed projects.updateContent, post-write full-file comparison, code rollback (D-06), and live runtime acceptance (D-07). No install has been performed.
+- Added a separately confirmed installer: it requires an exact D-04 Drive backup, a YES/NO dialog, a final concurrency check, and post-write full-file verification. It calls projects.updateContent only after explicit YES. This code has not been run against a live Apps Script project.
+- Still pending: code rollback (D-06) and live runtime acceptance (D-07). No install has been performed.
+
+
+## 26.11.2026 — D-05 confirmed installer implementation
+
+- Added a separate menu command for installing the latest stable GitHub release.
+- Before the write, the installer rebuilds the release preview, fingerprints the complete current project, creates a D-04 source backup, reads that Drive file back and verifies all checksums, Script ID and exact pre-install fingerprint.
+- The user receives a YES/NO confirmation with the release tag/commit, full file counts, zero-deletion statement and verified backup link. NO cancels without changing project content.
+- After YES, a last-moment read prevents overwriting project edits made while the dialog was open.
+- Only then does the installer call projects.updateContent with the complete file set. It then reads the project back and compares every file name, type and exact source. Only an exact match is marked INSTALLED_AND_VERIFIED.
+- A post-write mismatch is reported with the backup location; automatic rollback is deliberately not attempted. D-06 handles code rollback separately.
+- Required additional target manifest scope: https://www.googleapis.com/auth/script.projects. This repository does not alter or synthesize the real appsscript.json.
+- No deployment version is created or advanced. No setup, migration, FIFO rebuild or spreadsheet-data operation is invoked. No live installation has been performed.
