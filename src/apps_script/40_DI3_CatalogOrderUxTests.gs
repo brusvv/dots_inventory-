@@ -94,6 +94,17 @@ function di3RunCatalogOrderUxUnitTests() {
     includes(source, "Фактическое поступление товара на склад");
   });
 
+  test("historical-sale confirmation uses the same form snapshot as creation", function () {
+    var preview = di3PreviewHistoricalSaleForm.toString();
+    var save = di3SaveHistoricalSaleForm.toString();
+    includes(preview, "command = command || di3ReadHistoricalSaleFormCommand_()");
+    var read = save.indexOf("di3ReadHistoricalSaleFormCommand_()");
+    var plan = save.indexOf("di3PreviewHistoricalSaleForm(command)");
+    var confirm = save.indexOf("ui.alert(");
+    var create = save.indexOf("di3CreateHistoricalSale(command)");
+    equal(read >= 0 && plan > read && confirm > plan && create > confirm, true);
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Catalog/Order UX tests failed: " + JSON.stringify(failed));
   return report;
