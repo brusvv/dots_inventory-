@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/github-deployment-manager
+      - feature/github-release-pipeline
     paths:
       - "src/apps_script/**"
       - "tools/build_release_manifest.js"
