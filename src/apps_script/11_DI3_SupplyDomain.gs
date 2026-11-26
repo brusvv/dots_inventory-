@@ -412,12 +412,30 @@ function di3EnsureSupplyDatePanelLayout_(sheet) {
       existingNote !== previousOrderDateSemanticsNote && existingNote.indexOf("Вводи фактические даты по очереди") !== 0) || unexpectedContent) {
     throw new Error("Область D2:J8 листа «Поставка v3» содержит неизвестную структуру или данные. Размещение панели дат остановлено без перезаписи.");
   }
+  // Preserve legacy combined timestamps as separate visible inputs. A legacy
+  // midnight value has no provable time precision, so leave H blank for re-entry.
+  var legacyStageDates = sheet.getRange("G5:G7").getValues().map(function (row) { return row[0]; });
+  var legacyStageTimes = sheet.getRange("H5:H7").getDisplayValues().map(function (row) { return String(row[0] || "").trim(); });
+  var migratedDates = [], migratedTimes = [];
+  legacyStageDates.forEach(function (value, index) {
+    if (value === "" || value == null) {
+      migratedDates.push([""]); migratedTimes.push([legacyStageTimes[index] || ""]); return;
+    }
+    if (!(value instanceof Date) || isNaN(value.getTime())) {
+      throw new Error("Поле G" + (index + 5) + " содержит некорректную старую дату. Исправь её вручную до обновления панели.");
+    }
+    var parts = di3SplitEffectiveDateTime_(value, "Старый этап поставки");
+    migratedDates.push([parts.date]);
+    migratedTimes.push([legacyStageTimes[index] || (parts.time === "00:00" ? "" : parts.time)]);
+  });
   [["D2:F2", "G2:J2"], ["D3:F3", "G3:J3"], ["D4:F4", "G4:J4"],
     ["D5:F5", "G5:J5"], ["D6:F6", "G6:J6"], ["D7:F7", "G7:J7"]].forEach(function (pair) {
     sheet.getRange(pair[0]).breakApart().merge();
     sheet.getRange(pair[1]).breakApart();
   });
   sheet.getRange("D2:D7").setValues(labels.map(function (label) { return [label]; }));
+  sheet.getRange("G5:G7").setValues(migratedDates);
+  sheet.getRange("H5:H7").setValues(migratedTimes);
   sheet.getRange("D8:J8").breakApart().merge();
   sheet.getRange("D8").setValue(knownNote);
   sheet.getRange("D2:F7").setBackground("#EEF2F7").setFontWeight("bold");
