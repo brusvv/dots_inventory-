@@ -1,20 +1,24 @@
 # Installation and runtime acceptance notes
 
-## Important
+## Preferred initial installation — browser only
 
-This repository snapshot is a source export, not a fully bound clasp project. The original RAR did not include `appsscript.json` or `.clasp.json`. Do not invent a Script ID or deploy target.
+For a new, separate test spreadsheet, use [BROWSER_ONLY_BOOTSTRAP.md](BROWSER_ONLY_BOOTSTRAP.md). It fetches a fixed commit directly from GitHub, verifies all 47 Apps Script modules, creates a verified Drive source backup, asks for confirmation, installs through Apps Script API and verifies the complete project after writing. No clasp, local Git clone, Node.js or local source copy is required.
 
-## Deploying source modules to an existing test project
+The only manual bootstrap step is copying `bootstrap/DI3_GitHubBootstrap.gs` from GitHub into a new bound Apps Script project. The project must have the documented OAuth scopes and the Google Apps Script API enabled. The Bootstrap is strictly limited to a blank disposable project; it refuses unexpected source files. It must not be used against the production RC8 workbook.
 
-1. Create/verify a restored test copy of the Google Sheets workbook.
-2. Create a fresh backup of that test workbook.
-3. Open the Apps Script project bound to that copy.
-4. Replace/create `.gs` files using the exact names under `src/apps_script/`.
-5. Do not delete a module merely because the numbering has a gap (`06` is not present in this source snapshot).
-6. Preserve the actual project `appsscript.json`; confirm its `timeZone` equals `Europe/Helsinki`, matching `00_DI3_AppConfig.gs`.
-7. Save and reload the spreadsheet.
-8. Run the applicable Apps Script unit test functions listed in README / context.
-9. Run runtime acceptance only on the test copy and record the complete Execution log JSON.
+## Manual source replacement — fallback only
+
+This repository is not a fully bound clasp project. The source export intentionally does not contain a target `appsscript.json`, `.clasp.json` or Script ID. Do not invent these values.
+
+If a manual source replacement is explicitly chosen instead of the browser-only Bootstrap:
+
+1. Work only on a restored/disposable test spreadsheet with its own Script ID.
+2. Create and verify a fresh backup of that test workbook and Apps Script source.
+3. Open the Apps Script project bound to that test copy.
+4. Replace/create `.gs` files using exact names under `src/apps_script/`.
+5. Preserve the actual project `appsscript.json`; confirm its `timeZone` equals `Europe/Helsinki`, matching `00_DI3_AppConfig.gs`.
+6. Save and reload the spreadsheet.
+7. Run applicable Apps Script unit-test functions and runtime acceptance only on the test copy.
 
 Do not run Clean Start, imports, schema migration, restore, or any stock mutation just because code was replaced. The current clean-final schema source declares version 4. The legacy upgrade chain includes v2→v3 `commission_payer` and v3→v4 `business_date`; a schema-v3 workbook requires `RC8_ORDER_BUSINESS_DATE_V4` after read-only Dry Run and verified backup. A clean workbook uses one direct 0→4 `CLEAN_FINAL_BASELINE_ADOPTION` record. Important: the new F-07 clean baseline uses a 13-column sequence-based StockLedger; the existing RC8 12-column StockLedger is intentionally not compatible without a separately designed and approved migration. Do not run the v4 setup against the production RC8 workbook.
 
@@ -29,7 +33,7 @@ Do not run Clean Start, imports, schema migration, restore, or any stock mutatio
 - `di3RunSupplyFullEditUnitTests()`
 - `di3RunWarehouseDashboardUnitTests()`
 
-These are Apps Script code functions and some depend on the Sheets runtime / project mocks. The current local Node quality-gates execute seven suites: FIFO replay (41), Order Domain (22), Supply Workspace UX (17), Catalog/Order UX (14), System Safety UX (38), Warehouse Dashboard (9), and Finance Schema (4), for 145/145 tests. Syntax validation covers 50 `.gs` files. These are source/Node checks, not Apps Script runtime acceptance. Do not infer that every GAS-specific unit-test entry point was executed locally.
+These are Apps Script code functions and some depend on the Sheets runtime / project mocks. The current local Node quality-gates execute seven suites: FIFO replay (41), Order Domain (22), Supply Workspace UX (17), Catalog/Order UX (14), System Safety UX (38), Warehouse Dashboard (9), and Finance Schema (4), for 145/145 tests. Syntax validation covers 54 `.gs` files in the application source and runtime probes; the browser-only Bootstrap is checked separately. These are source/Node checks, not Apps Script runtime acceptance. Do not infer that every GAS-specific unit-test entry point was executed locally.
 
 ## Probe safety
 
