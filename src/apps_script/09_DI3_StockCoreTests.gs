@@ -1110,7 +1110,7 @@ function di3RunStockCoreUnitTests() {
 
       equal(report.summary.quarantined_replays, 0);
       equal(report.summary.manually_resolved_replays, 1);
-      equal(report.warnings.some(function (item) { return item.indexOf("MANUALLY_RESOLVED") >= 0; }), true);
+      equal(report.warnings.some(function (item) { return item.indexOf("разрешён владельцем") >= 0; }), true);
     } finally {
       di3BuildFifoAllocationSnapshotFingerprint_ = originalAllocationFingerprint;
       di3BuildFifoFingerprint_ = originalFingerprint;
