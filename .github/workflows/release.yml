@@ -19,48 +19,7 @@ jobs:
         with:
           node-version: "24"
       - name: Validate release tag and publication boundary
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG="$GITHUB_REF_NAME"
-          if [[ "$TAG" =~ ^dots-inventory-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            CHANNEL="stable"
-          elif [[ "$TAG" =~ ^dots-inventory-v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$ ]]; then
-            CHANNEL="preview"
-          else
-            echo "::error::Use dots-inventory-vX.Y.Z for Stable or dots-inventory-vX.Y.Z-preview.N for Preview."
-            exit 1
-          fi
-          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
-          if [[ "$CHANNEL" == "stable" ]]; then
-            if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
-              echo "::error::Stable release commit must already be reachable from main."
-              exit 1
-            fi
-            SOURCE_BRANCH="main"
-          else
-            TAG_MESSAGE="$(git for-each-ref --format='%(contents)' "refs/tags/$TAG")"
-            SOURCE_BRANCH="$(printf '%s\\n' "$TAG_MESSAGE" | sed -n 's/^source-branch: //p' | head -n 1)"
-            if [[ ! "$SOURCE_BRANCH" =~ ^(feature|release|hotfix)/[A-Za-z0-9._/-]+$ ]]; then
-              echo "::error::Preview annotated tag message must include: source-branch: feature/your-branch"
-              exit 1
-            fi
-            if ! git show-ref --verify --quiet "refs/remotes/origin/$SOURCE_BRANCH"; then
-              echo "::error::Preview source branch does not exist on origin: $SOURCE_BRANCH"
-              exit 1
-            fi
-            if ! git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$SOURCE_BRANCH"; then
-              echo "::error::Tagged commit is not contained in declared source branch: $SOURCE_BRANCH"
-              exit 1
-            fi
-            echo "Preview source branch: $SOURCE_BRANCH"
-          fi
-          if [[ "$(git cat-file -t "refs/tags/$TAG")" != "tag" ]]; then
-            echo "::error::An annotated Git tag is required."
-            exit 1
-          fi
-          echo "RELEASE_CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
-          echo "RELEASE_SOURCE_BRANCH=$SOURCE_BRANCH" >> "$GITHUB_ENV"
+        run: bash tools/validate_release_tag.sh
       - name: Test release manifest builder
         run: node tools/test_release_manifest.js
       - name: Test GitHub deployment manager
