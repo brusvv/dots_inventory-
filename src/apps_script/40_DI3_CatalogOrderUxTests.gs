@@ -71,6 +71,12 @@ function di3RunCatalogOrderUxUnitTests() {
       includes(source, 'subMenu("' + name + '"');
     });
   });
+  test("warehouse menu exposes the read-only Dashboard chart diagnostics command", function () {
+    var source = di3BuildMenus_.toString();
+    includes(source, 'Диагностика диаграммы Dashboard (без изменений)');
+    includes(source, '"di3LogWarehouseDashboardChartDiagnostics"');
+  });
+
   test("order menu names required source and target statuses for transitions", function () {
     var source = di3BuildMenus_.toString();
     includes(source, "Отправить выбранный заказ (Новый → В пути)…");
