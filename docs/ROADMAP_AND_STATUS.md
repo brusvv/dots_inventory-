@@ -332,7 +332,8 @@ The following issues have source changes and local regression coverage. They are
 - Kept the explicit RC8/legacy migration path separate. An unversioned workbook without recognized legacy migration identity is blocked rather than auto-adopted.
 - Added fail-closed checks for duplicate/mismatched clean-baseline journal records, legacy or partial headers, out-of-schema populated columns, and missing system tables after baseline adoption.
 - A `STARTED` baseline may resume only after revalidating the target headers; an adopted baseline remains recognizable after normal business rows have been created.
-- Added 11 focused System Safety UX regression cases and updated `docs/CLEAN_BASELINE_SCHEMA_VERSIONING_DESIGN.md`.
+- Added 12 focused System Safety UX regression cases and updated `docs/CLEAN_BASELINE_SCHEMA_VERSIONING_DESIGN.md`.
 - Branch: `feature/clean-final-baseline`; draft PR: https://github.com/brusvv/dots_inventory-/pull/1.
 - GitHub Actions code run `45728096949` and PR integration run `45728149345` (run #93, merge commit `a17111e`) passed syntax for 50 `.gs` files and 129/129 Node tests: FIFO 41, Order Domain 17, Supply UX 15, Catalog/Order UX 12, System Safety 31, Warehouse Dashboard 9, Finance 4. The idempotency test verifies recovery after schema_version has been written but before the baseline journal row is completed. This remains source-level validation, not Google Sheets runtime acceptance.
+- Added a regression case proving that a fully cleared header row after baseline adoption is BLOCKED; CI rerun for this final guard is pending.
 - **Still not runtime-accepted:** actual Google Sheets Dry Run, empty-workbook setup, setup rerun, interruption injection at both journal boundaries, backup/restore-as-new, and end-to-end supply/dispatch/return/finance flows. Existing RC8 remains untouched.
