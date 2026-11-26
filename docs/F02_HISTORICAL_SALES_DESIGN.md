@@ -160,3 +160,12 @@ Implemented on `feature/clean-final-baseline` / PR #1:
 - Added source regression tests for request-hash binding, the historical-only created_at bypass, and immutable dispatch retry timestamp checks.
 
 **Source CI passed:** GitHub Actions run `45847110942` (run #146) passed syntax for 50 `.gs` files and all 133/133 regression tests, including the three F-02 cases. Subsequent commits to the branch only updated documentation. **Not yet runtime-accepted:** the migration, historical form, FIFO chronology, PeriodGuard, commissions, Finance Dashboard and retry/fault-recovery flows must be exercised on a restored disposable workbook. No production workbook, live RC8 data, or deployed Apps Script was changed by this source patch. PR #1 remains Draft and unmerged.
+## 10. Recovery hardening — 26.11.2026
+
+- Hardened the IN_TRANSIT retry boundary: the order status alone is no longer treated as proof that ORDER_DISPATCH reached COMMITTED. When a dispatch operation exists, retry verifies the persisted timestamp and historical-mode marker; a PREPARED operation is resumed from its immutable payload.
+- The historical-sale orchestrator now re-enters the dispatch workflow when it finds an order already in IN_TRANSIT, allowing recovery after the order row was updated but before the dispatch operation journal was committed.
+- Before confirming a historical sale, the orchestrator verifies that the dispatch operation exists, is COMMITTED, carries the exact requested dispatched_at, and is marked as historical.
+- The completion retry path idempotently repairs a missing DocumentStatusHistory completion entry after verifying the immutable completion timestamp. Derived FIFO snapshots and the order register are refreshed on an already-completed retry.
+- Added an Order Domain regression for IN_TRANSIT + PREPARED recovery, including rejection when the persisted operation's historical-mode marker does not match.
+- **Updated source CI:** GitHub Actions PR run #154 (45847647122) passed syntax for 50 .gs files and **134/134** tests: FIFO 41, Order Domain 21, Supply Workspace UX 15, Catalog/Order UX 12, System Safety UX 32, Warehouse Dashboard 9, Finance Schema 4.
+- This remains source/Node validation. Apps Script runtime, actual OperationExecutor fault injection, migration Dry Run/apply, and backup/restore acceptance remain pending on a restored disposable workbook.
