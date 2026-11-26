@@ -1,0 +1,84 @@
+name: Package Dots Inventory v4 installation bundle
+
+on:
+  push:
+    branches:
+      - feature/clean-final-baseline
+    paths:
+      - "src/apps_script/**"
+      - "runtime/probes/**"
+      - "docs/INSTALLATION_AND_RUNTIME_ACCEPTANCE.md"
+      - "docs/RUNTIME_PROBES.md"
+      - "docs/SOURCE_MODULE_INDEX.md"
+      - "docs/ROADMAP_AND_STATUS.md"
+      - "README.md"
+      - "tools/**"
+      - ".github/workflows/package-installation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch commit
+        uses: actions/checkout@v4
+      - name: Assemble installation bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="DotsInventory_v4_install"
+          mkdir -p "$ROOT/Apps_Script" "$ROOT/Runtime_Probes" "$ROOT/Documentation" "$ROOT/QA_Tools"
+          cp src/apps_script/*.gs "$ROOT/Apps_Script/"
+          cp runtime/probes/*.gs "$ROOT/Runtime_Probes/"
+          cp README.md "$ROOT/README_SOURCE.md"
+          cp docs/INSTALLATION_AND_RUNTIME_ACCEPTANCE.md "$ROOT/Documentation/"
+          cp docs/RUNTIME_PROBES.md "$ROOT/Documentation/"
+          cp docs/SOURCE_MODULE_INDEX.md "$ROOT/Documentation/"
+          cp docs/ROADMAP_AND_STATUS.md "$ROOT/Documentation/"
+          cp tools/* "$ROOT/QA_Tools/"
+          cat > "$ROOT/INSTALLATION_RU.txt" <<'EOF'
+          DOTS INVENTORY v4 — ПАКЕТ ИСХОДНИКОВ ДЛЯ УСТАНОВКИ
+          
+          Состав:
+          - Apps_Script/ — все .gs модули текущей ветки clean-final-baseline.
+          - Runtime_Probes/ — временные диагностические/приёмочные пробы. НЕ загружать как штатные модули приложения и не запускать на рабочей таблице.
+          - Documentation/ — инструкция, индекс модулей, runtime-пробы и актуальный roadmap.
+          - QA_Tools/ — локальные проверки и Node regression runners.
+          
+          ВАЖНО: это пакет исходников, а не готовый clasp-проект. В нём намеренно отсутствуют appsscript.json и .clasp.json:
+          Script ID и манифест должны быть взяты из фактического Apps Script проекта; выдумывать их нельзя.
+          
+          Установка:
+          1. Создай отдельную тестовую Google Sheets таблицу или восстанови тестовую копию.
+          2. Сделай и проверь резервную копию тестовой таблицы.
+          3. Открой Apps Script проект, привязанный к тестовой таблице.
+          4. Создай/замени .gs файлы из Apps_Script/, сохраняя точные имена. Не удаляй существующий модуль только из-за пропуска номера в последовательности.
+          5. Сохрани фактический appsscript.json. Его timeZone должен быть Europe/Helsinki — как DI3_APP_CONFIG.TIME_ZONE в 00_DI3_AppConfig.gs.
+          6. Сохрани проект, перезагрузи таблицу и сначала выполни только read-only di3DryRunInstallation().
+          7. Проверь результат Dry Run и только затем отдельно планируй разрешённую установку на чистой тестовой книге.
+          
+          КРИТИЧЕСКИ ВАЖНО:
+          - НЕ устанавливать и не мигрировать этим пакетом действующую RC8/рабочую таблицу.
+          - Целевая чистая схема этой ветки — v4. У неё 13-колоночный StockLedger с sequence-последовательностью; существующий RC8 12-колоночный StockLedger несовместим без отдельной миграции, которая не входит в этот пакет.
+          - Замена кода сама по себе НЕ означает запуск Clean Start, импорта, миграции схемы, восстановления, перестройки FIFO или складских операций.
+          - Не запускать Runtime_Probes на рабочей таблице. Часть проб изменяет тестовые данные или удерживает ScriptLock; см. Documentation/RUNTIME_PROBES.md.
+          - Кодовые CI-тесты не заменяют runtime-приёмку в Google Sheets.
+          
+          Конфигурация часового пояса в исходниках: Europe/Helsinki.
+          Текущая ветка: feature/clean-final-baseline.
+          EOF
+          find "$ROOT" -type f -print0 | sort -z | xargs -0 sha256sum > "$ROOT/SHA256SUMS.txt"
+          zip -qr "DotsInventory_v4_install.zip" "$ROOT"
+          sha256sum "DotsInventory_v4_install.zip" > "DotsInventory_v4_install.zip.sha256"
+      - name: Upload installation ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: DotsInventory-v4-installation
+          path: |
+            DotsInventory_v4_install.zip
+            DotsInventory_v4_install.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
