@@ -208,7 +208,7 @@ function di3SetupWarehouseManager() {
     if (oldDateValue instanceof Date && !isNaN(oldDateValue.getTime()) && !oldTimeValue) {
       var oldParts = di3SplitEffectiveDateTime_(oldDateValue, "Существующая дата ручного движения");
       sheet.getRange("B4").setValue(oldParts.date);
-      sheet.getRange("C4").setNumberFormat("@").setValue(oldParts.time);
+      sheet.getRange("C4").setNumberFormat("@").setValue(oldParts.time === "00:00" ? "" : oldParts.time);
     }
     sheet.getRange("A4").setValue("Дата операции");
     sheet.getRange("C3").setValue("Время (HH:mm)").setFontWeight("bold").setBackground("#EEF2F7");
