@@ -1624,7 +1624,10 @@ function di3BuildFifoReplayArchiveDiagnostics_(runRows, allocationArchiveRows, l
         });
       }
       if (index === 0 && type !== "PREPARED") errors.push("FifoReplayEvents: первое событие replay " + replayId + " должно быть PREPARED.");
-      if (index > 0 && (terminal || (type !== "COMMITTED" && type !== "QUARANTINED"))) {
+      var manualResolutionTransition = index > 0 &&
+        String(events[index - 1][3]) === "QUARANTINED" && type === "MANUALLY_RESOLVED";
+      if (index > 0 && !manualResolutionTransition &&
+          (terminal || (type !== "COMMITTED" && type !== "QUARANTINED"))) {
         errors.push("FifoReplayEvents: недопустимый переход состояния для replay " + replayId + ".");
       }
       if (["COMMITTED", "QUARANTINED", "MANUALLY_RESOLVED"].indexOf(type) >= 0) terminal = true;
