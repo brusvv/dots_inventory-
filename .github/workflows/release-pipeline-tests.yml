@@ -20,6 +20,8 @@ on:
 permissions:
   contents: read
 
+# D-05 confirmed installer and post-write verification are included in this workflow.
+
 jobs:
   release-contract:
     runs-on: ubuntu-latest
