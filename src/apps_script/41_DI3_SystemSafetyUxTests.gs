@@ -532,6 +532,39 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("completed clean baseline blocks setup when a required system table is missing", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      function headerOnlySheet(name) {
+        var expected = DI3_TABLE_SCHEMAS[name];
+        return {
+          getLastRow: function () { return 1; },
+          getMaxColumns: function () { return expected.length; },
+          getRange: function () { return { getDisplayValues: function () { return [expected]; } }; }
+        };
+      }
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) {
+          return name === "_AppMeta" || name === "SchemaMigrations" ? headerOnlySheet(name) : null;
+        } };
+      };
+      di3GetSchemaVersion_ = function () { return DI3_SCHEMA_VERSION; };
+      di3GetSchemaMigrationRows_ = function () {
+        return [{ migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY, from_schema_version: 0,
+          to_schema_version: DI3_SCHEMA_VERSION, status: "COMPLETED", row_number: 2 }];
+      };
+      var state = di3GetCleanBaselineState_();
+      equal(state.eligible, false);
+      equal(state.issues.some(function (issue) { return issue.indexOf("Products") >= 0; }), true);
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
     ["StockLedger", "StockAllocations", "FifoAllocationRuns", "FifoAllocationArchive",
       "FifoLotCacheArchive", "FifoReplayEvents"].forEach(function (sheetName) {
