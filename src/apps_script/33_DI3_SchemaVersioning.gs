@@ -54,6 +54,7 @@ function di3ApplyOrderBusinessDateMigration_() {
     return [Utilities.parseDate(dateText, timezone, "yyyy-MM-dd")];
   });
   if (backfilled) sheet.getRange(2, 30, updates.length, 1).setValues(updates);
+  if (sheet.getMaxRows() > 1) sheet.getRange(2, 30, sheet.getMaxRows() - 1, 1).setNumberFormat("dd.mm.yyyy");
   di3CompactSheet_(sheet, Math.max(1, lastRow), 30);
   return { status: "APPLIED", orders: rowCount, rows_backfilled: backfilled, header: targetHeader };
 }
