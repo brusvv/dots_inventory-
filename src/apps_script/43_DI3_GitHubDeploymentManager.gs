@@ -87,6 +87,12 @@ function di3FetchGitHubJson_(url) {
 function di3ValidateGitHubReleaseManifest_(manifest, releaseTag) {
   var issues = [];
   var config = di3GetGitHubDeploymentConfig_();
+  var channel = String(manifest && manifest.release_channel || "");
+  var sourceBranch = String(manifest && manifest.source_branch || "");
+  if (channel !== "stable" && channel !== "preview") issues.push("Некорректный release_channel в манифесте.");
+  if (channel === "stable" && (sourceBranch !== "main" || /-preview\\./.test(String(releaseTag || "")))) issues.push("Stable-релиз должен иметь source_branch=main и стабильный тег.");
+  if (channel === "preview" && (!sourceBranch || sourceBranch === "main" || !/-preview\\.\\d+$/.test(String(releaseTag || "")))) issues.push("Preview должен иметь preview-тег и исходную ветку, отличную от main.");
+  if (channel && channel !== config.release_channel) issues.push("Канал манифеста (" + channel + ") не совпадает с выбранным каналом установки (" + config.release_channel + ").");
   var repository = config.repository;
   var commit = String(manifest && manifest.git_commit || "").toLowerCase();
   if (!manifest || manifest.format !== DI3_GITHUB_RELEASE_FORMAT) issues.push("Неподдерживаемый format манифеста.");
