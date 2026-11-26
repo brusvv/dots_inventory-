@@ -187,8 +187,6 @@ function di3GetLatestGitHubReleaseManifest_() {
     var listResult = di3FetchGitHubJson_(apiBase + "/releases?per_page=100");
     if (listResult.status === "NOT_FOUND" || !Array.isArray(listResult.data)) return { status: "NO_RELEASE", message: "Список GitHub Releases недоступен или Preview-релизов пока нет." };
     var previews = listResult.data.filter(function (item) { return item && !item.draft && item.prerelease && /^dots-inventory-v[0-9]+[.][0-9]+[.][0-9]+-preview[.][0-9]+$/.test(String(item.tag_name || "")); });
-      return item && !item.draft && item.prerelease && /^dots-inventory-v\\d+\\.\\d+\\.\\d+-preview\\.\\d+$/.test(String(item.tag_name || ""));
-    });
     if (!previews.length) return { status: "NO_RELEASE", message: "Опубликованный Preview-релиз не найден." };
     release = previews[0];
   }
