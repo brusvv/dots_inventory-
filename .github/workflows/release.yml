@@ -18,6 +18,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+      - name: Test Stable and Preview Git tag policy
+        run: bash tools/test_release_tag_policy.sh
       - name: Validate release tag and publication boundary
         run: bash tools/validate_release_tag.sh
       - name: Test release manifest builder
