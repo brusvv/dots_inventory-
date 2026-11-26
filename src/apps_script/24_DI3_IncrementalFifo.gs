@@ -471,6 +471,9 @@ function di3ResolveQuarantinedFifoReplay(replayId, confirmation, reason) {
     if (String(runRecord.values[2]) !== "FAILED") {
       throw new Error("Исходный FIFO run должен иметь статус FAILED; фактический статус: " + runRecord.values[2]);
     }
+    if (String(runRecord.values[10] || "") !== String(event[5] || "")) {
+      throw di3FifoReplayIntegrityError_("operation_id в FIFO run не совпадает с карантинным replay event.");
+    }
 
     // Verify that the immutable source archive itself is intact before
     // accepting an operator's reconciliation attestation.
@@ -528,7 +531,7 @@ function di3ResolveQuarantinedFifoReplay(replayId, confirmation, reason) {
       note: "No stock/FIFO projection rows were changed by this resolution."
     };
     di3AppendFifoReplayEvent_(context, "MANUALLY_RESOLVED", fingerprints, audit);
-    di3UpdateFifoRunStatus_(runRecord.row_number, "MANUALLY_RESOLVED", new Date(),
+    di3UpdateFifoRunStatus_(runRecord.row_number, "MANUALLY_RESOLVED", "",
       "Manually resolved after owner reconciliation: " + why, null);
     return {
       status: "MANUALLY_RESOLVED",
