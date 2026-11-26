@@ -248,6 +248,84 @@ function di3RunOrderDomainUnitTests() {
     equal(plan.seller_revenue_estimate, 950);
     equal(plan.estimated_profit, 350);
   });
+  test("historical sale request hash binds business date and both historical event timestamps", function () {
+    var originalHash = di3BuildManualOperationPayloadHash_;
+    var originalBusinessDate = di3FormatBusinessDate_;
+    var originalToDate = di3ToDate_;
+    try {
+      di3BuildManualOperationPayloadHash_ = function (value) { return JSON.stringify(value); };
+      di3FormatBusinessDate_ = function (value) { return String(value); };
+      di3ToDate_ = function (value) { return value instanceof Date ? value : new Date(value); };
+      var base = {
+        request_token: "HIST-1", business_date: "2026-01-02", historical_mode: true,
+        historical_dispatched_at: "2026-01-02T12:00:00.000Z",
+        historical_completed_at: "2026-01-03T09:00:00.000Z",
+        lines: [{ product_id: "P1", quantity: 1, sale_unit_price: 100 }]
+      };
+      var original = di3BuildOrderRequestHash_(base);
+      var changedBusinessDate = Object.assign({}, base, { business_date: "2026-01-01" });
+      var changedDispatch = Object.assign({}, base, { historical_dispatched_at: "2026-01-02T12:01:00.000Z" });
+      var changedCompletion = Object.assign({}, base, { historical_completed_at: "2026-01-03T09:01:00.000Z" });
+      equal(di3BuildOrderRequestHash_(changedBusinessDate) === original, false);
+      equal(di3BuildOrderRequestHash_(changedDispatch) === original, false);
+      equal(di3BuildOrderRequestHash_(changedCompletion) === original, false);
+      equal(di3BuildOrderRequestHash_(base), original);
+    } finally {
+      di3BuildManualOperationPayloadHash_ = originalHash;
+      di3FormatBusinessDate_ = originalBusinessDate;
+      di3ToDate_ = originalToDate;
+    }
+  });
+
+  test("historical mode bypasses only the created_at lower bound for dispatch", function () {
+    var originalParse = di3ParseSupplyEffectiveDate_;
+    var originalMillis = di3ToMillis_;
+    var originalItems = di3GetOrderItems_;
+    var eventAt = new Date("2026-01-02T10:00:00.000Z");
+    var order = { order_id: "HIST-ORDER", order_number: "H-1", status: DI3_ORDER_STATUS.NEW,
+      created_at: new Date("2026-01-03T10:00:00.000Z") };
+    try {
+      di3ParseSupplyEffectiveDate_ = function (value) { return new Date(value); };
+      di3ToMillis_ = function (value) { return new Date(value).getTime(); };
+      di3GetOrderItems_ = function () { return []; };
+      throws(function () { di3DispatchOrder_(order, eventAt); }, /раньше создания заказа/);
+      throws(function () { di3DispatchOrder_(order, eventAt, { allowHistoricalBackdate: true }); }, /нет товарных позиций/);
+    } finally {
+      di3ParseSupplyEffectiveDate_ = originalParse;
+      di3ToMillis_ = originalMillis;
+      di3GetOrderItems_ = originalItems;
+    }
+  });
+
+  test("prepared dispatch retry rejects a changed immutable timestamp", function () {
+    var originals = {
+      parse: di3ParseSupplyEffectiveDate_, millis: di3ToMillis_, items: di3GetOrderItems_,
+      pending: di3AssertNoOtherPendingStockOperations_, getOperation: di3GetOrderOperationByKey_,
+      readPayload: di3ReadVerifiedOperationPayload_, complete: di3CompleteOrderDispatch_
+    };
+    var savedAt = "2026-01-02T10:00:00.000Z";
+    var order = { order_id: "RETRY-ORDER", order_number: "R-1", status: DI3_ORDER_STATUS.NEW,
+      created_at: new Date("2026-01-01T10:00:00.000Z") };
+    try {
+      di3ParseSupplyEffectiveDate_ = function (value) { return new Date(value); };
+      di3ToMillis_ = function (value) { return new Date(value).getTime(); };
+      di3GetOrderItems_ = function () { return [{ order_item_id: "I1", product_id: "P1", quantity: 1 }]; };
+      di3AssertNoOtherPendingStockOperations_ = function () { return true; };
+      di3GetOrderOperationByKey_ = function () { return { values: ["OP-1", "KEY", "ORDER_DISPATCH", "ORDER", "RETRY-ORDER", "PREPARED"] }; };
+      di3ReadVerifiedOperationPayload_ = function () { return { dispatched_at: savedAt, historical_mode: false }; };
+      di3CompleteOrderDispatch_ = function () { return { status: "COMMITTED" }; };
+      throws(function () { di3DispatchOrder_(order, new Date("2026-01-02T10:01:00.000Z")); }, /другим временем/);
+    } finally {
+      di3ParseSupplyEffectiveDate_ = originals.parse;
+      di3ToMillis_ = originals.millis;
+      di3GetOrderItems_ = originals.items;
+      di3AssertNoOtherPendingStockOperations_ = originals.pending;
+      di3GetOrderOperationByKey_ = originals.getOperation;
+      di3ReadVerifiedOperationPayload_ = originals.readPayload;
+      di3CompleteOrderDispatch_ = originals.complete;
+    }
+  });
+
   var report = { passed: passed, failed: failures.length, failures: failures };
   if (failures.length) throw new Error("Order-domain tests failed: " + JSON.stringify(failures));
   return report;
