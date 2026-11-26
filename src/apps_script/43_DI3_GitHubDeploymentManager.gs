@@ -329,6 +329,8 @@ function di3CheckGitHubRelease() {
   catch (ignoreInstalledTag) {}
   var result = {
     status: diff.added.length || diff.changed.length ? "UPDATE_AVAILABLE" : "UP_TO_DATE",
+    release_channel: releaseResult.release.channel,
+    source_branch: releaseResult.release.source_branch,
     release: releaseResult.release,
     manifest: {
       schema_version: Number(releaseResult.manifest.target_schema_version),
@@ -343,7 +345,8 @@ function di3CheckGitHubRelease() {
     manifest_preserved: diff.manifest_preserved
   };
   var lines = [
-    "Последний релиз: " + result.release.tag_name,
+    "Канал: " + (result.release_channel === "preview" ? "PREVIEW" : "STABLE") + (result.source_branch ? " · ветка: " + result.source_branch : ""),
+    "Релиз: " + result.release.tag_name,
     "Схема: v" + result.manifest.schema_version + " · часовой пояс: " + result.manifest.time_zone,
     "Файлов релиза: " + diff.summary.release_files,
     "Новых: " + diff.summary.added + " · изменённых: " + diff.summary.changed + " · без изменений: " + diff.summary.unchanged,
