@@ -12,7 +12,7 @@ GitHub Actions run [45864704114](https://github.com/brusvv/dots_inventory-/actio
 - System Safety UX: 39/39.
 - Warehouse Dashboard: 9/9.
 - Finance schema: 4/4.
-- Total: **147/147**.
+- Total: **149/149**.
 
 This is Node/source CI, not Google Apps Script runtime acceptance.
 
@@ -23,7 +23,7 @@ This is Node/source CI, not Google Apps Script runtime acceptance.
 - **F-08, F-17:** not closed. F-17 requires the user's real delivery-method catalogue; do not invent options.
 - **F-19:** pure-domain regression suite is executed by CI and passes 42/42. This does not replace Apps Script write-boundary fault injection.
 - **N-03:** clean v4 baseline, preflight, interrupted-start recovery and populated-workspace guard are implemented in source. Empty-workbook setup/rerun/interruption and v3→v4 migration remain runtime gates.
-- **N-02:** transient Sheets/service errors leave FIFO replay `PREPARED` for retry; immutable-input/integrity violations move it to `QUARANTINED`. Added `di3ResolveQuarantinedFifoReplay()` and a separate menu action: it verifies the archived source fingerprints, requires an explicit owner attestation and detailed reason, appends immutable `MANUALLY_RESOLVED`, marks only the failed run as `MANUALLY_RESOLVED`, and requeues a linked quarantined operation into a new retry epoch. It does not edit StockLedger/StockLots/StockAllocations/FifoProductState or execute a stock operation. Source CI for the new flow is pending; runtime fault-injection and operator acceptance remain open.
+- **N-02:** transient Sheets/service errors leave FIFO replay `PREPARED` for retry; immutable-input/integrity violations move it to `QUARANTINED`. Added `di3ResolveQuarantinedFifoReplay()` and a separate menu action. It verifies archived source fingerprints, requires explicit owner attestation and a detailed reason, appends immutable `MANUALLY_RESOLVED`, marks only the failed run as `MANUALLY_RESOLVED`, and requeues a linked quarantined operation into a new retry epoch. It does not edit StockLedger/StockLots/StockAllocations/FifoProductState or execute a stock operation. Source regression and diagnostics tests pass; runtime fault-injection and operator acceptance remain open.
 - **Warehouse Dashboard:** chart source and diagnostics are implemented, but the user-reported blank chart still needs read-only inspection of N1:O21 and actual chart ranges in Sheets.
 - **Commission/Finance:** buyer-vs-seller payer logic and Finance schema mapping are source-implemented; real migrated-order settlement and Finance Dashboard reconciliation remain open.
 
