@@ -159,7 +159,7 @@ Implemented on `feature/clean-final-baseline` / PR #1:
 - Added business date to the order register as a separate visible field. Finance Dashboard recognition remains based on `completed_at`; business_date does not move revenue or COGS between periods.
 - Added source regression tests for request-hash binding, the historical-only created_at bypass, and immutable dispatch retry timestamp checks.
 
-**Source CI passed:** GitHub Actions run `45848797676` (run #173) passed on the current PR head: syntax for 50 `.gs` files and all 137/137 regression tests. The suites include Order Domain 21/21 and System Safety UX 34/34, including F-02 migration/preflight and committed-dispatch recovery checks. **Not yet runtime-accepted:** the migration, historical form, FIFO chronology, PeriodGuard, commissions, Finance Dashboard and retry/fault-recovery flows must be exercised on a restored disposable workbook. No production workbook, live RC8 data, or deployed Apps Script was changed by this source patch. PR #1 remains Draft and unmerged.
+**Source CI passed:** GitHub Actions run `45852013073` (run #212) passed syntax for 50 `.gs` files and all 142/142 regression tests. The current source suites include Order Domain 22/22, Supply Workspace UX 17/17, Catalog/Order UX 14/14 and System Safety UX 35/35, including the F-02 and shared date/time input regressions. **Not yet runtime-accepted:** the migration, historical form, FIFO chronology, PeriodGuard, commissions, Finance Dashboard and retry/fault-recovery flows must be exercised on a restored disposable workbook. No production workbook, live RC8 data, or deployed Apps Script was changed by this source patch. PR #1 remains Draft and unmerged.
 ## 10. Recovery hardening — 26.11.2026
 
 - Hardened the IN_TRANSIT retry boundary: the order status alone is no longer treated as proof that ORDER_DISPATCH reached COMMITTED. When a dispatch operation exists, retry verifies the persisted timestamp and historical-mode marker; a PREPARED operation is resumed from its immutable payload.
@@ -169,7 +169,7 @@ Implemented on `feature/clean-final-baseline` / PR #1:
 - Added an Order Domain regression for IN_TRANSIT + PREPARED recovery, including rejection when the persisted operation's historical-mode marker does not match.
 - Added a financial preview and explicit YES/NO confirmation before historical stock mutation. The preview accepts the already-read command snapshot, so the confirmed amounts and the eventual immutable create payload cannot be built from two different reads of the form.
 - Added a Catalog/Order UX regression proving the historical-sale confirmation and create path share one form snapshot.
-- **Latest source CI:** GitHub Actions PR run #163 (45848104778) passed syntax for 50 .gs files and **135/135** tests: FIFO 41, Order Domain 21, Supply Workspace UX 15, Catalog/Order UX 13, System Safety UX 32, Warehouse Dashboard 9, Finance Schema 4. Later commits changed documentation only.
+- Historical CI note superseded by section 11. The current application-source validation is run #212 (142/142); run #214 (docs-only PR head) also passed.
 - This remains source/Node validation. Apps Script runtime, actual OperationExecutor fault injection, migration Dry Run/apply, and backup/restore acceptance remain pending on a restored disposable workbook.
 
 
