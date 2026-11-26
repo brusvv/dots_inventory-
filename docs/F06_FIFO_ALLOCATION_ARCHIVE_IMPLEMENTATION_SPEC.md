@@ -11,6 +11,8 @@
 - Added a SHA-256 fingerprint helper and persisted top-level run scope/input metadata. Added the archive tables to backup priority ordering.
 - Verified the clean-baseline schema contract in the FIFO source test suite.
 
+**Recovery hardening:** explicit input/archive integrity failures append QUARANTINED; unexpected execution or Sheets write failures leave the replay PREPARED for safe retry. A regression verifies that a transient product-state write failure does not terminally quarantine a replay.
+
 **Implemented in source:** deterministic allocation IDs for product/full replay; idempotent append-only allocation and lot-cache snapshots; PREPARED/COMMITTED/QUARANTINED event transitions; stable per-product replay IDs; pending run reuse; manual product-set run reuse by exact scope and input fingerprint; source restoration when active projection is neither source nor target; recovery before tail processing; read-only archive/event integrity diagnostics; backup full-hash priority for all FIFO archive tables; rollback tests for failures during allocation and lot-cache writes; and a mutation gate while FIFO runs remain unresolved. Archive snapshots are written before active projection replacement.
 
 **Source verification:** Latest GitHub Actions run `45853915962` (run #231) passed syntax checks for 50 `.gs` files and all seven Node suites (145/145: FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 38, Warehouse Dashboard 9, Finance Schema 4). This validates the source/test harness only; Apps Script runtime fault-injection at every write boundary, full backup/restore acceptance and operator quarantine-resolution UX remain pending.
