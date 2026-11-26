@@ -567,8 +567,7 @@ function di3SetupHistoricalSaleForm() {
       ["Комиссию оплачивает покупатель"], ["Комиссия площадки, %"], ["Учитывать скидку продавца"],
       ["Скидка покупателю, %"], ["Метод доставки"], ["Комментарий"]
     ]);
-    sheet.getRange("C5").setValue("Время отправки (HH:mm)");
-    sheet.getRange("C6").setValue("Время завершения (HH:mm)");
+    sheet.getRange("C5:C6").clearContent();
     sheet.getRange("B7").insertCheckboxes().setValue(true);
     sheet.getRange("B9").insertCheckboxes().setValue(false);
     sheet.getRange("B8").setValue(0);
@@ -580,6 +579,19 @@ function di3SetupHistoricalSaleForm() {
     sheet.getRange("F3:G3").merge().setValue("ПРОВЕРКА СУММ");
     sheet.getRange("F4:F8").setValues([["Товары"], ["Комиссия"], ["Скидка"], ["К оплате"], ["Выручка продавца"]]);
     sheet.getRange("G4:G8").clearContent();
+    // Upgrade the earlier layout where the time label occupied C5/C6 and the
+    // actual time value was in D5/D6. Date and time inputs are now adjacent B/C.
+    [["D5", "C5", "Время отправки"], ["D6", "C6", "Время завершения"]].forEach(function (item) {
+      var oldValue = sheet.getRange(item[0]).getDisplayValue();
+      var newValue = sheet.getRange(item[1]).getDisplayValue();
+      if (/^Время /.test(newValue)) newValue = "";
+      if (!newValue && oldValue) sheet.getRange(item[1]).setValue(oldValue);
+      sheet.getRange(item[0]).clearContent();
+      sheet.getRange(item[1]).setNumberFormat("@")
+        .setNote(item[2] + ": обязательное местное время в формате HH:mm (24 часа).");
+    });
+    var dateRule = SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build();
+    sheet.getRange("B4:B6").setDataValidation(dateRule).setNumberFormat("dd.mm.yyyy");
     sheet.getRange("A1:G1").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold");
     sheet.getRange("A2:G2").setBackground("#EAF0F7").setFontColor("#40516A");
     sheet.getRange("A4:A14").setFontWeight("bold").setBackground("#F3F6FA");
@@ -646,8 +658,8 @@ function di3ReadHistoricalSaleFormCommand_() {
   return {
     historical_mode: true,
     business_date: di3FormatBusinessDate_(sheet.getRange("B4").getValue()),
-    historical_dispatched_at: di3BuildHistoricalDateTime_(sheet.getRange("B5").getValue(), sheet.getRange("D5").getDisplayValue(), "Отправка"),
-    historical_completed_at: di3BuildHistoricalDateTime_(sheet.getRange("B6").getValue(), sheet.getRange("D6").getDisplayValue(), "Завершение"),
+    historical_dispatched_at: di3BuildHistoricalDateTime_(sheet.getRange("B5").getValue(), sheet.getRange("C5").getDisplayValue(), "Отправка"),
+    historical_completed_at: di3BuildHistoricalDateTime_(sheet.getRange("B6").getValue(), sheet.getRange("C6").getDisplayValue(), "Завершение"),
     commission_paid_by_buyer: sheet.getRange("B7").getValue() === true,
     commission_rate: di3NormalizeOrderPercentInput_(sheet.getRange("B8").getValue(), sheet.getRange("B8").getNumberFormat(), "Комиссия"),
     discount_enabled: sheet.getRange("B9").getValue() === true,
