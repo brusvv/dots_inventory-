@@ -501,3 +501,19 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Latest PR quality-gates run: [45864597621](https://github.com/brusvv/dots_inventory-/actions/runs/45864597621), run #240, completed successfully on head `5698e8321f255055f7472a8374e8ca4b846184e5`.
 - Apps Script syntax: **50/50 .gs files PASS**. Regression suites: **147/147 PASS** — FIFO 42, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 39, Warehouse Dashboard 9, Finance Schema 4.
 - This is source/Node CI only. Google Sheets Dry Run, clean setup/rerun, interruption recovery, and backup/restore-as-new still require runtime acceptance on a disposable empty workbook. PR #1 remains Draft and unmerged; main and the existing RC8 workbook remain unchanged.
+
+
+## GitHub release pipeline — D-01 / D-02 — 26.11.2026
+
+**Source implementation complete; first published release intentionally deferred.**
+
+- Added `tools/build_release_manifest.js`: creates deterministic `dots-inventory-release/v1` metadata from a full commit SHA and annotated semver tag.
+- Release manifest includes exact Git commit, schema target read from `DI3_SCHEMA_VERSION`, application timezone read from `DI3_APP_CONFIG.TIME_ZONE`, updater minimum version, target-manifest preservation policy and sorted Apps Script source entries.
+- Each `.gs` entry is pinned to an immutable `raw.githubusercontent.com` URL and records byte length and SHA-256. The manifest has a detached SHA-256 sidecar; source hashes are recorded separately.
+- Only `.gs` modules from `src/apps_script/` are included as Apps Script files. Runtime probes, QA tools and docs are not executable project modules.
+- Added tag-triggered `.github/workflows/release.yml`. It requires an annotated `dots-inventory-vMAJOR.MINOR.PATCH` tag whose commit is already reachable from `main`, runs release-manifest tests, builds a source ZIP and publishes GitHub Release assets.
+- The release deliberately omits `appsscript.json` and `.clasp.json`. The future updater must preserve the actual target manifest and must not fabricate a Script ID.
+- **CI:** run [45880750420](https://github.com/brusvv/dots_inventory-/actions/runs/45880750420) passed 9/9 manifest tests, Apps Script syntax 50/50 and all seven source regression suites 151/151. The PR quality-gates run [45880757060](https://github.com/brusvv/dots_inventory-/actions/runs/45880757060) also passed.
+- PR #2: [D-01/D-02 release pipeline](https://github.com/brusvv/dots_inventory-/pull/2), Draft, based on `feature/clean-final-baseline`. No release tag has been created; publication awaits merge of the baseline into `main` and a deliberate version tag.
+- **Not implemented yet:** D-03 in-project update check/diff UI, D-04 current Apps Script code backup, D-05 confirmed installation and post-write verification, D-06 code rollback, and D-07 live Apps Script runtime acceptance.
+- No live Apps Script project, Google Sheet, RC8 workbook or deployment was modified. Replacing code through `projects.updateContent` remains a future operation and must preserve the target manifest and all explicitly unmanaged files because the API replaces the full project file set.
