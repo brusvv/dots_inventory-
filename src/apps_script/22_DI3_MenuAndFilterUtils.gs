@@ -279,6 +279,7 @@ function di3BuildMenus_() {
     menu.addSubMenu(subMenu("GitHub и обновления", function (child) {
       child.addItem("Проверить опубликованный релиз и сравнить код", "di3CheckGitHubRelease")
         .addItem("Предварительно собрать обновление (без установки)", "di3PrepareGitHubInstallPreviewFromMenu")
+        .addItem("Установить релиз… (с подтверждением)", "di3InstallLatestGitHubReleaseFromMenu")
         .addItem("Создать резервную копию кода Apps Script", "di3CreateAppsScriptSourceBackupFromMenu");
     }));
   });
