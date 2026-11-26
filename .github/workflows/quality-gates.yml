@@ -8,7 +8,7 @@ on:
       - "tools/**"
       - ".github/workflows/**"
   pull_request:
-    branches: [main, feature/clean-final-baseline]
+    branches: [main, feature/clean-final-baseline, feature/github-deployment-manager]
 permissions:
   contents: read
 jobs:
@@ -40,3 +40,5 @@ jobs:
         run: node tools/run_warehouse_dashboard_tests.js
       - name: Finance schema tests
         run: node tools/run_finance_schema_tests.js
+      - name: GitHub deployment manager tests
+        run: node tools/run_github_deployment_manager_tests.js
