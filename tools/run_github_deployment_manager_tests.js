@@ -87,13 +87,19 @@ test("builds and verifies a source backup including appsscript.json", () => {
   assert.equal(verified.file_count, 2);
 });
 test("detects tampered source backup payload", () => {
-  const project = { script_id: "script-123", content: { files: [{ name: "Code", type: "SERVER_JS", source: "function x() {}\n" }] } };
+  const project = { script_id: "script-123", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function x() {}\n" },
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki"}' }
+  ] } };
   const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')", context);
   envelope.payload.files[0].source = "function evil() {}\n";
   assert.throws(() => vm.runInContext("di3VerifyAppsScriptSourceBackupEnvelope_(" + JSON.stringify(envelope) + ")", context), /payload.*не совпадает/);
 });
 test("detects file-level corruption even when payload checksum is recomputed", () => {
-  const project = { script_id: "script-123", content: { files: [{ name: "Code", type: "SERVER_JS", source: "function x() {}\n" }] } };
+  const project = { script_id: "script-123", content: { files: [
+    { name: "Code", type: "SERVER_JS", source: "function x() {}\n" },
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki"}' }
+  ] } };
   const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')", context);
   envelope.payload.files[0].source = "function evil() {}\n";
   envelope.payload_sha256 = crypto.createHash("sha256").update(JSON.stringify(envelope.payload)).digest("hex");
