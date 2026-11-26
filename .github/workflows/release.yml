@@ -62,7 +62,9 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           SOURCE_DIR: src/apps_script
-          OUTPUT_DIR: dist/release-metadata\n          RELEASE_CHANNEL: ${{ env.RELEASE_CHANNEL }}\n          RELEASE_SOURCE_BRANCH: ${{ env.RELEASE_SOURCE_BRANCH }}
+          OUTPUT_DIR: dist/release-metadata
+          RELEASE_CHANNEL: ${{ env.RELEASE_CHANNEL }}
+          RELEASE_SOURCE_BRANCH: ${{ env.RELEASE_SOURCE_BRANCH }}
         run: node tools/build_release_manifest.js
       - name: Assemble release bundle
         shell: bash
@@ -93,6 +95,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          PRERELEASE_FLAG=""
+          if [[ "$RELEASE_CHANNEL" == "preview" ]]; then PRERELEASE_FLAG="--prerelease"; fi
           gh release create "$GITHUB_REF_NAME" \
             dist/DotsInventory-source.zip \
             dist/DotsInventory-source.zip.sha256 \
