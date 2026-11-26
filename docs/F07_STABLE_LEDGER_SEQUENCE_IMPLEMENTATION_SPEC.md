@@ -15,7 +15,7 @@ The sequence must never replace that ordering or be used to decide which lot is 
 
 ## Source implementation progress — 26.11.2026
 
-The first source implementation pass is now present on `main`:
+The first source implementation pass is now present on the clean-final branch:
 
 - `DI3_TABLE_SCHEMAS.StockLedger` appends `ledger_sequence` as column 13.
 - `FifoProductState` keeps the existing fifth field position but renames it to `last_processed_ledger_sequence`.
@@ -31,7 +31,7 @@ The first source implementation pass is now present on `main`:
 - Added unit coverage for reordered physical rows, sequence gaps, duplicate/missing sequence values, lock-required allocation, and business-date ordering independent of ingestion sequence. Existing actor-attribution fixtures now provide the required sequence.
 - Added a GitHub Actions quality-gates workflow and included the sequence helper in the System Safety test runner.
 
-**Source verification:** Latest GitHub Actions run `45721449653` completed successfully. JavaScript syntax check passed for all 50 `.gs` files. All seven local suites passed: FIFO 41/41, Order Domain 17/17, Supply Workspace UX 15/15, Catalog/Order UX 12/12, System Safety UX 20/20, Warehouse Dashboard 9/9, Finance Schema 4/4 — **118/118 tests, 0 failures**. Run: https://github.com/brusvv/dots_inventory-/actions/runs/45721449653. Apps Script runtime acceptance has not been performed.
+**Source verification:** Latest GitHub Actions run `45853092868` (run #225) completed successfully. JavaScript syntax check passed for all 50 `.gs` files. All seven suites passed: FIFO 41/41, Order Domain 22/22, Supply Workspace UX 17/17, Catalog/Order UX 14/14, System Safety UX 38/38, Warehouse Dashboard 9/9, Finance Schema 4/4 — **145/145 tests, 0 failures**. Run: https://github.com/brusvv/dots_inventory-/actions/runs/45721449653. Apps Script runtime acceptance has not been performed.
 
 This implementation pass is not a release-ready F-07 sign-off. It still requires source review, execution of all local runners and syntax checks, and runtime acceptance on a disposable empty workbook. It is not compatible with the old 12-column StockLedger layout; do not deploy it to the existing workbook. The clean-baseline adoption and legacy-workbook isolation remain prerequisites before production installation.
 
@@ -168,3 +168,8 @@ This is O(N) over one numeric column and O(K) full-width reads for K tail rows. 
 ## Performance notes
 
 The proposed algorithm deliberately trades a three-column narrow scan for independence from physical row positions. It avoids downloading the full width of the ledger for normal tail discovery. C-01 must measure this at 500, 1,000, 2,000 and larger synthetic movement counts. If the one-column scan becomes dominant, consider a separately designed immutable sequence index; do not revert to row-number cursor semantics.
+
+
+## Current branch verification — 26.11.2026
+
+F-07 remains source-implemented but not runtime-accepted. The current branch passes 145/145 source tests. This does not validate sequence allocation under actual concurrent Apps Script executions, workbook migration, same-timestamp event ordering or FIFO replay in a live Google Sheets copy. The legacy 12-column RC8 StockLedger remains intentionally incompatible with the new 13-column sequence-based baseline unless a separate migration is designed and approved.
