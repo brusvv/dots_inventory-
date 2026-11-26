@@ -6,6 +6,8 @@ REMOTE="$ROOT/remote.git"
 WORK="$ROOT/work"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export RELEASE_VALIDATOR="$SCRIPT_DIR/validate_release_tag.sh"
+export GITHUB_ENV="$ROOT/github-env"
+: > "$GITHUB_ENV"
 
 git init --bare --initial-branch=main "$REMOTE" >/dev/null
 git clone "$REMOTE" "$WORK" >/dev/null 2>&1
