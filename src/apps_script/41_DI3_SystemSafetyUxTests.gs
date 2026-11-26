@@ -714,7 +714,7 @@ function di3RunSystemSafetyUxUnitTests() {
       "Business-date backfill must not rewrite the existing order row prefix");
     var preflightSource = di3PreflightCoreSchemas_.toString();
     includes(preflightSource, "business_date");
-    includes(preflightSource, "column AD");
+    includes(preflightSource, "businessDateHeader");
     var historicalWorkflowSource = di3CreateHistoricalSale.toString();
     includes(historicalWorkflowSource, 'dispatchOperation.values[5]');
     includes(historicalWorkflowSource, 'persistedDispatchPayload.historical_mode !== true');
