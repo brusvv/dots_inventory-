@@ -2,7 +2,8 @@
  * Dots Inventory — browser-only first-install bootstrap.
  *
  * One-time use in a NEW, spreadsheet-bound Apps Script project.
- * Fetches a fixed Git commit directly from GitHub, verifies every Git blob,
+ * Authenticates GitHub API requests using a one-run, operator-entered token,
+ * fetches a fixed Git commit directly from GitHub, verifies every Git blob,
  * backs up the current Apps Script source to Drive, asks for confirmation,
  * then replaces project content through Apps Script API.
  *
@@ -38,10 +39,11 @@ function di3GitHubBootstrapInstall() {
     throw new Error("Bootstrap остановлен: проект не привязан к активной Google-таблице. Создай новую тестовую таблицу и открой Apps Script через Расширения → Apps Script.");
   }
 
+  var githubToken = di3BootstrapPromptGitHubToken_(ui);
   var project = di3BootstrapGetProjectContent_();
   di3BootstrapAssertBlankProject_(project.content.files);
   var manifest = di3BootstrapReadAndValidateManifest_(project.content.files);
-  var sources = di3BootstrapDownloadPinnedSources_();
+  var sources = di3BootstrapDownloadPinnedSources_(githubToken);
   var targetFiles = di3BootstrapBuildTargetFiles_(project.content.files, sources);
   var sourceFingerprint = di3BootstrapFingerprint_(project.content.files);
 
@@ -188,11 +190,11 @@ function di3BootstrapAssertBlankProject_(files) {
   }
 }
 
-function di3BootstrapDownloadPinnedSources_() {
+function di3BootstrapDownloadPinnedSources_(githubToken) {
   var config = DI3_GITHUB_BOOTSTRAP_CONFIG;
   var apiBase = "https://api.github.com/repos/" + config.REPOSITORY;
   var commitUrl = apiBase + "/git/commits/" + config.COMMIT;
-  var commitResponse = di3BootstrapFetchText_(commitUrl, "application/vnd.github+json");
+  var commitResponse = di3BootstrapFetchText_(commitUrl, "application/vnd.github+json", githubToken);
   var commit;
   try { commit = JSON.parse(commitResponse); }
   catch (error) { throw new Error("GitHub вернул некорректный commit object: " + (error.message || String(error))); }
@@ -203,7 +205,7 @@ function di3BootstrapDownloadPinnedSources_() {
   // Resolve the tree SHA from the immutable commit object instead of treating
   // the commit SHA itself as a tree identifier.
   var treeUrl = apiBase + "/git/trees/" + commit.tree.sha + "?recursive=1";
-  var treeResponse = di3BootstrapFetchText_(treeUrl, "application/vnd.github+json");
+  var treeResponse = di3BootstrapFetchText_(treeUrl, "application/vnd.github+json", githubToken);
   var tree;
   try { tree = JSON.parse(treeResponse); }
   catch (error) { throw new Error("GitHub вернул некорректное дерево репозитория: " + (error.message || String(error))); }
@@ -241,7 +243,65 @@ function di3BootstrapDownloadPinnedSources_() {
   });
 }
 
-function di3BootstrapFetchText_(url, accept) {
+/**
+ * Obtain a short-lived GitHub token from the operator without persisting it.
+ * Use a fine-grained PAT limited to this repository with Contents: Read-only.
+ */
+function di3BootstrapPromptGitHubToken_(ui) {
+  var response = ui.prompt(
+    "Dots Inventory · GitHub authentication",
+    "Введи GitHub fine-grained Personal Access Token с доступом только к brusvv/dots_inventory- и разрешением Contents: Read-only. Токен используется только в памяти текущего запуска и не сохраняется.",
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (response.getSelectedButton() !== ui.Button.OK) {
+    throw new Error("Установка отменена: GitHub-аутентификация не предоставлена. Apps Script проект не изменён.");
+  }
+  var token = String(response.getResponseText() || "").trim();
+  if (!/^github_pat_[A-Za-z0-9_]+$/.test(token) && !/^gh[pousr]_[A-Za-z0-9_]+$/.test(token)) {
+    throw new Error("Токен не распознан. Используй GitHub fine-grained PAT (github_pat_...). Токен не сохранён.");
+  }
+
+  // Verify identity and repository access before downloading any source.
+  var user;
+  try {
+    user = JSON.parse(di3BootstrapFetchText_("https://api.github.com/user", "application/vnd.github+json", token));
+  } catch (error) {
+    throw new Error("GitHub не принял токен или не удалось проверить пользователя. Проверь токен и его срок действия. Подробности: " +
+      String(error.message || error).replace(token, "[REDACTED]"));
+  }
+  if (!user || !user.login) throw new Error("GitHub вернул неполный профиль пользователя; токен не принят.");
+
+  var repository;
+  try {
+    repository = JSON.parse(di3BootstrapFetchText_(
+      "https://api.github.com/repos/" + DI3_GITHUB_BOOTSTRAP_CONFIG.REPOSITORY,
+      "application/vnd.github+json",
+      token
+    ));
+  } catch (error) {
+    throw new Error("Токен действителен, но доступ к репозиторию не подтверждён. Проверь Repository access и Contents: Read-only. Подробности: " +
+      String(error.message || error).replace(token, "[REDACTED]"));
+  }
+  if (!repository || repository.full_name !== DI3_GITHUB_BOOTSTRAP_CONFIG.REPOSITORY || repository.private === true) {
+    throw new Error("Проверка целевого публичного репозитория не пройдена; установка остановлена.");
+  }
+  return token;
+}
+
+function di3BootstrapBuildGitHubHeaders_(url, accept, githubToken) {
+  var headers = {
+    Accept: accept || "text/plain",
+    "User-Agent": "DotsInventoryBrowserBootstrap/1.0"
+  };
+  // Credentials are strictly limited to api.github.com; never send them to
+  // raw.githubusercontent.com or any redirect target on another host.
+  if (/^https:\/\/api\.github\.com\//i.test(String(url || "")) && githubToken) {
+    headers.Authorization = "Bearer " + githubToken;
+  }
+  return headers;
+}
+
+function di3BootstrapFetchText_(url, accept, githubToken) {
   var initial = String(url || "");
   var allowed = /^https:\/\/(api\.github\.com|raw\.githubusercontent\.com)\//i.exec(initial);
   if (!allowed) throw new Error("Bootstrap заблокировал неожиданный URL: " + initial);
@@ -257,10 +317,7 @@ function di3BootstrapFetchText_(url, accept) {
     try {
       response = UrlFetchApp.fetch(currentUrl, {
         method: "get",
-        headers: {
-          Accept: accept || "text/plain",
-          "User-Agent": "DotsInventoryBrowserBootstrap/1.0"
-        },
+        headers: di3BootstrapBuildGitHubHeaders_(currentUrl, accept, githubToken),
         muteHttpExceptions: true,
         followRedirects: false
       });
