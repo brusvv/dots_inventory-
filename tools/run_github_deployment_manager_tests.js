@@ -111,4 +111,50 @@ test("detects file-level corruption even when payload checksum is recomputed", (
   envelope.payload_sha256 = crypto.createHash("sha256").update(JSON.stringify(envelope.payload)).digest("hex");
   assert.throws(() => vm.runInContext("di3VerifyAppsScriptSourceBackupEnvelope_(" + JSON.stringify(envelope) + ")", context), /SHA-256\/размера файла/);
 });
+
+function installManifest(code) {
+  const m = validManifest();
+  m.files[0].size_bytes = Buffer.byteLength(code);
+  m.files[0].sha256 = crypto.createHash("sha256").update(code).digest("hex");
+  return m;
+}
+function installFile(name, type, source) { return { name, type, source }; }
+test("builds a complete preview preserving manifest, non-server files and unmanaged modules", () => {
+  const oldCode = "function oldVersion() {}\\n", newCode = "function alpha() { return 2; }\\n";
+  const m = installManifest(newCode);
+  m.files.push({ ...m.files[0], name: "02_New.gs", source_path: "src/apps_script/02_New.gs",
+    raw_url: m.files[0].raw_url.replace("01_Module.gs", "02_New.gs") });
+  const files = [installFile("01_Module", "SERVER_JS", oldCode), installFile("LocalOnly", "SERVER_JS", "function localOnly() {}\\n"),
+    installFile("appsscript", "JSON", '{"timeZone":"Europe/Helsinki"}'), installFile("Index", "HTML", '<div>local</div>')];
+  const downloaded = [{ name: "01_Module.gs", source: newCode }, { name: "02_New.gs", source: newCode }];
+  const preview = vm.runInContext("di3BuildGitHubInstallPreview_(" + JSON.stringify(m) + ", " + JSON.stringify(files) + ", " + JSON.stringify(downloaded) + ")", context);
+  assert.equal(preview.status, "PREVIEW_READY");
+  assert.equal(preview.write_performed, false);
+  assert.equal(preview.update_content_called, false);
+  assert.equal(preview.summary.added, 1);
+  assert.equal(preview.summary.changed, 1);
+  assert.equal(preview.summary.preserved_unmanaged, 1);
+  assert.equal(preview.summary.preserved_non_server, 2);
+  assert.equal(preview.summary.removed, 0);
+  assert.equal(preview.target_files.find(f => f.name === "01_Module").source, newCode);
+  assert.equal(preview.target_files.find(f => f.name === "02_New").source, newCode);
+  assert.equal(preview.target_files.find(f => f.name === "LocalOnly").source, "function localOnly() {}\\n");
+  assert.equal(preview.target_files.find(f => f.name === "appsscript").source, '{"timeZone":"Europe/Helsinki"}');
+});
+test("refuses install preview without actual appsscript manifest", () => {
+  const code = "function alpha() {}\\n", m = installManifest(code);
+  const files = [installFile("Code", "SERVER_JS", "function x() {}\\n")], downloaded = [{ name: "01_Module.gs", source: code }];
+  assert.throws(() => vm.runInContext("di3BuildGitHubInstallPreview_(" + JSON.stringify(m) + ", " + JSON.stringify(files) + ", " + JSON.stringify(downloaded) + ")", context), /ровно один фактический appsscript.json/);
+});
+test("rejects tampered downloaded source during install preview", () => {
+  const code = "function alpha() {}\\n", m = installManifest(code);
+  const files = [installFile("appsscript", "JSON", '{}')], downloaded = [{ name: "01_Module.gs", source: "function evil() {}\\n" }];
+  assert.throws(() => vm.runInContext("di3BuildGitHubInstallPreview_(" + JSON.stringify(m) + ", " + JSON.stringify(files) + ", " + JSON.stringify(downloaded) + ")", context), /проверка нового исходника не пройдена/);
+});
+test("rejects release module name collision with a non-server file", () => {
+  const code = "function alpha() {}\\n", m = installManifest(code);
+  const files = [installFile("appsscript", "JSON", '{}'), installFile("01_Module", "HTML", '<p>x</p>')], downloaded = [{ name: "01_Module.gs", source: code }];
+  assert.throws(() => vm.runInContext("di3BuildGitHubInstallPreview_(" + JSON.stringify(m) + ", " + JSON.stringify(files) + ", " + JSON.stringify(downloaded) + ")", context), /имя 01_Module уже занято/);
+});
+
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
