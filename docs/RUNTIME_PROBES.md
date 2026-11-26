@@ -27,3 +27,14 @@ Run only on a restored disposable workbook and bound Apps Script project.
 6. The probe marker is stored in ScriptProperties and token-checked on cleanup. A stale marker older than 120 seconds can be removed by the next hold attempt. It does not read or write business tables.
 
 Do not run this probe against the production workbook. Save both complete execution results with timestamps and the same probe ID.
+
+
+## N-02 FIFO replay quarantine resolution
+
+The menu action `Система → Операции и FIFO → Разрешить FIFO quarantine после ручной сверки…` is an owner-attested journal resolution, not a repair or rebuild.
+
+- Run only after manually reconciling StockLedger, StockMovementDetails, StockLots, StockAllocations, FifoProductState, the global ledger sequence cursor and affected OrderCostSnapshots.
+- The command verifies the immutable source archive fingerprints, requires the exact confirmation token internally and a detailed reason (at least 30 characters), then appends `MANUALLY_RESOLVED` and marks the failed FIFO run accordingly.
+- It does not write business projections or execute a stock operation. If the linked Operation is QUARANTINED, it is requeued into a new bounded retry epoch; use the normal operation-recovery action separately to execute it.
+- The integrity report retains the original QUARANTINED event and records the MANUALLY_RESOLVED terminal event. Never manually edit FifoReplayEvents or FifoAllocationRuns to bypass quarantine.
+- Validate on a disposable restored copy with an injected integrity mismatch, archive verification, owner resolution, linked operation requeue, and subsequent FIFO rebuild/replay. No live workbook.
