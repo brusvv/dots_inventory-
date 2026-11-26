@@ -428,6 +428,85 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("interrupted clean baseline with STARTED record can resume after header revalidation", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      var headers = DI3_TABLE_SCHEMAS.Products.slice();
+      var productSheet = {
+        getLastRow: function () { return 2; },
+        getMaxColumns: function () { return headers.length; },
+        getRange: function () { return { getDisplayValues: function () { return [headers]; } }; }
+      };
+      function headerOnlySheet(name) {
+        var expected = DI3_TABLE_SCHEMAS[name];
+        return {
+          getLastRow: function () { return 1; },
+          getMaxColumns: function () { return expected.length; },
+          getRange: function () { return { getDisplayValues: function () { return [expected]; } }; }
+        };
+      }
+      var record = { migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY, from_schema_version: 0,
+        to_schema_version: DI3_SCHEMA_VERSION, status: "STARTED", row_number: 2 };
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) {
+          if (name === "Products") return productSheet;
+          if (name === "_AppMeta" || name === "SchemaMigrations") return headerOnlySheet(name);
+          return null;
+        } };
+      };
+      di3GetSchemaVersion_ = function () { return 0; };
+      di3GetSchemaMigrationRows_ = function () { return [record]; };
+      var state = di3GetCleanBaselineState_();
+      equal(state.eligible, true);
+      var report = di3GetSchemaVersioningReport_();
+      equal(report.status, "READY");
+      equal(report.planned_changes.length, 1);
+      equal(report.planned_changes[0].type, "RESUME_CLEAN_FINAL_BASELINE");
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
+  test("clean baseline rejects a duplicate or version-mismatched journal identity", function () {
+    var originalSpreadsheet = di3GetSpreadsheet_;
+    var originalVersion = di3GetSchemaVersion_;
+    var originalRows = di3GetSchemaMigrationRows_;
+    try {
+      function headerOnlySheet(name) {
+        var expected = DI3_TABLE_SCHEMAS[name];
+        return {
+          getLastRow: function () { return 1; },
+          getMaxColumns: function () { return expected.length; },
+          getRange: function () { return { getDisplayValues: function () { return [expected]; } }; }
+        };
+      }
+      di3GetSpreadsheet_ = function () {
+        return { getSheetByName: function (name) {
+          return DI3_TABLE_SCHEMAS[name] ? headerOnlySheet(name) : null;
+        } };
+      };
+      di3GetSchemaVersion_ = function () { return DI3_SCHEMA_VERSION; };
+      var record = { migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY, from_schema_version: 0,
+        to_schema_version: DI3_SCHEMA_VERSION, status: "COMPLETED", row_number: 2 };
+      di3GetSchemaMigrationRows_ = function () { return [record, Object.assign({}, record, { row_number: 3 })]; };
+      equal(di3GetCleanBaselineState_().eligible, false, "Duplicate baseline rows must be rejected");
+      di3GetSchemaMigrationRows_ = function () {
+        return [{ migration_key: DI3_CLEAN_BASELINE_MIGRATION_KEY, from_schema_version: 0,
+          to_schema_version: DI3_SCHEMA_VERSION, status: "STARTED", row_number: 2 }];
+      };
+      di3GetSchemaVersion_ = function () { return 1; };
+      equal(di3GetCleanBaselineState_().eligible, false, "Unexpected version must be rejected");
+    } finally {
+      di3GetSpreadsheet_ = originalSpreadsheet;
+      di3GetSchemaVersion_ = originalVersion;
+      di3GetSchemaMigrationRows_ = originalRows;
+    }
+  });
+
   test("backup full-hash priority includes append-only FIFO archive and replay history", function () {
     ["StockLedger", "StockAllocations", "FifoAllocationRuns", "FifoAllocationArchive",
       "FifoLotCacheArchive", "FifoReplayEvents"].forEach(function (sheetName) {
