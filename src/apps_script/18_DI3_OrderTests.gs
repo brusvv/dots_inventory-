@@ -311,6 +311,48 @@ function di3RunOrderDomainUnitTests() {
     }
   });
 
+  test("historical sale rejects business date after dispatch and completion before dispatch", function () {
+    var originals = {
+      parseBusinessDate: di3ParseBusinessDate_,
+      toDate: di3ToDate_,
+      timezone: di3GetConfiguredTimeZone_,
+      utilities: typeof globalThis.Utilities === "undefined" ? null : globalThis.Utilities
+    };
+    try {
+      di3ParseBusinessDate_ = function (value) { return new Date(String(value) + "T00:00:00.000Z"); };
+      di3ToDate_ = function (value) { return value instanceof Date ? value : new Date(value); };
+      di3GetConfiguredTimeZone_ = function () { return "Test/Zone"; };
+      globalThis.Utilities = {
+        formatDate: function (value, timezone, pattern) {
+          if (pattern !== "yyyy-MM-dd") throw new Error("Unexpected date format: " + pattern);
+          return new Date(value).toISOString().slice(0, 10);
+        }
+      };
+      throws(function () {
+        di3BuildOrderDraftPayload_({
+          historical_mode: true, __historical_sale_authorized: true,
+          business_date: "2026-01-03",
+          historical_dispatched_at: "2026-01-02T10:00:00.000Z",
+          historical_completed_at: "2026-01-02T11:00:00.000Z"
+        });
+      }, /Дата оформления не может быть позже календарной даты отправки/);
+      throws(function () {
+        di3BuildOrderDraftPayload_({
+          historical_mode: true, __historical_sale_authorized: true,
+          business_date: "2026-01-01",
+          historical_dispatched_at: "2026-01-02T12:00:00.000Z",
+          historical_completed_at: "2026-01-02T11:00:00.000Z"
+        });
+      }, /Завершение не может быть раньше фактической отправки/);
+    } finally {
+      di3ParseBusinessDate_ = originals.parseBusinessDate;
+      di3ToDate_ = originals.toDate;
+      di3GetConfiguredTimeZone_ = originals.timezone;
+      if (originals.utilities) globalThis.Utilities = originals.utilities;
+      else delete globalThis.Utilities;
+    }
+  });
+
   test("historical mode bypasses only the created_at lower bound for dispatch", function () {
     var originalMillis = di3ToMillis_;
     var originalItems = di3GetOrderItems_;
