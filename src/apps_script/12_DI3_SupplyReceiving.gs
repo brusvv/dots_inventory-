@@ -847,8 +847,11 @@ function di3RefreshSupplyRegister(preservedDateTimesById) {
     sheet.getRange(4, 5, rows.length, 3).setNumberFormat("dd.mm.yyyy hh:mm");
     sheet.getRange(4, 8, rows.length, 1).setNumberFormat("dd.mm.yyyy");
     sheet.getRange(4, 10, rows.length, 1).setNumberFormat("#,##0.00 ₽");
-    sheet.getRange(4, 13, rows.length, 1).setNumberFormat("dd.mm.yyyy");
-    sheet.getRange(4, 14, rows.length, 1).setNumberFormat("@");
+    sheet.getRange(4, 13, rows.length, 1).setDataValidation(
+      SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build()
+    ).setNumberFormat("dd.mm.yyyy").setNote("Календарная дата следующего этапа. Время укажи отдельно в колонке N.");
+    sheet.getRange(4, 14, rows.length, 1).setNumberFormat("@")
+      .setNote("Обязательное местное время следующего этапа в формате HH:mm (24 часа).");
     sheet.getBandings().forEach(function (banding) { banding.remove(); });
     di3ApplyLightBandingWithDarkText_(sheet.getRange(4, 1, rows.length, DI3_SUPPLY_REGISTER_HEADERS.length));
     var filter = sheet.getFilter();
