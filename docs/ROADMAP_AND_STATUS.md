@@ -393,3 +393,19 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Added the IN_TRANSIT + PREPARED recovery regression. Added a financial preview and explicit YES/NO confirmation before historical stock mutation; preview and create now use the same parsed form snapshot. Added a Catalog/Order UX regression for this invariant.
 - Latest source CI run #163 (45848104778): syntax 50/50; all seven suites **135/135 PASS** (FIFO 41, Order Domain 21, Supply UX 15, Catalog/Order UX 13, System Safety 32, Warehouse Dashboard 9, Finance 4). Later commits changed documentation only.
 - Runtime acceptance remains pending on a restored disposable workbook: schema Dry Run/backup/v3→v4 migration, clean-baseline setup/rerun, historical form, FIFO historical sufficient/insufficient cases, PeriodGuard, commission/Finance Dashboard, operation fault injection and backup/restore-as-new. No production RC8 workbook or deployment was changed.
+
+
+## Cross-workspace date/time input implementation — 26.11.2026
+
+**Source implementation complete; runtime acceptance pending.**
+
+- Added the shared timezone-aware `di3BuildEffectiveDateTime_()` parser and `di3SplitEffectiveDateTime_()` presentation helper. Input time is strict `HH:mm`, mandatory, minute-precision; seconds/milliseconds normalize to zero; nonexistent local times in DST gaps fail closed.
+- Order register: date P + time Q; hidden `order_id` moved to R; `business_date` is S. The 13/18-column legacy register layouts migrate by order ID; date-only/ambiguous legacy timestamps do not silently receive midnight.
+- Supply register: date M + time N; 13-column legacy register upgrades to 14 columns by `supply_id`.
+- Supply form: actual stage dates G5:G7 and times H5:H7 for ordinary lifecycle, historical entry and full edit. Time cells are included in dirty-form fingerprints and unsaved-data checks. Existing combined stage timestamps are split on setup; ambiguous midnight input requires re-entry.
+- Manual warehouse IN/OUT: date B4 + time C4; existing combined B4 timestamps are split non-destructively.
+- Historical sale: business date B4 remains date-only; dispatch B5/C5 and completion B6/C6 are adjacent date/time pairs.
+- Canonical data model is unchanged: each event remains one timestamp in operation payloads and stock/order/supply tables. No timestamp-split columns were added to StockLedger or V3_Supplies.
+- Regression coverage includes parser format/seconds/DST-gap behavior, supply and order register pairs/migrations, dirty-form state, historical-sale fields and manual warehouse input.
+- **Latest source CI:** run #212 ([45852013073](https://github.com/brusvv/dots_inventory-/actions/runs/45852013073)) passed syntax for 50 `.gs` files and 142/142 tests: FIFO 41, Order Domain 22, Supply Workspace UX 17, Catalog/Order UX 14, System Safety UX 35, Warehouse Dashboard 9, Finance Schema 4.
+- **Still pending:** Google Sheets runtime acceptance on a restored disposable workbook, including setup migration/rerun, date/time input behavior, DST timezone behavior, order/supply status transitions, manual movements, FIFO ordering, PeriodGuard, commissions, Finance Dashboard and retry/fault recovery. Production RC8 and deployed Apps Script remain untouched. PR #1 remains Draft/unmerged.
