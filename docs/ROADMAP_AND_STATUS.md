@@ -153,7 +153,7 @@ The following issues have source changes and local regression coverage. They are
 ### Still open or only partially mitigated
 
 - **F-01:** code-fixed and locally tested; end-to-end return after a newer unrelated FIFO run still needs runtime acceptance.
-- **F-02:** source audit and v3→v4 design documented in `docs/F02_HISTORICAL_SALES_DESIGN.md`; implementation is not started. Requires an explicit same-day dispatch-time precision rule before coding.
+- **F-02:** source audit and v3→v4 design documented in `docs/F02_HISTORICAL_SALES_DESIGN.md`; implementation is not started. Exact dispatch date/time is now confirmed. UI decision: use separate adjacent calendar-date and mandatory 24-hour `HH:mm` controls so selecting a date cannot reset the time; completion uses the same pair, business date is date-only. Remaining F-02 implementation/design review is open.
 - **F-04:** payload-size guard only; chunking/compaction remains a future design task.
 - **F-06/F-07:** FIFO allocation archival and stable cursors remain open; require a migration/replay design.
 - **F-09:** per-view isolation and journal warning are added, but O(N) read cost and scoped refresh remain open.
@@ -206,7 +206,7 @@ The following issues have source changes and local regression coverage. They are
 - Proposed append-only `business_date` in `V3_Orders` (schema v3→v4), preserving `created_at` as actual record-entry time, with dispatch and completion timestamps remaining separate.
 - Proposed retry-safe orchestration using the existing `ORDER_CREATE` and `ORDER_DISPATCH` operations plus the existing completion settlement transition; no second FIFO engine or new operation type unless tests prove the existing lifecycle cannot safely resume.
 - **Not implemented:** no source behavior, schema, menu, tests or workbook data changed for F-02. The design is documented in `docs/F02_HISTORICAL_SALES_DESIGN.md`.
-- **Decision required before UI implementation:** exact dispatch date/time is recommended. A date-only value is ambiguous because same-day FIFO events are secondarily ordered by actual `recorded_at`; silently choosing midnight/noon/end-of-day could change historical lot attribution.
+- **Decision confirmed 26.11.2026:** exact dispatch date/time is mandatory. Use separate date-picker and time controls (same form row), date `ДД.ММ.ГГГГ`, time `ЧЧ:ММ` in 24-hour format; do not rely on date-cell number formatting to preserve a time value. Completion uses the same pair; business date remains date-only. Missing time must block submission.
 
 
 ## F-20 — operation identity and actor attribution audit — 25.11.2026
