@@ -370,37 +370,20 @@ function di3ApplySupplyStageInputState_(sheet, supply, nextStage) {
 
 function di3EnsureSupplyDatePanelLayout_(sheet) {
   var labels = [
-    "Дата создания заказа в магазине",
-    "Ожидаемая дата прибытия",
-    "Запись создана в системе",
-    "Отправлена",
-    "Ожидает получения",
-    "Получена"
+    "Дата создания заказа в магазине", "Ожидаемая дата прибытия", "Запись создана в системе",
+    "Отправлена", "Ожидает получения", "Получена"
   ];
   var previousLabels = [
-    "Дата заказа у продавца",
-    "Ожидаемая дата получения",
-    "Создана в системе",
-    "Отправлена",
-    "Готова к получению",
-    "Фактически получена"
+    "Дата заказа у продавца", "Ожидаемая дата получения", "Создана в системе",
+    "Отправлена", "Готова к получению", "Фактически получена"
   ];
   var existingLabels = sheet.getRange("D2:D7").getDisplayValues().map(function (row) { return String(row[0] || "").trim(); });
-  var knownNote = "G2 — дата заказа в магазине; G3 — плановая дата прибытия; G4 — системная дата записи. Вводи фактические даты по очереди в доступное поле G5, G6 или G7 и выполняй «Поставки» → «Применить следующий этап из формы». G7 запускает фактическую приёмку и создание складских движений.";
+  var knownNote = "G2 — дата заказа в магазине; G3 — плановая дата прибытия; G4 — системное время записи. Для фактических этапов укажи дату в G5:G7 и отдельное время HH:mm в H5:H7. G7 запускает фактическую приёмку и создание складских движений.";
   var previousNote = "Плановые даты можно менять в черновике; фактические даты фиксируются при смене статуса.";
   var previousOrderDateSemanticsNote = "Дата создания заказа в магазине определяет сортировку. Запись в системе и фактические этапы фиксируются автоматически; ожидаемая дата — плановая.";
   var existingNote = String(sheet.getRange("D8").getDisplayValue() || "").trim();
-  var previousOrderDateSemanticsLabels = [
-    "Дата создания заказа в магазине",
-    "Ожидаемая дата получения",
-    "Запись создана в системе",
-    "Отправлена",
-    "Готова к получению",
-    "Фактически получена"
-  ];
   var labelsCompatible = existingLabels.every(function (value, index) {
-    return !value || value === labels[index] || value === previousLabels[index] ||
-      value === previousOrderDateSemanticsLabels[index];
+    return !value || value === labels[index] || value === previousLabels[index];
   });
   var panelValues = sheet.getRange("D2:J8").getValues();
   var unexpectedContent = false;
@@ -409,44 +392,63 @@ function di3EnsureSupplyDatePanelLayout_(sheet) {
       if (value === "" || value == null) return;
       var isLabel = columnIndex === 0 && rowIndex < 6;
       var isNote = columnIndex === 0 && rowIndex === 6;
-      var isDateValue = columnIndex === 3 && rowIndex < 6; // G2:G7 are the planned/factual date cells.
-      if (!isLabel && !isNote && !isDateValue) unexpectedContent = true;
+      var isDateValue = columnIndex === 3 && rowIndex < 6;
+      var isTimeValue = columnIndex === 4 && rowIndex >= 3 && rowIndex <= 5;
+      if (!isLabel && !isNote && !isDateValue && !isTimeValue) unexpectedContent = true;
     });
   });
   if (!labelsCompatible || (existingNote && existingNote !== knownNote && existingNote !== previousNote &&
-      existingNote !== previousOrderDateSemanticsNote &&
-      existingNote.indexOf("Вводи фактические даты по очереди") !== 0) || unexpectedContent) {
+      existingNote !== previousOrderDateSemanticsNote && existingNote.indexOf("Вводи фактические даты по очереди") !== 0) || unexpectedContent) {
     throw new Error("Область D2:J8 листа «Поставка v3» содержит неизвестную структуру или данные. Размещение панели дат остановлено без перезаписи.");
   }
+  // Upgrade legacy combined timestamps without inventing midnight precision.
+  var legacyDates = sheet.getRange("G5:G7").getValues().map(function (row) { return row[0]; });
+  var legacyTimes = sheet.getRange("H5:H7").getDisplayValues().map(function (row) { return String(row[0] || "").trim(); });
+  var migratedDates = [], migratedTimes = [];
+  legacyDates.forEach(function (value, index) {
+    if (value === "" || value == null) {
+      migratedDates.push([""]); migratedTimes.push([legacyTimes[index] || ""]); return;
+    }
+    if (!(value instanceof Date) || isNaN(value.getTime())) {
+      throw new Error("Поле G" + (index + 5) + " содержит некорректную старую дату. Исправь её вручную до обновления панели.");
+    }
+    var parts = di3SplitEffectiveDateTime_(value, "Старый этап поставки");
+    migratedDates.push([parts.date]);
+    migratedTimes.push([legacyTimes[index] || (parts.time === "00:00" ? "" : parts.time)]);
+  });
   [["D2:F2", "G2:J2"], ["D3:F3", "G3:J3"], ["D4:F4", "G4:J4"],
     ["D5:F5", "G5:J5"], ["D6:F6", "G6:J6"], ["D7:F7", "G7:J7"]].forEach(function (pair) {
     sheet.getRange(pair[0]).breakApart().merge();
-    sheet.getRange(pair[1]).breakApart().merge();
+    sheet.getRange(pair[1]).breakApart();
   });
   sheet.getRange("D2:D7").setValues(labels.map(function (label) { return [label]; }));
+  sheet.getRange("G5:G7").setValues(migratedDates);
+  sheet.getRange("H5:H7").setValues(migratedTimes);
   sheet.getRange("D8:J8").breakApart().merge();
   sheet.getRange("D8").setValue(knownNote);
   sheet.getRange("D2:F7").setBackground("#EEF2F7").setFontWeight("bold");
   sheet.getRange("G2:J3").setBackground("#FFFFFF");
-  sheet.getRange("G4:J7").setBackground("#F1F5F9").setFontColor("#475569");
+  sheet.getRange("G4:J4").setBackground("#F1F5F9").setFontColor("#475569");
+  sheet.getRange("G5:H7").setBackground("#F1F5F9").setFontColor("#64748B");
   sheet.getRange("D8:J8").setBackground("#F8FAFC").setFontColor("#64748B");
   var dateValidation = SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build();
   sheet.getRange("G2:G3").setDataValidation(dateValidation).setNumberFormat("dd.mm.yyyy");
-  sheet.getRange("G2").setNote("Дата, когда сам заказ был создан в магазине. По умолчанию — сегодня; можно выбрать прошлую дату. При первом сохранении по этой дате формируется номер поставки. Обычное «Сохранить поставку» сохраняет уже присвоенный номер; команда «Обновить черновик» пересчитывает его по исправленной G2. supply_id и системная дата создания при этом сохраняются. По G2 сортируются реестр и список поставок. Это не дата регистрации записи в Dots Inventory (она фиксируется автоматически в G4). Будущие даты не допускаются.");
-  sheet.getRange("G3").setNote("Плановая дата прибытия поставки в пункт назначения. Поле необязательное; она не меняет фактический статус и не увеличивает остаток. Не может быть раньше даты заказа в G2.");
-  sheet.getRange("G4:G7").setNumberFormat("dd.mm.yyyy hh:mm");
-  sheet.getRange("G4").setNote("Только просмотр. Системная дата и время первого сохранения записи в Dots Inventory; не является датой заказа в магазине и не задаёт начало хронологии логистики.");
-  sheet.getRange("G5:G7").clearDataValidations();
-  sheet.getRange("G5:J7").setBackground("#F1F5F9").setFontColor("#64748B");
-  sheet.getRange("G5").setNote("Фактическая дата отправки. Поле становится доступным после сохранения поставки.");
-  sheet.getRange("G6").setNote("Фактическая дата этапа «Ожидает получения». Поле становится доступным после отметки отправки.");
-  sheet.getRange("G7").setNote("Фактическая дата получения. После ввода и применения запускается отдельная операция приёмки и создания складских движений.");
+  sheet.getRange("G4").setNumberFormat("dd.mm.yyyy hh:mm");
+  sheet.getRange("G5:G7").setDataValidation(dateValidation).setNumberFormat("dd.mm.yyyy");
+  sheet.getRange("H5:H7").setNumberFormat("@");
+  sheet.getRange("G5").setNote("Календарная дата фактической отправки. Время обязательно укажи отдельно в H5.");
+  sheet.getRange("G6").setNote("Календарная дата фактического этапа «Ожидает получения». Время обязательно укажи отдельно в H6.");
+  sheet.getRange("G7").setNote("Календарная дата фактического получения. Время обязательно укажи отдельно в H7.");
+  ["H5", "H6", "H7"].forEach(function (cell) {
+    sheet.getRange(cell).setNote("Обязательное местное время в формате HH:mm (24 часа).");
+  });
+  sheet.setColumnWidth(8, 110);
   sheet.setRowHeights(2, 6, 28);
   sheet.setRowHeight(8, 28);
   if (!sheet.getRange("G2").getValue() && !sheet.getRange("B3").getValue()) {
     sheet.getRange("G2").setValue(di3ParseSupplyCalendarDate_(new Date(), "Дата создания заказа в магазине"));
   }
-  return { status: "READY", planned_date_cells: ["G2", "G3"], system_date_cell: "G4", stage_input_cells: ["G5", "G6", "G7"] };
+  return { status: "READY", planned_date_cells: ["G2", "G3"], system_date_cell: "G4", stage_input_pairs: [["G5", "H5"], ["G6", "H6"], ["G7", "H7"]] };
 }
 
 function di3SupplyNumberPrefixForDate_(date) {
