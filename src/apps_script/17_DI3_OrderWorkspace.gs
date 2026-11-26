@@ -619,6 +619,41 @@ function di3ReadHistoricalSaleFormCommand_() {
   };
 }
 
+function di3PreviewHistoricalSaleForm() {
+  var command = di3ReadHistoricalSaleFormCommand_();
+  var products = di3LoadProductsIndex_();
+  var lines = command.lines.map(function (raw, index) {
+    var product = products.byId[String(raw.product_id || "")];
+    if (!product) throw new Error("Позиция " + (index + 1) + ": товар не найден в каталоге.");
+    var quantity = Number(raw.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Позиция " + (index + 1) + ": количество должно быть положительным целым числом.");
+    var hasOverride = raw.sale_unit_price !== "" && raw.sale_unit_price != null;
+    var price = hasOverride ? Number(raw.sale_unit_price) : Number(product.current_sale_price);
+    if (!Number.isFinite(price) || price < 0) throw new Error("Позиция " + (index + 1) + ": укажи корректную цену продажи.");
+    return { product_id: String(product.product_id), product_label: di3GetProductLabel_(product),
+      quantity: quantity, sale_unit_price: price };
+  });
+  var plan = di3BuildOrderFinancialPlan_({
+    lines: lines,
+    commission_paid_by_buyer: command.commission_paid_by_buyer,
+    commission_rate: command.commission_rate,
+    discount_enabled: command.discount_enabled,
+    discount_rate: command.discount_rate
+  });
+  var sheet = di3GetSheetOrThrow_("Историческая продажа");
+  sheet.getRange("F4").setValue("Товары");
+  sheet.getRange("F5").setValue("Комиссия (" + (plan.commission_payer === "BUYER" ? "покупатель" : "продавец") + ")");
+  sheet.getRange("F6").setValue("Скидка");
+  sheet.getRange("F7").setValue("К оплате");
+  sheet.getRange("F8").setValue(plan.commission_payer === "SELLER" ? "Выручка после комиссии" : "Выручка продавца");
+  sheet.getRange("G4:G8").setValues([
+    [plan.goods_amount], [plan.commission_amount], [plan.discount_amount],
+    [plan.payable_total], [plan.seller_revenue_estimate]
+  ]);
+  sheet.getRange("G4:G8").setNumberFormat("#,##0.00 ₽");
+  return plan;
+}
+
 function di3SaveHistoricalSaleForm() {
   var command = di3ReadHistoricalSaleFormCommand_();
   var timezone = di3GetConfiguredTimeZone_();
