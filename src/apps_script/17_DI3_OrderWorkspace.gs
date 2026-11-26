@@ -396,7 +396,7 @@ function di3RefreshOrderRegister(preservedDatesOverride) {
     var orderId = String(row[0] || "");
     return [
       row[1], row[2], row[3], row[4], row[6], row[8], row[9], row[10], row[12],
-      row[23], row[24], row[25], row[14], row[26], row[16], datesById[orderId] || "", orderId
+      row[23], row[24], row[25], row[14], row[26], row[16], datesById[orderId] || "", orderId, row[29] || ""
     ];
   }).sort(function (a, b) { return di3ToMillis_(b[1]) - di3ToMillis_(a[1]); });
   var oldCount = Math.max(0, sheet.getLastRow() - 3);
