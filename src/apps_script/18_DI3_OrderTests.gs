@@ -262,6 +262,7 @@ function di3RunOrderDomainUnitTests() {
         parseDate: function (value) {
           var match = String(value).match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
           if (!match) return new Date(NaN);
+          if (String(value) === "2026-03-29 02:30") return new Date(Date.UTC(2026, 2, 29, 3, 30, 0, 0));
           return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), 0, 0));
         }
       };
@@ -271,6 +272,9 @@ function di3RunOrderDomainUnitTests() {
       throws(function () { di3BuildEffectiveDateTime_(sourceDate, "", "Тест"); }, /HH:mm/);
       throws(function () { di3BuildEffectiveDateTime_(sourceDate, "9:45", "Тест"); }, /HH:mm/);
       throws(function () { di3BuildEffectiveDateTime_(sourceDate, "24:00", "Тест"); }, /HH:mm/);
+      throws(function () {
+        di3BuildEffectiveDateTime_(new Date(Date.UTC(2026, 2, 29, 12, 0, 0)), "02:30", "DST");
+      }, /не существует/);
     } finally {
       globalThis.Utilities = originalUtilities;
       if (originalTimezone) globalThis.di3GetConfiguredTimeZone_ = originalTimezone;
