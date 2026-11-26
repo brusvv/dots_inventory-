@@ -379,6 +379,7 @@ function di3EnsureSupplyDatePanelLayout_(sheet) {
   ];
   var existingLabels = sheet.getRange("D2:D7").getDisplayValues().map(function (row) { return String(row[0] || "").trim(); });
   var knownNote = "G2 — дата заказа в магазине; G3 — плановая дата прибытия; G4 — системное время записи. Для фактических этапов укажи дату в G5:G7 и отдельное время HH:mm в H5:H7. G7 запускает фактическую приёмку и создание складских движений.";
+  var previousKnownNote = "G2 — дата заказа в магазине; G3 — плановая дата прибытия; G4 — системная дата записи. Вводи фактические даты по очереди в доступное поле G5, G6 или G7 и выполняй «Поставки» → «Применить следующий этап из формы». G7 запускает фактическую приёмку и создание складских движений.";
   var previousNote = "Плановые даты можно менять в черновике; фактические даты фиксируются при смене статуса.";
   var previousOrderDateSemanticsNote = "Дата создания заказа в магазине определяет сортировку. Запись в системе и фактические этапы фиксируются автоматически; ожидаемая дата — плановая.";
   var existingNote = String(sheet.getRange("D8").getDisplayValue() || "").trim();
@@ -398,7 +399,8 @@ function di3EnsureSupplyDatePanelLayout_(sheet) {
     });
   });
   if (!labelsCompatible || (existingNote && existingNote !== knownNote && existingNote !== previousNote &&
-      existingNote !== previousOrderDateSemanticsNote && existingNote.indexOf("Вводи фактические даты по очереди") !== 0) || unexpectedContent) {
+      existingNote !== previousOrderDateSemanticsNote && existingNote !== previousKnownNote &&
+      existingNote.indexOf("Вводи фактические даты по очереди") !== 0) || unexpectedContent) {
     throw new Error("Область D2:J8 листа «Поставка v3» содержит неизвестную структуру или данные. Размещение панели дат остановлено без перезаписи.");
   }
   // Upgrade legacy combined timestamps without inventing midnight precision.
