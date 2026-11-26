@@ -48,10 +48,20 @@ The schema registry, legacy-schema compatibility checks, schema-version report, 
 Recommended UX: a separate menu command **«Внести старую продажу…»** using the existing order calculator's product lines, prices, discount and commission inputs. It must not silently turn ordinary order creation into historical mode.
 
 The command collects and confirms:
-- business date;
-- physical dispatch date/time;
-- completion date/time;
+- business date (date only);
+- physical dispatch date plus a separately entered exact dispatch time;
+- completion date plus a separately entered completion time;
 - current calculator request token and exact form fingerprint.
+
+### Date/time input UX — decision confirmed 26.11.2026
+
+The historical dispatch must use an exact time; date-only dispatch is not accepted. The date picker and time input must be separate controls, placed side-by-side on the same form row:
+- date control: calendar picker, displayed as `ДД.ММ.ГГГГ`;
+- time control: required 24-hour input, displayed/entered as `ЧЧ:ММ` (for example `14:35`), with minute precision and seconds normalized to `00`;
+- completion uses the same date + time pair so the settlement timestamp is explicit and validated;
+- business date remains a date-only field.
+
+Do **not** use one combined date-time cell/control with the calendar picker and rely only on a custom number format such as `ДД.ММ.ГГГГ ЧЧ:ММ`. A Sheets date picker selects a date without a time component and can therefore replace the time portion with midnight; number formatting changes display, not the underlying timestamp. Keep the time in its own field/control and combine date + time into one timestamp in the configured spreadsheet timezone before validation, hashing the immutable request and passing `effective_at` to the workflow. Empty or malformed time must fail closed; do not silently default to midnight or the current time. In a sheet-row implementation, use adjacent date and time columns in the same row, format the time column as `HH:mm`, and validate it independently.
 
 Recommended orchestration reuses the existing idempotent lifecycle rather than introducing a second stock engine:
 
@@ -77,26 +87,22 @@ No new operation type is required if the orchestration can safely resume the exi
 - Existing return linkage remains through `V3_OrderItems.dispatch_movement_id`; F-01's movement-based lookup must continue to work when a historical sale is later returned.
 - A sale whose dispatch or completion date falls in a locked period must be blocked by PeriodGuard. Reopening a period remains an explicit, audited action.
 
-## 5. Critical unresolved precision rule
+## 5. Confirmed precision rule
 
-The FIFO comparator orders same-day events by `recorded_at` after `effective_at`. A historical sale entered today with only a date (no time) can therefore be ordered after all already-recorded movements at the same effective timestamp/date. That may not reproduce the real-world sequence within that day.
+The FIFO comparator orders same-day events by `recorded_at` after `effective_at`. A historical sale entered today with only a date (no time) can therefore be ordered after already-recorded movements at the same effective timestamp/date and produce misleading historical lot attribution.
 
-Before coding the UI, choose one explicit policy:
-- require the exact dispatch date **and time** (recommended for faithful FIFO ordering); or
-- accept date-only dispatch and define a deterministic convention for all same-day receipts/sales, documenting that it is an approximation.
-
-Do not silently choose midnight/noon/end-of-day. The chosen convention affects historical lot attribution and whether a sale is rejected for insufficient stock.
+Decision confirmed 26.11.2026: **require the exact physical dispatch date and time**. The user also requires the date picker not to erase the entered time. Implement this as separate adjacent date and time controls/columns, not as a single date-time field controlled by a calendar. The time is mandatory, 24-hour `HH:mm`, minute precision; seconds are normalized to `00`. Completion also uses a separate date + time pair. Business date remains date-only. Do not silently choose midnight, noon, end-of-day or current time.
 
 ## 6. Required regression and acceptance coverage
 
 Pure/domain tests:
 1. Normal order with no business_date preserves existing v3 behavior before migration and defaults business_date to created_at after v4.
 2. Historical order stores actual created_at separately from business_date.
-3. Business date ≤ dispatch timestamp ≤ completion timestamp ≤ current time.
+3. Business date ≤ dispatch timestamp ≤ completion timestamp ≤ current time; date and time are combined using the configured spreadsheet timezone.
 4. Dispatch before business date, completion before dispatch, future dates and invalid dates fail closed.
 5. Historical stock is sufficient at dispatch even if later sales consumed the current stock: preflight passes and replay allocates correct historical lots.
 6. Historical stock is insufficient at dispatch even if a later receipt makes current stock sufficient: preflight rejects.
-7. Same-day receipt/sale ordering follows the explicitly selected precision policy.
+7. Same-day receipt/sale ordering uses the explicitly entered dispatch time; missing/invalid time fails closed and does not default to midnight.
 8. UNKNOWN/FREE lots preserve cost status and no invented COGS.
 9. Existing F-01 return-after-unrelated-FIFO-run scenario still returns the original dispatch lots.
 10. Request-token retry with identical dates is idempotent; changed dates or form payload are rejected.
