@@ -337,9 +337,6 @@ function di3FormatBusinessDate_(value) {
     }
   }
   if (!(date instanceof Date) || !Number.isFinite(date.getTime())) throw new Error("Указана некорректная дата оформления.");
-  if (value instanceof Date && Utilities.formatDate(value, timezone, "HH:mm:ss") !== "00:00:00") {
-    throw new Error("Дата оформления должна быть date-only, без времени.");
-  }
   return Utilities.formatDate(date, timezone, "yyyy-MM-dd");
 }
 
