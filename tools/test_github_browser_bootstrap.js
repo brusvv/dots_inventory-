@@ -70,4 +70,4 @@ test("bootstrap does not run setup, migrations or stock mutations", () => {
   assert.doesNotMatch(source, /di3RunCleanStart|di3RunMigration|di3RebuildFifo|di3CreateSupply|di3CreateOrder/);
 });
 
-process.stdout.write("\\n" + passed + " browser-bootstrap policy tests passed.\\n");
+process.stdout.write("\n" + passed + " browser-bootstrap policy tests passed.\n");
