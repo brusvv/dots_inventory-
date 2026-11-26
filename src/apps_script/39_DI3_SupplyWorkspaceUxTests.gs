@@ -18,13 +18,26 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     var payload = di3BuildSupplyFormStatePayload_({
       document: [["SUP-1"], ["Vendor"], [0], [0], [5], ["note"]],
       dates: [[date], [""], [date], [""], [""], [""]],
+      times: [["09:30"], [""], [""]],
       lines: [["Product", 20, 2, 100]],
       reason: "Correction reason"
     });
-    equal(Object.keys(payload).join(","), "document,dates,lines,reason");
+    equal(Object.keys(payload).join(","), "document,dates,times,lines,reason");
     equal(payload.dates[0][0], date.toISOString());
+    equal(payload.times[0][0], "09:30");
     equal(payload.lines[0][1], 20);
     equal(payload.reason, "Correction reason");
+  });
+
+  test("supply factual event inputs use separate date and mandatory HH:mm cells", function () {
+    includes(di3ReadSupplyStageDateTime_.toString(), "di3BuildEffectiveDateTime_");
+    includes(di3RefreshSupplyDatePanel_.toString(), 'sheet.getRange("H5:H7")');
+    includes(di3ApplySupplyStageInputState_.toString(), 'sheet.getRange("H" + rowNumber)');
+    includes(di3ApplyNextSupplyStageFromForm.toString(), "di3ReadSupplyStageDateTime_");
+    includes(di3GetHistoricalSupplyFormSnapshot_.toString(), "di3ReadSupplyStageDateTime_");
+    includes(di3ParseSupplyFullEditInput_.toString(), "di3ReadSupplyStageDateTime_");
+    includes(di3GetSupplyFormStateHash_.toString(), 'times: sheet.getRange("H5:H7")');
+    includes(di3HasSupplyFormUserData_.toString(), 'sheet.getRange("H5:H7")');
   });
 
   test("discard confirmation is requested for dirty forms unless an internal caller explicitly bypasses it", function () {
