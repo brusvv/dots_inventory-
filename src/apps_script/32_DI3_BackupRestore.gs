@@ -433,8 +433,8 @@ function di3CreateSpreadsheetBackupInternal_(reason) {
     warnings.push("Не удалось создать/обновить JSON sidecar; манифест сохранён в описании файла backup: " + (manifestError.message || String(manifestError)));
   }
   manifest.finalized_at_utc = new Date().toISOString();
-  manifest.timing.manifest_write_ms = Date.now() - manifestWriteStartedAt;
-  manifest.timing.total_ms = Date.now() - startedAtMs;
+  manifest.timing.manifest_write_ms_before_final_update = Date.now() - manifestWriteStartedAt;
+  manifest.timing.total_ms_before_final_manifest_update = Date.now() - startedAtMs;
   try {
     backupFile.setDescription(di3SerializeBackupManifest_(manifest));
     if (sidecar && typeof sidecar.setContent === "function") sidecar.setContent(JSON.stringify(manifest, null, 2));
@@ -443,6 +443,7 @@ function di3CreateSpreadsheetBackupInternal_(reason) {
   }
 
   PropertiesService.getScriptProperties().setProperty("DI3_LAST_BACKUP_FILE_ID", backupFile.getId());
+  var resultTiming = Object.assign({}, manifest.timing, { total_ms: Date.now() - startedAtMs });
   return {
     status: "VERIFIED",
     backup_file_id: backupFile.getId(),
@@ -454,7 +455,7 @@ function di3CreateSpreadsheetBackupInternal_(reason) {
     sheet_count: sourceSheets.length,
     verification: verification,
     verification_level: verification.verification_level,
-    timing: manifest.timing,
+    timing: resultTiming,
     warnings: warnings,
     reason: manifest.reason
   };
