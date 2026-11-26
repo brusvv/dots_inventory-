@@ -21,7 +21,7 @@ on:
 permissions:
   contents: read
 
-# D-05 confirmed installer and post-write verification are included in this workflow.
+# D-05 confirmed installer and D-06 verified source rollback are covered by this workflow.
 
 jobs:
   release-contract:
