@@ -1088,6 +1088,34 @@ function di3RunStockCoreUnitTests() {
     }
   });
 
+  test("FIFO archive diagnostics accept QUARANTINED to MANUALLY_RESOLVED as an audited terminal transition", function () {
+    var originalAllocationFingerprint = di3BuildFifoAllocationSnapshotFingerprint_;
+    var originalFingerprint = di3BuildFifoFingerprint_;
+    var replayId = "OP:op-1:PRODUCT:p1", runId = "run-1";
+    function event(id, sequence, type) {
+      return [id, replayId, sequence, type, runId, "", "PRODUCT", '["p1"]',
+        "input-fp", "source-a", "target-a", "source-l", "target-l", new Date(), "{}"];
+    }
+    var run = [runId, 1, "MANUALLY_RESOLVED", "TEST", new Date(), new Date(),
+      1, 0, 1, "manual reconciliation", "", "", "PRODUCT_SET", '["p1"]', "input-fp"];
+    try {
+      di3BuildFifoAllocationSnapshotFingerprint_ = function () { return "source-a"; };
+      di3BuildFifoFingerprint_ = function () { return "source-l"; };
+      var report = di3BuildFifoReplayArchiveDiagnostics_(
+        [run], [], [],
+        [event("e1", 1, "PREPARED"), event("e2", 2, "QUARANTINED"), event("e3", 3, "MANUALLY_RESOLVED")]
+      );
+      equal(report.ok, true, JSON.stringify(report.errors));
+      equal(report.summary.pending_runs, 0);
+      equal(report.summary.quarantined_replays, 0);
+      equal(report.summary.manually_resolved_replays, 1);
+      equal(report.warnings.some(function (item) { return item.indexOf("MANUALLY_RESOLVED") >= 0; }), true);
+    } finally {
+      di3BuildFifoAllocationSnapshotFingerprint_ = originalAllocationFingerprint;
+      di3BuildFifoFingerprint_ = originalFingerprint;
+    }
+  });
+
   var report = { passed: passed, failed: failures.length, failures: failures };
   if (failures.length) throw new Error("Stock Core tests failed: " + JSON.stringify(failures));
   return report;
