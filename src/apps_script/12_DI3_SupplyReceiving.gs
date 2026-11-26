@@ -586,13 +586,22 @@ function di3GetSelectedSupplyRegisterRow_() {
   if (rowNumber < 4 || rowNumber > sheet.getLastRow()) throw new Error("Выбери строку поставки начиная с 4-й строки.");
   var supplyNumber = String(sheet.getRange(rowNumber, 2).getValue() || "").trim();
   if (!supplyNumber) throw new Error("В выбранной строке нет номера поставки.");
-  var effectiveAt = sheet.getRange(rowNumber, 13).getValue();
-  return { supply_number: supplyNumber, effective_at: effectiveAt };
+  var effectiveAt = di3BuildEffectiveDateTime_(
+    sheet.getRange(rowNumber, 13).getValue(),
+    sheet.getRange(rowNumber, 14).getDisplayValue(),
+    "Следующий этап поставки"
+  );
+  return { supply_number: supplyNumber, row_number: rowNumber, effective_at: effectiveAt };
 }
 
 function di3TransitionSelectedSupply_(nextStatus) {
   var selected = di3GetSelectedSupplyRegisterRow_();
   var result = di3AdvanceSupplyStatus(selected.supply_number, nextStatus, selected.effective_at);
+  if (["UPDATED", "COMMITTED", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1) {
+    var register = di3GetSheetOrThrow_(DI3_SUPPLY_REGISTER_SHEET);
+    register.getRange(selected.row_number, 13, 1, 2).clearContent();
+    di3RefreshSupplyRegister();
+  }
   if (nextStatus === DI3_SUPPLY_STATUS.RECEIVED && ["UPDATED", "COMMITTED", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1 && typeof di3RefreshWarehouseViewsAfterCommit_ === "function") {
     di3RefreshWarehouseViewsAfterCommit_("Поставка " + selected.supply_number);
   }
