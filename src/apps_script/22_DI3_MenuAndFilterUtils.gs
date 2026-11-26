@@ -276,6 +276,10 @@ function di3BuildMenus_() {
         .addItem("Открыть папку резервных копий", "di3OpenSpreadsheetBackupFolder")
         .addItem("Восстановить в новую таблицу…", "di3PromptRestoreSpreadsheetBackup");
     }));
+    menu.addSubMenu(subMenu("GitHub и обновления", function (child) {
+      child.addItem("Проверить опубликованный релиз и сравнить код", "di3CheckGitHubRelease")
+        .addItem("Создать резервную копию кода Apps Script", "di3CreateAppsScriptSourceBackupFromMenu");
+    }));
   });
 
   return { status: "READY", menus: menus };
