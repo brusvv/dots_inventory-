@@ -67,9 +67,15 @@ function di3GetCleanBaselineState_() {
   if (record && currentVersion !== 0 && currentVersion !== DI3_SCHEMA_VERSION) issues.push("schema_version не согласован с clean baseline.");
   if (record && record.status === "COMPLETED" && currentVersion !== DI3_SCHEMA_VERSION) issues.push("Завершённый clean baseline требует schema_version целевой версии.");
   if (!record && currentVersion !== 0) issues.push("Версия схемы уже установлена без записи clean baseline.");
+  if (record && (!metaSheet || !ss.getSheetByName("SchemaMigrations"))) {
+    issues.push("После регистрации clean baseline отсутствует обязательная таблица _AppMeta или SchemaMigrations.");
+  }
   DI3_CORE_TABLE_NAMES.forEach(function (name) {
     var sheet = ss.getSheetByName(name);
-    if (!sheet) return;
+    if (!sheet) {
+      if (record) issues.push(name + ": системная таблица отсутствует после регистрации clean baseline.");
+      return;
+    }
     var expected = DI3_TABLE_SCHEMAS[name];
     var width = Math.min(expected.length, sheet.getMaxColumns());
     var actual = width ? sheet.getRange(1, 1, 1, width).getDisplayValues()[0].map(di3NormalizeHeader_) : [];
