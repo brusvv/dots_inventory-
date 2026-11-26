@@ -1015,9 +1015,9 @@ function di3DiagnoseSupplyStageInputState() {
     normalized_status: normalizedStatus,
     next_input_cell: nextStage ? nextStage.input_cell : "",
     values: {
-      G5: sheet.getRange("G5").getValue(),
-      G6: sheet.getRange("G6").getValue(),
-      G7: sheet.getRange("G7").getValue()
+      G5: sheet.getRange("G5").getValue(), H5: sheet.getRange("H5").getDisplayValue(),
+      G6: sheet.getRange("G6").getValue(), H6: sheet.getRange("H6").getDisplayValue(),
+      G7: sheet.getRange("G7").getValue(), H7: sheet.getRange("H7").getDisplayValue()
     },
     form_mode: String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") || "STANDARD",
     validations: validations
@@ -1092,7 +1092,7 @@ function di3SetupSupplyForm() {
   }
   di3EnsureSupplyDatePanelLayout_(sheet);
   sheet.getRange("A2").setValue("Выбрать поставку");
-  sheet.getRange("B2").setNote("Выбери номер поставки. Если форма не изменена, документ загрузится автоматически. Если есть несохранённые изменения, выбор будет временно отменён: запусти «Поставки → Выбор и просмотр → Загрузить выбранную поставку» и подтверди замену. Для новой поставки используй «Новая поставка», для уже полученной, но ещё не оприходованной поставки — «Внести старую поставку». Фактические даты обычной поставки применяются по очереди.");
+  sheet.getRange("B2").setNote("Выбери номер поставки. Если форма не изменена, документ загрузится автоматически. Если есть несохранённые изменения, выбор будет временно отменён: запусти «Поставки → Выбор и просмотр → Загрузить выбранную поставку» и подтверди замену. Для новой поставки используй «Новая поставка», для уже полученной, но ещё не оприходованной поставки — «Внести старую поставку». Фактические даты и время обычной поставки применяются по очереди: дата G5:G7, время H5:H7.");
   sheet.getRange("B3").setNote("Номер документа. Для новой или старой поставки формируется системой по дате заказа в G2.");
   sheet.getRange("L2").setValue("Режим:").setBackground("#EEF2F7").setFontWeight("bold");
   sheet.getRange("L9").setValue("Причина корректировки").setBackground("#EEF2F7").setFontWeight("bold");
@@ -1106,7 +1106,7 @@ function di3SetupSupplyForm() {
   var editSupplyId = String(sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "").trim();
   var historicalMode = String(sheet.getRange(DI3_SUPPLY_FORM.historicalMode).getValue() || "") === "HISTORICAL_CREATE";
   if (historicalMode) {
-    sheet.getRange("D8").setValue("Режим «Внести старую поставку»: заполни G2, при необходимости G3, а также фактические даты G5:G7. После проверки и отдельного подтверждения создаётся документ и выполняется одна складская приёмка. G4 остаётся системным временем внесения записи.");
+    sheet.getRange("D8").setValue("Режим «Внести старую поставку»: заполни G2, при необходимости G3, а также фактические даты G5:G7 и время HH:mm в H5:H7. После проверки и отдельного подтверждения создаётся документ и выполняется одна складская приёмка. G4 остаётся системным временем внесения записи.");
   }
   if (editSupplyId) {
     var editSupply = di3GetSupplyById_(editSupplyId);
@@ -1147,6 +1147,7 @@ function di3BuildSupplyFormStatePayload_(fields) {
   return {
     document: di3NormalizeSupplyFormStateValue_(fields.document || []), // B3:B8
     dates: di3NormalizeSupplyFormStateValue_(fields.dates || []),       // G2:G7
+    times: di3NormalizeSupplyFormStateValue_(fields.times || []),       // H5:H7
     lines: di3NormalizeSupplyFormStateValue_(fields.lines || []),       // A12:D31
     reason: di3NormalizeSupplyFormStateValue_(fields.reason == null ? "" : fields.reason) // M9
   };
@@ -1160,6 +1161,7 @@ function di3GetSupplyFormStateHash_(sheet) {
   var payload = di3BuildSupplyFormStatePayload_({
     document: sheet.getRange("B3:B8").getValues(),
     dates: sheet.getRange("G2:G7").getValues(),
+    times: sheet.getRange("H5:H7").getDisplayValues(),
     lines: sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues(),
     reason: sheet.getRange("M9").getValue()
   });
@@ -1178,10 +1180,12 @@ function di3HasSupplyFormUserData_(sheet) {
   function hasValue(value) { return value !== "" && value !== null && value !== undefined; }
   var documentValues = sheet.getRange("B3:B8").getValues();
   var stageDates = sheet.getRange("G3:G7").getValues();
+  var stageTimes = sheet.getRange("H5:H7").getDisplayValues();
   var lines = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues();
   var reason = sheet.getRange("M9").getValue();
   if (documentValues.some(function (row) { return hasValue(row[0]); })) return true;
   if (stageDates.some(function (row) { return hasValue(row[0]); })) return true;
+  if (stageTimes.some(function (row) { return hasValue(row[0]); })) return true;
   if (lines.some(function (row) { return row.some(hasValue); })) return true;
   if (hasValue(reason)) return true;
   // G2 is prefilled with today's date for a new blank supply. Treat another date
@@ -1233,6 +1237,7 @@ function di3NewSupplyForm(options) {
   }
   sheet.getRange("B2:B8").clearContent();
   sheet.getRange("G2:G7").clearContent();
+  sheet.getRange("H5:H7").clearContent();
   sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent();
   sheet.getRange("M4:M8").clearContent();
   sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).clearContent();
