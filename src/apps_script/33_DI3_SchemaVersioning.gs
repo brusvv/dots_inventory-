@@ -85,7 +85,8 @@ function di3GetCleanBaselineState_() {
     }
     var blank = actual.every(function (value) { return value === ""; });
     var exact = expected.every(function (header, index) { return actual[index] === header; });
-    if (!blank && !exact) issues.push(name + ": обнаружена нецелостная или legacy-схема; clean baseline запрещён.");
+    if (record && blank) issues.push(name + ": после регистрации clean baseline строка заголовков очищена; требуется восстановить точную целевую схему.");
+    else if (!blank && !exact) issues.push(name + ": обнаружена нецелостная или legacy-схема; clean baseline запрещён.");
     if (!record && sheet.getLastRow() > 1) issues.push(name + ": найдены строки данных без clean-baseline identity.");
   });
   return { eligible: issues.length === 0, current_version: currentVersion, record: record,
