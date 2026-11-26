@@ -1,7 +1,7 @@
 # F-19 — FIFO replay and recovery regression coverage
 
 Дата: 25.11.2026  
-Статус: **tests added; execution pending**
+Статус: **source CI executed; 42/42 PASS; Apps Script runtime acceptance pending**
 
 ## Purpose
 
@@ -33,14 +33,14 @@ The runner exits non-zero if any test fails.
 
 ## Boundaries and remaining acceptance
 
-- **Not executed in this environment:** repository checkout was unavailable, so the new Node runner and syntax check were not run here. A commit is not evidence of passing tests.
+- **Executed by GitHub Actions:** run [45864704114](https://github.com/brusvv/dots_inventory-/actions/runs/45864704114), head `0257f3c9faef202bd8224e208e2adc1b5f83de9a`, reports FIFO replay **42 passed / 0 failed**. The same CI run passed syntax checks for all 50 `.gs` files and all six other regression suites (147/147 total).
 - The pure suite does not simulate Google Sheets write interruption, OperationExecutor persistence, LockService contention, or recovery after a process terminates between sheet writes.
 - No Apps Script, schema, workbook, StockLedger, StockLots, StockAllocations, FifoProductState or cursor values were changed.
 - No full FIFO rebuild or stock operation was executed.
 
 ## Next validation
 
-1. Run node tools/run_fifo_replay_tests.js and tools/check_syntax.sh in a local checkout.
-2. Resolve any failures before merging additional FIFO behavior changes.
-3. Add a disposable-workbook fault-injection suite for interruption points in di3RebuildFifoAllocations_ and operation recovery. This requires a test harness capable of replacing sheet writes and must not run against the live workbook.
-4. On a restored copy, compare incremental and full replay outputs and run F-01 return acceptance after a newer unrelated FIFO run.
+1. Keep the passing CI runner as the source-level regression gate; rerun it after any FIFO change.
+2. Add/execute a disposable-workbook fault-injection suite for interruption points in `di3RebuildFifoAllocations_` and OperationExecutor recovery. This must not run against the live workbook.
+3. On a restored copy, compare incremental and full replay outputs and run F-01 return acceptance after a newer unrelated FIFO run.
+4. Separately design and test an owner-controlled resolution path for a quarantined FIFO replay. The existing OperationExecutor quarantine release is not a substitute for resolving a `FifoReplayEvents` quarantine.
