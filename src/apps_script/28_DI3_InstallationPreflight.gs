@@ -134,6 +134,17 @@ function di3PreflightCoreSchemas_() {
           planned.push({ type: "UPGRADE_SCHEMA", sheet: name, add_columns: ["commission_payer"] });
           warnings.push("V3_Orders: будет добавлен плательщик комиссии; существующие заказы получат значение BUYER.");
         }
+        var businessDateHeader = actual[29] || "";
+        if (!payerHeader && businessDateHeader) {
+          issues.push("V3_Orders: business_date в AD обнаружен до подтверждённого commission_payer в AC; структура неоднозначна.");
+        } else if (businessDateHeader && businessDateHeader !== "business_date") {
+          issues.push("V3_Orders: колонка AD занята неизвестным заголовком; миграция business_date небезопасна.");
+        } else if (!businessDateHeader && di3PreflightHasBodyValues_(sheet, 30, 1)) {
+          issues.push("V3_Orders: колонка AD содержит данные при пустом заголовке. Миграция остановлена без перезаписи.");
+        } else if (!businessDateHeader) {
+          planned.push({ type: "UPGRADE_SCHEMA", sheet: name, add_columns: ["business_date"] });
+          warnings.push("V3_Orders: будет добавлена дата оформления business_date в AD; legacy-значения будут восстановлены по локальной дате created_at.");
+        }
         return;
       }
     }
