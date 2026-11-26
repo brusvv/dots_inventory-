@@ -693,6 +693,22 @@ function di3RunSystemSafetyUxUnitTests() {
     }
   });
 
+  test("F-14 two-session ScriptLock probe detects overlap without touching business tables", function () {
+    var hold = di3TmpC06HoldScriptLock.toString();
+    var contend = di3TmpC06ProbeContendedLock.toString();
+    includes(hold, "LockService.getScriptLock()");
+    includes(hold, "PropertiesService.getScriptProperties()");
+    includes(hold, "release_requested_at_ms");
+    includes(contend, "di3WithLock_(function ()");
+    includes(contend, "OVERLAP_DETECTED");
+    includes(contend, "CONTENDED");
+    includes(contend, "ACQUIRED_AFTER_RELEASE");
+    includes(hold, "business_data_touched: false");
+    includes(contend, "business_data_touched: false");
+    equal((hold.match(/StockLedger|StockLots|StockAllocations|V3_Orders|V3_Supplies/g) || []).length, 0);
+    equal((contend.match(/StockLedger|StockLots|StockAllocations|V3_Orders|V3_Supplies/g) || []).length, 0);
+  });
+
   test("F-13 backup flushes before snapshot/copy and records phase timings", function () {
     var internal = di3CreateSpreadsheetBackupInternal_.toString();
     var flush = internal.indexOf("SpreadsheetApp.flush()");
