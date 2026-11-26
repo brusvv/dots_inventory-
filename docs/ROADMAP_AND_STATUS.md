@@ -334,5 +334,5 @@ The following issues have source changes and local regression coverage. They are
 - A `STARTED` baseline may resume only after revalidating the target headers; an adopted baseline remains recognizable after normal business rows have been created.
 - Added 10 focused System Safety UX regression cases and updated `docs/CLEAN_BASELINE_SCHEMA_VERSIONING_DESIGN.md`.
 - Branch: `feature/clean-final-baseline`; draft PR: https://github.com/brusvv/dots_inventory-/pull/1.
-- GitHub Actions at commit `e695bf9` passed syntax for 50 `.gs` files and 124/124 Node tests. A later run exposed missing `getLastColumn()` methods in the new test mocks (not a production-source failure); mocks were corrected. The latest CI rerun is in progress.
+- GitHub Actions at commit `32d891f` passed syntax for 50 `.gs` files and 128/128 Node tests: FIFO 41, Order Domain 17, Supply UX 15, Catalog/Order UX 12, System Safety 30, Warehouse Dashboard 9, Finance 4. An intermediate run caught incomplete test-sheet mocks; the mocks were corrected and the final run passed.
 - **Still not runtime-accepted:** actual Google Sheets Dry Run, empty-workbook setup, setup rerun, interruption injection at both journal boundaries, backup/restore-as-new, and end-to-end supply/dispatch/return/finance flows. Existing RC8 remains untouched.
