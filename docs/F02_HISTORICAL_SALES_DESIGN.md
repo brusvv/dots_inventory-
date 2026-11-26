@@ -188,6 +188,8 @@ A source audit after the F-02 implementation found that the historical-sale form
 - Retained clearing of the retired `D5:D6` cells as a defensive cleanup.
 - Added a Catalog/Order UX regression asserting that date/current-time/legacy-time clearing occurs only after `di3CreateHistoricalSale(command)`, and that the NO/cancel path returns before creation.
 - Added Order Domain chronology regressions: a historical business date later than the dispatch calendar date is rejected, and completion before dispatch is rejected.
-- CI run [45885667109](https://github.com/brusvv/dots_inventory-/actions/runs/45885667109) passed: Apps Script syntax 50/50; FIFO replay 46/46; Order Domain 23/23; Supply Workspace UX 17/17; Catalog/Order UX 15/15; System Safety UX 39/39; Warehouse Dashboard 9/9; Finance schema 4/4 — **153/153 tests**.
+- Added Order Domain chronology regressions: a historical business date later than the dispatch calendar date is rejected, and completion before dispatch is rejected.
+- CI run [45885839074](https://github.com/brusvv/dots_inventory-/actions/runs/45885839074) passed: Apps Script syntax 50/50; FIFO replay 46/46; Order Domain 23/23; Supply Workspace UX 17/17; Catalog/Order UX 16/16; System Safety UX 39/39; Warehouse Dashboard 9/9; Finance schema 4/4 — **154/154 tests**.
+- The warehouse menu now exposes the read-only Dashboard chart diagnostics command; full details are written to the Apps Script execution log.
 
 This is a source-level fix and regression only. Runtime acceptance of the historical form and v3→v4 migration is still required on a restored disposable workbook. No production workbook or deployed Apps Script was modified.
