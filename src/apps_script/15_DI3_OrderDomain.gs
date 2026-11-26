@@ -507,6 +507,9 @@ function di3CreateOrder(command) {
   return di3WithLock_(function () {
     di3EnsureCoreFoundationSchemas_();
     command = command || {};
+    if (command.historical_mode === true && command.__historical_sale_authorized !== true) {
+      throw new Error("Исторический заказ можно создавать только через di3CreateHistoricalSale().");
+    }
     var token = String(command.request_token || "").trim();
     if (!token) throw new Error("Не найден request_token формы заказа.");
     var existing = di3GetOrderCreateOperation_(token);
