@@ -4,7 +4,7 @@ var DI3_ORDER_REGISTER_HEADERS = [
   "Скидка продавца, ₽", "Сумма покупателю (расчёт), ₽", "Оценка FIFO, ₽",
   "Фактический FIFO, ₽", "Выручка продавца, ₽", "Комиссия площадки (факт), ₽",
   "Оплачено покупателем, ₽", "Прибыль продавца, ₽", "Статус расчёта",
-  "Метод доставки", "Дата следующего этапа", "order_id"
+  "Метод доставки", "Дата следующего этапа", "order_id", "Дата оформления"
 ];
 var DI3_ORDER_REGISTER_LEGACY_HEADERS = [
   "Номер заказа", "Создан", "Статус", "Товары, ₽", "Комиссия, ₽",
@@ -349,9 +349,10 @@ function di3SetupOrderRegister() {
     sheet.getRange("A2").setValue("Комиссия — доплата покупателя площадке. Выручка и прибыль продавца учитываются отдельно. Выбери строку заказа для смены статуса; дату укажи в колонке P.");
   } else {
     var currentWidth = Math.max(17, sheet.getLastColumn());
-    di3EnsureSheetCapacity_(sheet, Math.max(3, sheet.getLastRow()), 17);
+    di3EnsureSheetCapacity_(sheet, Math.max(3, sheet.getLastRow()), 18);
     var oldHeader = sheet.getRange(3, 1, 1, 13).getDisplayValues()[0].map(di3NormalizeHeader_);
-    var newHeader = sheet.getRange(3, 1, 1, 17).getDisplayValues()[0].map(di3NormalizeHeader_);
+    var newHeader = sheet.getRange(3, 1, 1, 18).getDisplayValues()[0].map(di3NormalizeHeader_);
+    var previousCurrentHeader = DI3_ORDER_REGISTER_HEADERS.slice(0, 17);
     if (oldHeader.join("|") === DI3_ORDER_REGISTER_LEGACY_HEADERS.join("|")) {
       var legacyRows = sheet.getLastRow() >= 4 ? sheet.getRange(4, 1, sheet.getLastRow() - 3, 13).getValues() : [];
       legacyRows.forEach(function (row) { if (row[12]) preservedDates[String(row[12])] = row[11] || ""; });
@@ -361,29 +362,30 @@ function di3SetupOrderRegister() {
       if (sheet.getLastRow() >= 4) sheet.getRange(4, 1, sheet.getLastRow() - 3, 17).clearContent();
       sheet.getRange("A1:Q1").merge();
       sheet.getRange("A2:Q2").merge();
-    } else if (newHeader.join("|") !== DI3_ORDER_REGISTER_HEADERS.join("|")) {
+    } else if (newHeader.slice(0, 17).join("|") !== previousCurrentHeader.join("|") ||
+        (newHeader[17] && newHeader[17] !== DI3_ORDER_REGISTER_HEADERS[17])) {
       throw new Error("Лист «Реестр заказов v3» имеет несовместимые заголовки.");
     }
   }
-  sheet.getRange(3, 1, 1, 17).setValues([DI3_ORDER_REGISTER_HEADERS]);
-  sheet.getRange("A1:Q1").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold").setFontSize(14);
-  sheet.getRange("A2:Q2").setBackground("#EAF0F7").setFontColor("#40516A");
-  sheet.getRange("A3:Q3").setBackground("#253B59").setFontColor("#FFFFFF").setFontWeight("bold");
+  sheet.getRange(3, 1, 1, 18).setValues([DI3_ORDER_REGISTER_HEADERS]);
+  sheet.getRange("A1:R1").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold").setFontSize(14);
+  sheet.getRange("A2:R2").setBackground("#EAF0F7").setFontColor("#40516A");
+  sheet.getRange("A3:R3").setBackground("#253B59").setFontColor("#FFFFFF").setFontWeight("bold");
   di3SetFrozenRowsSafely_(sheet, 3);
-  [145, 145, 130, 120, 155, 125, 155, 135, 135, 140, 160, 155, 140, 130, 190, 190, 180].forEach(function (width, index) { sheet.setColumnWidth(index + 1, width); });
+  [145, 145, 130, 120, 155, 125, 155, 135, 135, 140, 160, 155, 140, 130, 190, 190, 180, 125].forEach(function (width, index) { sheet.setColumnWidth(index + 1, width); });
   if (typeof sheet.showColumns === "function") sheet.showColumns(13);
   sheet.hideColumns(17);
-  di3CompactSheet_(sheet, Math.max(3, sheet.getLastRow()), 17);
+  di3CompactSheet_(sheet, Math.max(3, sheet.getLastRow()), 18);
   sheet.setHiddenGridlines(true);
   di3RefreshOrderRegister(preservedDates);
-  return { status: "READY", sheet: DI3_ORDER_REGISTER_SHEET, columns: 17, migrated_legacy_layout: Object.keys(preservedDates).length > 0 };
+  return { status: "READY", sheet: DI3_ORDER_REGISTER_SHEET, columns: 18, migrated_legacy_layout: Object.keys(preservedDates).length > 0 };
 }
 
 function di3RefreshOrderRegister(preservedDatesOverride) {
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_ORDER_REGISTER_SHEET);
   if (!sheet) return { refreshed: false, reason: "SHEET_MISSING" };
   di3RefreshAllOrderFifoSnapshots_();
-  var oldRows = sheet.getLastRow() >= 4 ? sheet.getRange(4, 1, sheet.getLastRow() - 3, 17).getValues() : [];
+  var oldRows = sheet.getLastRow() >= 4 ? sheet.getRange(4, 1, sheet.getLastRow() - 3, 18).getValues() : [];
   var datesById = preservedDatesOverride || {};
   oldRows.forEach(function (row) { if (row[16] && datesById[String(row[16])] == null) datesById[String(row[16])] = row[15]; });
   var rows = di3ReadTableValues_("V3_Orders").map(function (row) {
@@ -394,17 +396,18 @@ function di3RefreshOrderRegister(preservedDatesOverride) {
     ];
   }).sort(function (a, b) { return di3ToMillis_(b[1]) - di3ToMillis_(a[1]); });
   var oldCount = Math.max(0, sheet.getLastRow() - 3);
-  di3EnsureSheetCapacity_(sheet, Math.max(3, 3 + rows.length), 17);
-  if (oldCount) sheet.getRange(4, 1, oldCount, 17).clearContent();
+  di3EnsureSheetCapacity_(sheet, Math.max(3, 3 + rows.length), 18);
+  if (oldCount) sheet.getRange(4, 1, oldCount, 18).clearContent();
   if (rows.length) {
-    sheet.getRange(4, 1, rows.length, 17).setValues(rows);
+    sheet.getRange(4, 1, rows.length, 18).setValues(rows);
     sheet.getRange(4, 2, rows.length, 1).setNumberFormat("dd.mm.yyyy hh:mm");
     sheet.getRange(4, 4, rows.length, 10).setNumberFormat("#,##0.00 ₽");
     sheet.getRange(4, 16, rows.length, 1).setNumberFormat("dd.mm.yyyy hh:mm");
+    sheet.getRange(4, 18, rows.length, 1).setNumberFormat("dd.mm.yyyy");
     sheet.getBandings().forEach(function (banding) { banding.remove(); });
     di3ApplyLightBandingWithDarkText_(sheet.getRange(4, 1, rows.length, 17));
     var filter = sheet.getFilter();
-    var filterRange = sheet.getRange(3, 1, rows.length + 1, 17);
+    var filterRange = sheet.getRange(3, 1, rows.length + 1, 18);
     if (filter) di3SetFilterRangePreservingCriteria_(sheet, filterRange); else filterRange.createFilter();
   } else {
     sheet.getBandings().forEach(function (banding) { banding.remove(); });
@@ -414,7 +417,7 @@ function di3RefreshOrderRegister(preservedDatesOverride) {
   di3SetFrozenRowsSafely_(sheet, 3);
   if (typeof sheet.showColumns === "function") sheet.showColumns(13);
   sheet.hideColumns(17);
-  di3CompactSheet_(sheet, Math.max(3, 3 + rows.length), 17);
+  di3CompactSheet_(sheet, Math.max(3, 3 + rows.length), 18);
   return { refreshed: true, orders: rows.length, max_rows: sheet.getMaxRows(), max_columns: sheet.getMaxColumns() };
 }
 
@@ -491,3 +494,137 @@ function di3CompleteSelectedOrder() { return di3TransitionSelectedOrder_(DI3_ORD
 function di3MarkSelectedOrderReturning() { return di3TransitionSelectedOrder_(DI3_ORDER_STATUS.RETURNING); }
 function di3ReturnSelectedOrder() { return di3TransitionSelectedOrder_(DI3_ORDER_STATUS.RETURNED); }
 function di3CancelSelectedOrder() { return di3TransitionSelectedOrder_(DI3_ORDER_STATUS.CANCELLED); }
+
+
+/** Dedicated, explicit workflow for recording a sale that was already dispatched and completed. */
+function di3SetupHistoricalSaleForm() {
+  di3EnsureCoreFoundationSchemas_();
+  var ss = di3GetSpreadsheet_();
+  var name = "Историческая продажа";
+  var sheet = ss.getSheetByName(name);
+  var created = false;
+  if (!sheet) { sheet = ss.insertSheet(name); di3PrepareNewSheet_(sheet, 36, 7); created = true; }
+  if (created || sheet.getLastRow() === 0) {
+    sheet.getRange("A1:G1").merge().setValue("ВНЕСТИ ИСТОРИЧЕСКУЮ ПРОДАЖУ");
+    sheet.getRange("A2:G2").merge().setValue("Создаёт заказ и проводит фактическое FIFO-списание по указанной дате отправки, затем завершает продажу по фактической дате. Используй только для уже состоявшихся продаж.");
+    sheet.getRange("A4:A13").setValues([
+      ["Дата оформления покупателем"], ["Фактическая дата отправки"], ["Время отправки (HH:mm)"],
+      ["Фактическая дата завершения"], ["Время завершения (HH:mm)"],
+      ["Комиссию оплачивает покупатель"], ["Комиссия площадки, %"], ["Учитывать скидку продавца"],
+      ["Скидка покупателю, %"], ["Метод доставки"]
+    ]);
+    sheet.getRange("B9").insertCheckboxes().setValue(true);
+    sheet.getRange("B11").insertCheckboxes().setValue(false);
+    sheet.getRange("B10").setValue(0);
+    sheet.getRange("B12").setValue(0);
+    sheet.getRange("B13").setValue("");
+    sheet.getRange("A14").setValue("Комментарий");
+    sheet.getRange("B14").setValue("");
+    sheet.getRange("A16:C16").merge().setValue("ТОВАРНЫЕ ПОЗИЦИИ");
+    sheet.getRange("A17:C17").setValues([["Товар", "Количество, шт.", "Цена продажи, ₽ / шт. (пусто = цена каталога)"]]);
+    sheet.getRange("F3:G3").merge().setValue("ПРОВЕРКА СУММ");
+    sheet.getRange("F4:F8").setValues([["Товары"], ["Комиссия"], ["Скидка"], ["К оплате"], ["Выручка продавца"]]);
+    sheet.getRange("G4:G8").clearContent();
+    sheet.getRange("A1:G1").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold");
+    sheet.getRange("A2:G2").setBackground("#EAF0F7").setFontColor("#40516A");
+    sheet.getRange("A4:A14").setFontWeight("bold").setBackground("#F3F6FA");
+    sheet.getRange("A16:C16").setBackground("#EAF0F7").setFontWeight("bold");
+    sheet.getRange("A17:C17").setBackground("#253B59").setFontColor("#FFFFFF").setFontWeight("bold");
+    sheet.getRange("F3:G3").setBackground("#17243A").setFontColor("#FFFFFF").setFontWeight("bold");
+    sheet.getRange("F4:F8").setBackground("#F3F6FA").setFontWeight("bold");
+    [330, 140, 245, 24, 24, 190, 150].forEach(function (width, index) { sheet.setColumnWidth(index + 1, width); });
+    sheet.setFrozenRows(17);
+  } else {
+    var headers = sheet.getRange("A17:C17").getDisplayValues()[0];
+    if (headers.join("|") !== ["Товар", "Количество, шт.", "Цена продажи, ₽ / шт. (пусто = цена каталога)"].join("|")) {
+      throw new Error("Лист «Историческая продажа» имеет несовместимые заголовки.");
+    }
+  }
+  sheet.getRange("B4:B7").setNumberFormat("dd.mm.yyyy");
+  sheet.getRange("D5:D6").setNumberFormat("@");
+  sheet.getRange("B10").setNumberFormat('0.00"%"');
+  sheet.getRange("B12").setNumberFormat('0.00"%"');
+  sheet.getRange("B4:B7").setDataValidation(SpreadsheetApp.newDataValidation().requireDate().setAllowInvalid(false).build());
+  sheet.getRange("C5").setValue("Время отправки");
+  sheet.getRange("C6").setValue("Время завершения");
+  sheet.getRange("D5:D6").setNote("Укажи точное местное время в формате HH:mm.");
+  if (created) di3GetFormRequestToken_("HISTORICAL_ORDER");
+  else di3GetFormRequestToken_("HISTORICAL_ORDER");
+  di3RefreshHistoricalSaleFormValidations();
+  di3CompactSheet_(sheet, 36, 7);
+  sheet.setHiddenGridlines(true);
+  return { status: "READY", sheet: name };
+}
+
+function di3RefreshHistoricalSaleFormValidations() {
+  var sheet = di3GetSheetOrThrow_("Историческая продажа");
+  var products = di3GetOrderProductOptionIndex_();
+  if (products.options.length) {
+    sheet.getRange("A18:A36").setDataValidation(
+      SpreadsheetApp.newDataValidation().requireValueInList(products.options, true).setAllowInvalid(false).build()
+    );
+  } else sheet.getRange("A18:A36").clearDataValidations();
+  var methods = di3GetDeliveryMethodNames_();
+  if (methods.length) sheet.getRange("B13").setDataValidation(
+    SpreadsheetApp.newDataValidation().requireValueInList(methods, true).setAllowInvalid(false).build()
+  );
+  else sheet.getRange("B13").clearDataValidations();
+  sheet.getRange("B18:B36").setDataValidation(di3BuildOptionalPositiveIntegerValidation_("B18")).setNumberFormat("0");
+  sheet.getRange("C18:C36").setDataValidation(di3BuildOptionalNonnegativeNumberValidation_()).setNumberFormat("#,##0.00 ₽");
+  return { products: products.options.length, delivery_methods: methods.length };
+}
+
+function di3BuildHistoricalDateTime_(dateValue, timeValue, label) {
+  if (!(dateValue instanceof Date) || !Number.isFinite(dateValue.getTime())) throw new Error(label + ": укажи дату.");
+  var time = String(timeValue == null ? "" : timeValue).trim();
+  if (!/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(time)) throw new Error(label + ": время должно быть в формате HH:mm.");
+  var timezone = di3GetConfiguredTimeZone_();
+  var value = Utilities.formatDate(dateValue, timezone, "yyyy-MM-dd") + " " + time;
+  var parsed = Utilities.parseDate(value, timezone, "yyyy-MM-dd HH:mm");
+  if (Utilities.formatDate(parsed, timezone, "yyyy-MM-dd HH:mm") !== value) throw new Error(label + ": некорректные дата или время.");
+  return parsed;
+}
+
+function di3ReadHistoricalSaleFormCommand_() {
+  var sheet = di3GetSheetOrThrow_("Историческая продажа");
+  var options = di3GetOrderProductOptionIndex_();
+  var rows = sheet.getRange("A18:C36").getValues();
+  var lines = rows.map(function (row, index) {
+    var label = di3NormalizeText_(row[0]);
+    if (!label && (row[1] === "" || row[1] == null) && (row[2] === "" || row[2] == null)) return null;
+    var product = options.byOption[label];
+    if (!product) throw new Error("Строка " + (index + 18) + ": выбери товар из списка.");
+    return { product_id: String(product.product_id), quantity: row[1], sale_unit_price: row[2] === "" || row[2] == null ? "" : row[2] };
+  }).filter(Boolean);
+  if (!lines.length) throw new Error("Добавь хотя бы одну товарную позицию.");
+  return {
+    historical_mode: true,
+    business_date: di3FormatBusinessDate_(sheet.getRange("B4").getValue()),
+    historical_dispatched_at: di3BuildHistoricalDateTime_(sheet.getRange("B5").getValue(), sheet.getRange("D5").getDisplayValue(), "Отправка"),
+    historical_completed_at: di3BuildHistoricalDateTime_(sheet.getRange("B6").getValue(), sheet.getRange("D6").getDisplayValue(), "Завершение"),
+    commission_paid_by_buyer: sheet.getRange("B9").getValue() === true,
+    commission_rate: di3NormalizeOrderPercentInput_(sheet.getRange("B10").getValue(), sheet.getRange("B10").getNumberFormat(), "Комиссия"),
+    discount_enabled: sheet.getRange("B11").getValue() === true,
+    discount_rate: di3NormalizeOrderPercentInput_(sheet.getRange("B12").getValue(), sheet.getRange("B12").getNumberFormat(), "Скидка"),
+    delivery_method: sheet.getRange("B13").getValue(),
+    notes: sheet.getRange("B14").getValue(),
+    lines: lines,
+    request_token: di3GetFormRequestToken_("HISTORICAL_ORDER")
+  };
+}
+
+function di3SaveHistoricalSaleForm() {
+  var result = di3CreateHistoricalSale(di3ReadHistoricalSaleFormCommand_());
+  var sheet = di3GetSheetOrThrow_("Историческая продажа");
+  sheet.getRange("B4:B7").clearContent();
+  sheet.getRange("D5:D6").clearContent();
+  sheet.getRange("B10").setValue(0);
+  sheet.getRange("B11").setValue(false);
+  sheet.getRange("B12").setValue(0);
+  sheet.getRange("B13:B14").clearContent();
+  sheet.getRange("A18:C36").clearContent();
+  sheet.getRange("G4:G8").clearContent();
+  di3RotateFormRequestToken_("HISTORICAL_ORDER");
+  SpreadsheetApp.getActiveSpreadsheet().toast("Историческая продажа " + result.order_number + " проведена.", "Продажа завершена", 7);
+  return result;
+}
