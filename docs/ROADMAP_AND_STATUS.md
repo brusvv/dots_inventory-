@@ -347,3 +347,15 @@ The following issues have source changes and local regression coverage. They are
 - This run includes the final clean-baseline guard rejecting a fully cleared core-table header after adoption. It also executes the current F-20 identity/initiator regression assertions through the System Safety runner.
 - These results are source/Node CI only. They do not establish Google Apps Script runtime behavior, Google Sheets chart rendering, multi-user LockService behavior, backup/restore consistency, or live business-cycle correctness.
 - N-03 source-CI gate is now passed. Remaining N-03 acceptance is Google Sheets Dry Run/setup/rerun/interruption recovery on a disposable empty workbook, plus backup/restore-as-new. PR #1 remains Draft and unmerged; main and the existing RC8 workbook remain unchanged.
+
+
+## Date/time UX scope expanded — 26.11.2026
+
+The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applies consistently to **orders, supplies and manual warehouse movements**, not only F-02 historical sales. New design contract: `docs/OPERATION_DATE_TIME_UX_DESIGN.md`.
+
+- Orders: separate next-transition date/time inputs; F-02 historical dispatch and completion each use separate mandatory date/time pairs. `business_date` remains date-only.
+- Supplies: normal next-stage input becomes a date/time pair; historical supply actual events sent/awaiting/received (G5:G7) each use a date/time pair. Store order date and expected arrival date remain date-only.
+- Warehouse: manual IN/OUT operation date and time become adjacent required inputs.
+- Canonical event timestamps remain single timestamps; `recorded_at`/`created_at` remain system times. No supply/StockLedger schema migration is introduced solely for UI separation.
+- Shared parser must combine the pair in the configured spreadsheet timezone, reject missing/invalid time, preserve time across date-picker changes, normalize seconds to `00`, and feed the same canonical timestamp into confirmation, idempotency hash and operation payload.
+- This is a design freeze only. Source implementation and regression tests remain pending; PR #1 remains Draft/unmerged and no workbook/runtime changes are authorized by this documentation update.
