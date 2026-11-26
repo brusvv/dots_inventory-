@@ -16,7 +16,7 @@ If a manual source replacement is explicitly chosen instead of the browser-only 
 2. Create and verify a fresh backup of that test workbook and Apps Script source.
 3. Open the Apps Script project bound to that test copy.
 4. Replace/create `.gs` files using exact names under `src/apps_script/`.
-5. Preserve the actual project `appsscript.json`; confirm its `timeZone` equals `Europe/Helsinki`, matching `00_DI3_AppConfig.gs`.
+5. Preserve the actual project `appsscript.json`; confirm its `timeZone` equals `Europe/Moscow`, matching `00_DI3_AppConfig.gs`.
 6. Save and reload the spreadsheet.
 7. Run applicable Apps Script unit-test functions and runtime acceptance only on the test copy.
 
