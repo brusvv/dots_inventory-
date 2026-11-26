@@ -1889,7 +1889,8 @@ function di3RunFifoIntegrityCheck() {
     "Replay-событий: " + Number(summary.fifo_replay_events || 0) + " · PREPARED: " +
       Number(summary.fifo_pending_replays || 0) + " · COMMITTED: " +
       Number(summary.fifo_committed_replays || 0) + " · QUARANTINED: " +
-      Number(summary.fifo_quarantined_replays || 0),
+      Number(summary.fifo_quarantined_replays || 0) + " · MANUALLY_RESOLVED: " +
+      Number(summary.fifo_manually_resolved_replays || 0),
     "Ошибок: " + (report.errors || []).length,
     "Предупреждений: " + (report.warnings || []).length,
     "\nДанные не изменялись. Полный отчёт записан в журнал выполнения."
