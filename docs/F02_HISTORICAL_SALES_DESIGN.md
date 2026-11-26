@@ -178,3 +178,15 @@ Implemented on `feature/clean-final-baseline` / PR #1:
 The shared exact date + required `HH:mm` contract is now implemented across ordinary order transitions, supply lifecycle transitions, historical supply entry/full edit, historical sales and manual warehouse IN/OUT. The common `di3BuildEffectiveDateTime_()` parser uses the configured spreadsheet timezone, rejects missing/malformed time and nonexistent local times, and normalizes seconds/milliseconds. See `docs/OPERATION_DATE_TIME_UX_DESIGN.md` for the final cell mapping and legacy form/register migration behavior.
 
 **Source CI:** run #212 passed syntax for 50 `.gs` files and 142/142 Node regression tests. This does not constitute Google Sheets runtime acceptance. Form migrations, date picker/time entry, DST, FIFO chronology, PeriodGuard, commission settlement, dashboard totals and retry/fault recovery remain pending on a restored disposable workbook. Production RC8 remains untouched; PR #1 remains Draft and unmerged.
+
+
+## 12. Historical form reset correction — 26.11.2026
+
+A source audit after the F-02 implementation found that the historical-sale form now reads dispatch/completion times from `C5:C6`, but the successful-save reset still cleared the retired legacy cells `D5:D6`. This could leave the previous sale's time values in the form and silently reuse them after the user entered new dates.
+
+- Corrected `di3SaveHistoricalSaleForm()` to clear the active `C5:C6` time inputs after the historical sale has been successfully created.
+- Retained clearing of the retired `D5:D6` cells as a defensive cleanup.
+- Added a Catalog/Order UX regression asserting that date/current-time/legacy-time clearing occurs only after `di3CreateHistoricalSale(command)`, and that the NO/cancel path returns before creation.
+- CI run [45885423968](https://github.com/brusvv/dots_inventory-/actions/runs/45885423968) passed: Apps Script syntax 50/50; FIFO replay 46/46; Order Domain 22/22; Supply Workspace UX 17/17; Catalog/Order UX 15/15; System Safety UX 39/39; Warehouse Dashboard 9/9; Finance schema 4/4 — **152/152 tests**.
+
+This is a source-level fix and regression only. Runtime acceptance of the historical form and v3→v4 migration is still required on a restored disposable workbook. No production workbook or deployed Apps Script was modified.
