@@ -34,8 +34,8 @@ function di3BuildGitHubInstallPreview_(manifest, projectFiles, downloadedFiles) 
     if (!file || !String(file.name || "").trim() || !String(file.type || "").trim() || typeof file.source !== "string") {
       throw new Error("Install preview: найден неполный файл текущего Apps Script проекта.");
     }
-    var key = String(file.type) + "|" + String(file.name).toLowerCase();
-    if (currentKeys[key]) throw new Error("Install preview: дублирующийся файл проекта " + file.name + ".");
+    var key = String(file.name).toLowerCase();
+    if (currentKeys[key]) throw new Error("Install preview: дублирующееся имя файла проекта между типами " + file.name + ".");
     currentKeys[key] = true;
     current.push({ name: String(file.name), type: String(file.type), source: file.source });
   });
