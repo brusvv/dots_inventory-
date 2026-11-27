@@ -15,6 +15,28 @@ var DI3_WAREHOUSE_VALUE_CHART_HELPER_START_COLUMN = 14;
  * sorted by inventory value descending, and capped at the configured Top-N size.
  * This avoids non-contiguous chart ranges that can misalign labels and values in Sheets.
  */
+/**
+ * Calculate the physical grid rows reserved for an embedded chart.
+ * Keep this in sync with warehouse chart placement: ceil(height / 21) + 2.
+ * The 18-row fallback preserves the previous conservative estimate when chart
+ * options are unavailable or the chart has no explicit height.
+ */
+function di3GetEmbeddedChartRequiredRows_(chart) {
+  if (!chart || typeof chart.getContainerInfo !== "function") return 0;
+  var info = chart.getContainerInfo();
+  var anchorRow = info && typeof info.getAnchorRow === "function" ? Number(info.getAnchorRow()) : 0;
+  if (!Number.isFinite(anchorRow) || anchorRow <= 0) return 0;
+
+  var chartHeight = 0;
+  try {
+    var options = typeof chart.getOptions === "function" ? chart.getOptions() : null;
+    if (options && typeof options.get === "function") chartHeight = Number(options.get("height")) || 0;
+  } catch (optionsError) {}
+
+  var chartRows = chartHeight > 0 ? Math.ceil(chartHeight / 21) + 2 : 18;
+  return anchorRow + chartRows;
+}
+
 function di3BuildWarehouseValueChartDataV2_(rows, maxItems) {
   var limit = Math.max(1, Math.min(50, Math.floor(Number(maxItems) || DI3_WAREHOUSE_VALUE_CHART_MAX_PRODUCTS)));
   return (rows || []).filter(function (row) {
