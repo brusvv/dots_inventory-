@@ -484,8 +484,8 @@ function configureInstallerHarness(answer, outcome) {
     installFile("Code", "SERVER_JS", "function released() {}\n"),
     files[1]
   ];
-  let readCount = 0, updateCalls = 0, alerts = [], selectedBackupReadCount = 0,
-    selectedBackupMode = "normal";
+  let readCount = 0, updateCalls = 0, alerts = [];
+  let selectedBackupReadCount = 0, selectedBackupMode = "normal";
   context.di3PrepareGitHubInstallPreview = () => ({
     status: "PREVIEW_READY", summary: { removed: 0, target_file_count: 2, added: 0, changed: 1, unchanged: 1, preserved_unmanaged: 0, preserved_non_server: 1 },
     project_id: "script-123", source_project_fingerprint: fingerprint,
