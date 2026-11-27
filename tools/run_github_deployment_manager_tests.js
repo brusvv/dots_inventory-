@@ -639,7 +639,7 @@ test("rollback final fingerprint guard blocks concurrent project edits", () => {
 
 test("installer rejects Drive backup metadata that differs from verified payload", () => {
   const h = configureInstallerHarness("NO", "metadata-mismatch");
-  try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /метаданные Drive source backup не совпадают/); assert.equal(h.updateCalls, 0); }
+  try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /метаданные Drive source backup не совпадают/i); assert.equal(h.updateCalls, 0); }
   finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "di3GetBackupFolder_", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
 });
 
