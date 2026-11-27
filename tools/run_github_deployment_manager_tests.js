@@ -6,6 +6,12 @@ const path = require("node:path");
 const vm = require("node:vm");
 const crypto = require("node:crypto");
 const root = path.resolve(__dirname, "..");
+const runtimeState = {
+  workbook_schema_version: 4,
+  config_time_zone: "Europe/Moscow",
+  script_time_zone: "Europe/Moscow",
+  spreadsheet_time_zone: "Europe/Moscow"
+};
 const context = vm.createContext({
   console, Date, JSON, Math, Number, String, Object, Array, RegExp, Error, isNaN,
   parseInt, parseFloat, Utilities: {
@@ -15,7 +21,11 @@ const context = vm.createContext({
     newBlob: (value) => ({ getBytes: () => Array.from(Buffer.from(String(value), "utf8")).map((b) => b > 127 ? b - 256 : b) })
   },
   DI3_APP_CONFIG: { TIME_ZONE: "Europe/Moscow", GITHUB_RELEASE: { REPOSITORY: "brusvv/dots_inventory-" } },
-  DI3_SCHEMA_VERSION: 4
+  DI3_SCHEMA_VERSION: 4,
+  di3GetSchemaVersion_: () => runtimeState.workbook_schema_version,
+  di3GetConfiguredTimeZone_: () => runtimeState.config_time_zone,
+  di3GetScriptTimeZone_: () => runtimeState.script_time_zone,
+  di3GetSpreadsheet_: () => ({ getSpreadsheetTimeZone: () => runtimeState.spreadsheet_time_zone })
 });
 for (const file of ["43_DI3_GitHubDeploymentManager.gs", "44_DI3_GitHubInstallPreview.gs", "45_DI3_GitHubConfirmedInstaller.gs", "46_DI3_GitHubCodeRollback.gs"]) {
   const source = fs.readFileSync(path.join(root, "src/apps_script", file), "utf8");
@@ -74,6 +84,33 @@ test("schema and all four timezone sources must match the release before install
   for (const [key, value] of [["workbook_schema_version", 3], ["code_schema_version", 3], ["config_time_zone", "Europe/Helsinki"], ["manifest_time_zone", "Europe/Helsinki"], ["script_time_zone", "Europe/Helsinki"], ["spreadsheet_time_zone", "Europe/Helsinki"]]) {
     const report = vm.runInContext("di3BuildGitHubInstallCompatibilityReport_(" + JSON.stringify(manifest) + ", " + JSON.stringify({ ...baseline, [key]: value }) + ")", context);
     assert.equal(report.status, "BLOCKED", key + " must block install"); assert.ok(report.issues.length > 0);
+  }
+});
+test("reads the actual Apps Script manifest and runtime timezone sources", () => {
+  const manifest = { target_schema_version: 4, application_time_zone: "Europe/Moscow" };
+  const projectFiles = [{ name: "appsscript", type: "JSON", source: JSON.stringify({ timeZone: "Europe/Moscow" }) }];
+  const ready = vm.runInContext("di3GetGitHubInstallCompatibilityReport_(" + JSON.stringify(manifest) + ", " + JSON.stringify(projectFiles) + ")", context);
+  assert.equal(ready.status, "READY");
+  assert.deepEqual(JSON.parse(JSON.stringify(ready.time_zones)), {
+    app_config: "Europe/Moscow", appsscript_manifest: "Europe/Moscow",
+    script_runtime: "Europe/Moscow", spreadsheet: "Europe/Moscow"
+  });
+});
+test("actual integration blocks missing manifest and runtime timezone drift", () => {
+  const manifest = { target_schema_version: 4, application_time_zone: "Europe/Moscow" };
+  const projectFiles = [{ name: "appsscript", type: "JSON", source: JSON.stringify({ timeZone: "Europe/Moscow" }) }];
+  const oldScriptZone = runtimeState.script_time_zone;
+  try {
+    runtimeState.script_time_zone = "Europe/Helsinki";
+    const mismatch = vm.runInContext("di3GetGitHubInstallCompatibilityReport_(" + JSON.stringify(manifest) + ", " + JSON.stringify(projectFiles) + ")", context);
+    assert.equal(mismatch.status, "BLOCKED");
+    assert.ok(mismatch.issues.some((issue) => issue.includes("Session.getScriptTimeZone()")));
+    runtimeState.script_time_zone = oldScriptZone;
+    const missing = vm.runInContext("di3GetGitHubInstallCompatibilityReport_(" + JSON.stringify(manifest) + ", [])", context);
+    assert.equal(missing.status, "BLOCKED");
+    assert.ok(missing.issues.some((issue) => issue.includes("appsscript.json")));
+  } finally {
+    runtimeState.script_time_zone = oldScriptZone;
   }
 });
 test("unknown workbook schema or timezone is fail-closed", () => {
