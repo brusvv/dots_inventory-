@@ -70,6 +70,8 @@ Before downloading release source files or creating a Drive backup, the updater 
 
 The schema/timezone check is read-only and is repeated immediately before `projects.updateContent`. Any missing value or mismatch blocks installation. The updater never migrates schema or changes timezone settings. Align timezone settings deliberately before installing; do not rewrite existing dates or timestamps as part of this operation.
 
+**One-time updater bootstrap:** versions older than `0.2.0` do not know how to enforce `minimum_updater_version`. Before relying on this gate, manually update the updater modules (`00_DI3_AppConfig.gs`, `43_DI3_GitHubDeploymentManager.gs`, `44_DI3_GitHubInstallPreview.gs`, `45_DI3_GitHubConfirmedInstaller.gs`) in a disposable Apps Script project while preserving its actual `appsscript.json`. Then verify the actual manifest and spreadsheet timezone are already `Europe/Moscow`. Do not use an older updater to bootstrap this release into a production project.
+
 No tag or release is created by this implementation.
 ## Safety contract
 
