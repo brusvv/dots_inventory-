@@ -2,7 +2,7 @@
 
 ## Scope
 
-This adds the release contract and GitHub Actions packaging. It does not install code into Apps Script and does not change any spreadsheet or deployment.
+This section documents the D-01/D-02 release contract and GitHub Actions packaging. It does not itself install code or change a spreadsheet/deployment; installation is handled by the separate D-03–D-06 Deployment Manager described below.
 
 The in-project Deployment Manager reads a published manifest, fetches files from immutable commit URLs, verifies SHA-256, preserves the target project's actual appsscript.json, backs up current code, and requires separate confirmation before updating.
 
