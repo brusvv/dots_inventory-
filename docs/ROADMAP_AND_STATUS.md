@@ -36,10 +36,21 @@
 
 ### Следующее безопасное действие в Dots beta 4
 
-В Apps Script editor выполнить только две read-only функции и сохранить полный JSON из Execution log:
+В Apps Script editor получить оба отчёта без записи в бизнес-таблицы. Чтобы вернуть значения в Execution log, временно добавить helper в тестовый проект, запустить и затем удалить его:
+
+```javascript
+function di3TmpR0ReadOnlySnapshot() {
+  var dryRun = di3RunInstallationDryRun();
+  Logger.log("R0_DRY_RUN_JSON=" + JSON.stringify(dryRun));
+  var diagnostics = di3RunInstallationDiagnostics();
+  Logger.log("R0_DIAGNOSTICS_JSON=" + JSON.stringify(diagnostics));
+}
+```
 
 1. `di3RunInstallationDryRun()` — возвращает `read_only: true`, структуру схем, clean-baseline/legacy classification, unknown populated tabs, issues/warnings и `planned_changes`.
 2. `di3RunInstallationDiagnostics()` — проверяет фактические листы и заголовки, schema version/journal, Settings, money/FIFO state, pending/quarantined operations, FIFO integrity, timezone, triggers и размеры workspace grids.
+
+Helper временно меняет только исходный код тестового Apps Script-проекта, не бизнес-данные таблицы. После сохранения полного Execution log удали helper и сохрани проект. Не добавляй его в production и не используй для складских операций.
 
 В дополнение вручную сверить в Project Settings фактический `appsscript.json.timeZone` и OAuth scopes; в Apps Script Deployments — deployment IDs/versions; в Triggers — handlers; в Script Properties — только имена ключей и наличие release markers (значения секретов не копировать). Сверить Drive backup по имени, размеру, Script ID и VERIFIED/hash metadata, не изменяя его.
 
