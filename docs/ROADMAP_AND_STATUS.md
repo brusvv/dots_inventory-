@@ -1063,3 +1063,13 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - Package build for the initial test commit passed; Release Pipeline failed only in GitHub Deployment Manager runner due to that harness ReferenceError; Apps Script quality gates passed.
 - CI for the harness fix was still running at time of this note. Final acceptance requires Release Pipeline, Apps Script quality gates and Package build green for the same final source/test commit.
 - This is source/Node work only. No Apps Script runtime, Drive file, spreadsheet, production workbook, N-02 fault-injection, migration or release action was run.
+
+
+## 2026-11-28 — Selected rollback backup revalidation completed in source/CI
+
+- Rollback reopens the selected Drive backup after the user confirms YES, revalidates its file identity, name, VERIFIED metadata, Script ID, configured folder membership, payload checksum and per-file hashes, rebuilds the rollback target and compares its fingerprint with the pre-confirmation preview before calling `projects.updateContent`.
+- Regression tests cover successful revalidation and selected backup becoming unavailable after confirmation (write call must remain zero).
+- Source commit: `0b8f3f30ff6375162748b57796438ab51b7a1c67`; test commits: `76cfd0140ce39c403a203251a76dac7740eed3dd`, `05a84fbc290543fe1684e264c477d1a3c4fbd02a`, `d0c969ccbdd358b9db132bbe20799a90744aec30`, `57327687990979594ed69aa7ee88cb7f6b132738`, `f818dc2dc72663f32579f3aee534abc8c2af294e`.
+- Final GitHub Actions on the checked source/test commit `57327687990979594ed69aa7ee88cb7f6b132738`: Release Pipeline PASS, Apps Script quality gates PASS, package build PASS. Release Pipeline includes the GitHub Deployment Manager runner and the new rollback revalidation cases.
+- CI evidence: [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084515885), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084515883), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084515887).
+- Source/Node CI only. No live Drive/Apps Script/Sheets acceptance, production update, schema migration, stock operation, release publication, PR merge or N-02 runtime fault-injection was performed.
