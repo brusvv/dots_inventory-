@@ -1042,3 +1042,13 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - Latest tested commit: `4f4508ada61e175670c80467e86ed3357663da36`. GitHub Deployment Manager suite: **55/55 PASS**; Apps Script syntax 55/55; all existing regression suites, release manifest and tag-policy checks passed.
 - CI: [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083992642), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083992555), [package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083992637).
 - Evidence is source/Node CI with mocked Drive objects, not live Drive or Apps Script acceptance. No production workbook or live Apps Script project was modified.
+
+## 2026-11-28 — Rollback backup revalidation after confirmation
+
+- Source change: `46_DI3_GitHubCodeRollback.gs` now reopens the selected rollback backup after the user confirms YES and revalidates its current Drive identity, filename, VERIFIED description metadata, Script ID, folder membership, payload checksum and file hashes before `projects.updateContent`.
+- The rollback target is rebuilt from the re-read envelope and its fingerprint must match the target prepared before confirmation. If the backup is unavailable or changed, rollback stops before the write.
+- Added two runner cases: successful selected-backup re-read after YES, and selected backup becoming unavailable after YES (asserts zero update calls).
+- Commits: `0b8f3f30ff6375162748b57796438ab51b7a1c67` (source), `76cfd0140ce39c403a203251a76dac7740eed3dd` (tests).
+- Package build for `76cfd01`: PASS [run 46084373385](https://github.com/brusvv/dots_inventory-/actions/runs/46084373385).
+- Release Pipeline [run 46084373426](https://github.com/brusvv/dots_inventory-/actions/runs/46084373426) and Apps Script quality gates [run 46084373429](https://github.com/brusvv/dots_inventory-/actions/runs/46084373429) were still IN_PROGRESS at the time of this entry; do not mark CI accepted until both complete successfully.
+- Source/Node test only. No Apps Script project, Drive backup, spreadsheet or production workbook was changed. No N-02 runtime fault injection, migration, release publication or PR merge was performed.
