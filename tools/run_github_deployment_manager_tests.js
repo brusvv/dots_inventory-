@@ -397,4 +397,41 @@ test("rollback refuses a backup without appsscript manifest", () => {
   assert.throws(() => vm.runInContext("di3BuildRollbackTargetFiles_(" + JSON.stringify(envelope) + ", " + JSON.stringify(currentProject) + ")", context), /backup и целевом проекте/);
 });
 
+
+test("Apps Script projects.getContent does not automatically forward OAuth redirects", () => {
+  let observed;
+  context.ScriptApp = { getScriptId: () => "script-123", getOAuthToken: () => "oauth-secret" };
+  context.UrlFetchApp = { fetch: (_url, options) => {
+    observed = options;
+    return { getResponseCode: () => 302, getContentText: () => "redirect" };
+  } };
+  try {
+    assert.throws(() => vm.runInContext("di3GetAppsScriptProjectContent_()", context), /HTTP 302/);
+    assert.equal(observed.followRedirects, false);
+    assert.equal(observed.headers.Authorization, "Bearer oauth-secret");
+  } finally {
+    delete context.ScriptApp;
+    delete context.UrlFetchApp;
+  }
+});
+
+test("Apps Script projects.updateContent does not automatically forward OAuth redirects", () => {
+  let observed;
+  context.ScriptApp = { getOAuthToken: () => "oauth-secret" };
+  context.UrlFetchApp = { fetch: (_url, options) => {
+    observed = options;
+    return { getResponseCode: () => 302, getContentText: () => "redirect" };
+  } };
+  try {
+    assert.throws(() => vm.runInContext(
+      "di3UpdateAppsScriptProjectContent_('script-123', [{name:'Code',type:'SERVER_JS',source:'x'}])",
+      context), /HTTP 302/);
+    assert.equal(observed.followRedirects, false);
+    assert.equal(observed.headers.Authorization, "Bearer oauth-secret");
+  } finally {
+    delete context.ScriptApp;
+    delete context.UrlFetchApp;
+  }
+});
+
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
