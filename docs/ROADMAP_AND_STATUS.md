@@ -32,7 +32,30 @@
 - Подтверждены содержательные различия в `11_DI3_SupplyDomain.gs`, `19_DI3_WarehouseViews.gs`, `43_DI3_GitHubDeploymentManager.gs`, `44_DI3_GitHubInstallPreview.gs` и `45_DI3_GitHubConfirmedInstaller.gs`. В частности, последний проверенный код содержит дополнительные fail-closed compatibility gates по версии updater, схеме и timezone, которых нет в первоначальном Bootstrap-снимке.
 - `00_DI3_AppConfig.gs` совпадает между этими снимками и содержит `Europe/Moscow`.
 
-**Статус R0: PARTIAL.** Идентификаторы и факт Bootstrap восстановлены из предыдущего протокола; прямое чтение текущего Google Sheets / Apps Script / Drive в этой сессии недоступно. Не проверены фактический `appsscript.json`, фактическая timezone таблицы, scopes, project file fingerprint, deployments, Script Properties, триггеры и содержимое backup. Нельзя ставить PASS по одному журналу Bootstrap.
+### Полученный read-only runtime отчёт — 27.11.2026
+
+Пользователь запустил `di3RunInstallationDryRun()` и `di3RunInstallationDiagnostics()` в Dots beta 4. В Execution log получены полные JSON-результаты.
+
+**Dry Run: READY**
+- `read_only: true`; 27 системных таблиц проверены, 40 вкладок книги проверены, неожиданных заполненных вкладок нет.
+- Schema v4 = target v4; путь `CLEAN_FINAL_BASELINE`; baseline migration `COMPLETED`; других миграций и `planned_changes` нет.
+- Config / Script runtime / Spreadsheet timezone совпадают: `Europe/Moscow`.
+- Issues и warnings пустые.
+
+**Installation Diagnostics: ERROR, 16/17 checks passed**
+- Все проверки схем, листов, schema journal, настроек, Money/FIFO, версии приложения, складских операций, карантина, OperationAttempts, FIFO integrity, timezone, PeriodGuard, последнего FIFO run, triggers и frozen panes прошли.
+- Подтверждено: 65 товаров, 37 FIFO lots, 0 unknown-cost lots, 0 pending stock operations; последний FIFO run #11 — COMMITTED; ledger cursor = 37.
+- Единственный failed check: `Компактные размеры листов`; «Склад» имеет 106×15, расчёт диагностики — 99×15, разница 7 строк.
+
+### Разбор единственного failed check
+
+В исходниках Dashboard резервирование строк диаграммы рассчитывается как `chartRows = Math.ceil(chartHeight / 21) + 2`; при высоте 480 px это 25 строк. Затем Dashboard вызывает `di3CompactSheet_(sheet, chartRow + chartRows, ...)`. Диагностика же ранее оценивала область любой диаграммы как `anchorRow + 18`. Это несогласованные алгоритмы: при 480 px оценка недосчитывает 7 строк — ровно разницу в runtime отчёте.
+
+Та же логика размещения диаграммы присутствует в Bootstrap commit `39ae1b1...`, поэтому расхождение релевантно установленному снимку. Наиболее вероятно, что 7 строк зарезервированы под Dashboard chart, а не являются случайным избытком. Однако фактические anchor row и chart height из живого листа ещё не залогированы — до этой проверки строки не удалять.
+
+Исправление внесено в source branch `feature/github-preview-releases`: диагностика теперь получает chart height через `EmbeddedChart.getOptions().get("height")` и использует ту же формулу, что Dashboard; добавлены два regression tests. Последний source CI прошёл: [Release Pipeline #46076200060](https://github.com/brusvv/dots_inventory-/actions/runs/46076200060), [Package build #46076200071](https://github.com/brusvv/dots_inventory-/actions/runs/46076200071). Warehouse Dashboard — 11/11, все восемь регрессионных suites — 189/189. Это исправление находится только в GitHub source branch и не установлено в Dots beta 4.
+
+**Статус R0: PARTIAL.** Runtime Dry Run и большая часть диагностики подтверждены. Окончательный PASS не ставится: нужно залогировать фактические anchor row / chart height и проверить `appsscript.json`, OAuth scopes, deployments, Script Properties, project fingerprint и Drive backup metadata/content. Live workbook и Apps Script этим изменением не обновлялись.
 
 ### Следующее безопасное действие в Dots beta 4
 
@@ -62,15 +85,15 @@ Helper временно меняет только исходный код тес
 
 ## 2. Подтверждённые source/CI результаты
 
-Последние проверки на HEAD `f4b294eae28da6fdb8c1718ee032c938415cbaf6`:
+Последняя проверенная source ветка `feature/github-preview-releases`, HEAD `7537712c93d1e20209e0e3419a3c04a890780eb4`:
 
-- [Release Pipeline CI #46073321726](https://github.com/brusvv/dots_inventory-/actions/runs/46073321726): success.
-- [Package build #46073321723](https://github.com/brusvv/dots_inventory-/actions/runs/46073321723): success.
-- Apps Script syntax: 54/54.
+- [Release Pipeline CI #46076200060](https://github.com/brusvv/dots_inventory-/actions/runs/46076200060): success.
+- [Package build #46076200071](https://github.com/brusvv/dots_inventory-/actions/runs/46076200071): success.
+- Apps Script syntax: все модули прошли проверку.
 - Release manifest tests: 15/15.
 - Stable/Preview tag policy: 9/9.
-- Регрессионные suites: FIFO 46/46; Order Domain 22/22; Supply Workspace UX 17/17; Catalog/Order UX 14/14; System Safety UX 39/39; Warehouse Dashboard 9/9; Finance schema 4/4; GitHub Deployment Manager 36/36.
-- Всего по восьми регрессионным suites: **187/187**. Проверки манифеста, tag policy и синтаксиса считаются отдельно.
+- Регрессионные suites: FIFO 46/46; Order Domain 22/22; Supply Workspace UX 17/17; Catalog/Order UX 14/14; System Safety UX 39/39; Warehouse Dashboard 11/11; Finance schema 4/4; GitHub Deployment Manager 36/36.
+- Всего по восьми регрессионным suites: **189/189**. Проверки манифеста, tag policy и синтаксиса считаются отдельно.
 - Пакет [DotsInventory-v4-installation](https://github.com/brusvv/dots_inventory-/actions/runs/46073321723/artifacts/15233334353): 410,757 bytes; SHA-256 `6819ef1881bf22aa1958eedacc6a47d3a34c3cb6f4744b298cbd51d55d30e2f2`; срок хранения до 27.12.2026. Это source ZIP, не clasp-проект и не доказательство runtime-установки.
 
 Эти результаты подтверждают качество исходников и сборки. Они **не** подтверждают работу Apps Script API, Drive backup, реальную миграцию, триггеры, FIFO в Sheets, конкурентность или восстановление.
