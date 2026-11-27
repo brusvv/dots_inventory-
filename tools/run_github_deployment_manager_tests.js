@@ -148,7 +148,7 @@ test("rejects Preview claiming main as its source branch", () => {
   const m = validManifest(); m.git_tag = "dots-inventory-v4.1.0-preview.1";
   m.release_channel = "preview"; m.source_branch = "main";
   context.DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL = "preview";
-  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.1.0-preview.1')", context), /исходную ветку/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.1.0-preview.1')", context), /Preview должен иметь тег/);
   context.DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL = "stable";
 });
 test("rejects release tag mismatch", () => {
