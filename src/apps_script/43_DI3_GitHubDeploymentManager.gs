@@ -489,12 +489,16 @@ function di3BuildAppsScriptSourceBackupEnvelope_(project, spreadsheetId, created
     return file && file.type === "JSON" && file.name === "appsscript";
   });
   if (!hasManifest) throw new Error("Source backup остановлен: в содержимом проекта отсутствует appsscript.json.");
+  var backupNames = {};
   var files = project.content.files.map(function (file) {
     var name = String(file.name || "");
     var type = String(file.type || "");
+    var key = name.toLowerCase();
     if (!name || !type || typeof file.source !== "string") {
       throw new Error("Нельзя создать backup: файл проекта имеет неполные метаданные или не содержит source.");
     }
+    if (backupNames[key]) throw new Error("Нельзя создать backup: дублирующееся имя файла между типами " + name + ".");
+    backupNames[key] = true;
     return {
       name: name,
       type: type,
