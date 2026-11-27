@@ -125,6 +125,45 @@ test("allows only GitHub-owned asset redirect hosts", () => {
   assert.equal(vm.runInContext("di3IsSafeGitHubAssetRedirect_('https://evil.example/file')", context), false);
   assert.equal(vm.runInContext("di3IsSafeGitHubAssetRedirect_('http://release-assets.githubusercontent.com/file')", context), false);
 });
+
+test("validates every signed asset redirect hop and never follows redirects automatically", () => {
+  const calls = [];
+  const responses = [
+    { code: 302, headers: { Location: "https://release-assets.githubusercontent.com/signed" } },
+    { code: 302, headers: { Location: "https://evil.example/steal" } }
+  ];
+  context.UrlFetchApp = { fetch: (url, options) => {
+    calls.push({ url, options });
+    const next = responses.shift();
+    return { getResponseCode: () => next.code, getContentText: () => "",
+      getAllHeaders: () => next.headers };
+  } };
+  const asset = { id: 123, url: "https://api.github.com/repos/brusvv/dots_inventory-/releases/assets/123" };
+  try {
+    assert.throws(() => vm.runInContext("di3FetchGitHubAsset_(" + JSON.stringify(asset) + ", 'test.zip')", context),
+      /недоверенный адрес/);
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every(call => call.options.followRedirects === false));
+    assert.equal(calls[1].url, "https://release-assets.githubusercontent.com/signed");
+  } finally {
+    delete context.UrlFetchApp;
+  }
+});
+
+test("GitHub API requests do not automatically follow redirects", () => {
+  let observed;
+  context.UrlFetchApp = { fetch: (_url, options) => {
+    observed = options;
+    return { getResponseCode: () => 302, getContentText: () => "", getAllHeaders: () => ({ Location: "https://evil.example/" }) };
+  } };
+  try {
+    const response = vm.runInContext("di3FetchGitHubResponse_('https://api.github.com/repos/brusvv/dots_inventory-', null, true)", context);
+    assert.equal(response.code, 302);
+    assert.equal(observed.followRedirects, false);
+  } finally {
+    delete context.UrlFetchApp;
+  }
+});
 test("accepts valid pinned release manifest", () => {
   const m = validManifest();
   const r = vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.0.0')", context);
