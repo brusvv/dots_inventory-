@@ -532,9 +532,9 @@ function di3VerifyAppsScriptSourceBackupEnvelope_(envelope) {
   }
   var seen = {};
   payload.files.forEach(function (file) {
-    var key = String(file.name || "") + "|" + String(file.type || "");
+    var key = String(file.name || "").toLowerCase();
     if (!file.name || !file.type || typeof file.source !== "string" || seen[key]) {
-      throw new Error("Apps Script source backup содержит некорректный или дублирующийся файл.");
+      throw new Error("Apps Script source backup содержит некорректный или дублирующийся файл (имя должно быть уникальным между типами).");
     }
     seen[key] = true;
     if (di3Sha256Hex_(file.source) !== file.sha256 ||
