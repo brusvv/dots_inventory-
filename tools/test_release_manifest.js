@@ -64,6 +64,10 @@ fixture(({ sourceDir }) => {
 });
 fixture(({ sourceDir }) => {
   test("rejects missing schema version", () => { fs.writeFileSync(path.join(sourceDir, "33_DI3_SchemaVersioning.gs"), "var CURRENT = 4;"); assert.throws(() => buildManifest({ ...base, sourceDir }), /DI3_SCHEMA_VERSION/); });
+  test("rejects an invalid IANA timezone in application config", () => {
+    fs.writeFileSync(path.join(sourceDir, "00_DI3_AppConfig.gs"), 'var DI3_APP_CONFIG = { TIME_ZONE: "Mars/Olympus_Mons" };');
+    assert.throws(() => buildManifest({ ...base, sourceDir }), /корректным идентификатором IANA/);
+  });
   test("rejects empty source tree", () => { for (const n of fs.readdirSync(sourceDir)) fs.unlinkSync(path.join(sourceDir, n)); assert.throws(() => listAppsScriptFiles(sourceDir), /не найдено ни одного/); });
 });
 process.stdout.write("\n" + passed + " release-manifest tests passed.\n");
