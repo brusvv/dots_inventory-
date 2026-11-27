@@ -96,6 +96,15 @@ function di3RunHistoricalSupplyUnitTests() {
     equal(source.indexOf("SUPPLY_RECEIVE:" + " + supply.supply_id") !== -1 || source.indexOf("di3GetSupplyReceiptOperation_") !== -1, true);
   });
 
+  test("date panel clears stale stage validations before restoring saved values", function () {
+    var source = di3RefreshSupplyDatePanel_.toString();
+    var clearIndex = source.indexOf('sheet.getRange("G5:H7").clearDataValidations()');
+    var dateWriteIndex = source.indexOf('sheet.getRange("G5:G7").setValues');
+    var timeWriteIndex = source.indexOf('sheet.getRange("H5:H7").setValues');
+    equal(clearIndex >= 0 && clearIndex < dateWriteIndex && clearIndex < timeWriteIndex, true,
+      "Stage validations must be cleared before saved date/time values are restored");
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Historical supply tests failed: " + JSON.stringify(failed));
   return report;
