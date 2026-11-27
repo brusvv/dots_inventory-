@@ -492,6 +492,7 @@ function configureInstallerHarness(answer, outcome) {
   });
   context.di3GetAppsScriptProjectContent_ = () => {
     readCount++;
+    if (outcome === "concurrent-change" && readCount >= 2) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function concurrentEdit() {}\\n"), files[1]] } };
     if (outcome === "readback-unavailable" && readCount >= 3) throw new Error("read-back unavailable");
     if (outcome === "readback-mismatch" && readCount >= 3) {
       return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function wrong() {}\n"), files[1]] } };
@@ -584,6 +585,7 @@ function configureRollbackHarness(answer, outcome) {
   }) };
   context.di3GetAppsScriptProjectContent_ = () => {
     readCount++;
+    if (outcome === "concurrent-change" && readCount >= 2) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function concurrentEdit() {}\\n"), currentFiles[1]] } };
     if (outcome === "readback-unavailable" && readCount >= 3) throw new Error("rollback read-back unavailable");
     if (outcome === "readback-mismatch" && readCount >= 3) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function wrong() {}\n"), currentFiles[1]] } };
     return baseline;
@@ -617,6 +619,18 @@ test("rollback distinguishes unavailable post-write verification", () => {
 test("rollback distinguishes mismatched post-write file set", () => {
   const h = configureRollbackHarness("YES", "readback-mismatch");
   try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "ROLLBACK_VERIFICATION_FAILED"); assert.equal(result.write_performed, true); assert.match(result.error, /отличается от подготовленного/); assert.equal(h.updateCalls, 1); assert.equal(h.readCount, 3); }
+  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+});
+
+test("installer final fingerprint guard blocks concurrent project edits", () => {
+  const h = configureInstallerHarness("YES", "concurrent-change");
+  try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /проект изменился после подтверждения/); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2); }
+  finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+});
+
+test("rollback final fingerprint guard blocks concurrent project edits", () => {
+  const h = configureRollbackHarness("YES", "concurrent-change");
+  try { assert.throws(() => vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context), /проект изменился после создания резервной копии/); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2); }
   finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
 });
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
