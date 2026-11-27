@@ -55,7 +55,19 @@
 
 Исправление внесено в source branch `feature/github-preview-releases`: диагностика теперь получает chart height через `EmbeddedChart.getOptions().get("height")` и использует ту же формулу, что Dashboard; добавлены два regression tests. Последний source CI прошёл: [Release Pipeline #46076200060](https://github.com/brusvv/dots_inventory-/actions/runs/46076200060), [Package build #46076200071](https://github.com/brusvv/dots_inventory-/actions/runs/46076200071). Warehouse Dashboard — 11/11, все восемь регрессионных suites — 189/189. Это исправление находится только в GitHub source branch и не установлено в Dots beta 4.
 
-**Статус R0: PARTIAL.** Runtime Dry Run и большая часть диагностики подтверждены. Окончательный PASS не ставится: нужно залогировать фактические anchor row / chart height и проверить `appsscript.json`, OAuth scopes, deployments, Script Properties, project fingerprint и Drive backup metadata/content. Live workbook и Apps Script этим изменением не обновлялись.
+### Подтверждение геометрии диаграммы в живой таблице — 28.11.2026
+
+Пользователь выполнил read-only snapshot диаграммы на листе «Склад». Получено:
+- `last_row = 78`, `max_rows = 106`, `max_columns = 15`.
+- Одна диаграмма; anchor row = 81, anchor column = 1; height = 480 px, width = 1120 px.
+- Источник диаграммы: `N1:O21`; вспомогательные подписи и значения скрыты.
+- В `N1:O21` — заголовок и 20 строк товарных значений.
+
+Расчёт фактического резерва: `Math.ceil(480 / 21) + 2 = 25` строк; `anchor_row 81 + 25 = 106`. Следовательно, физическая сетка 106 строк корректна и полностью соответствует резерву диаграммы. Разница 7 строк в первоначальной диагностике — ложноположительный результат старого расчёта `anchorRow + 18`, а не лишние строки.
+
+**Результат проверки grid sizing: PASS по фактической геометрии.** Не удалять строки 100–106. Исправленный расчёт уже находится в source branch и покрыт тестами; установленный в Dots beta 4 код пока не обновлялся.
+
+**Статус R0: PARTIAL.** Runtime Dry Run, основные проверки Installation Diagnostics и геометрия Dashboard подтверждены. Grid sizing принят как PASS по фактической геометрии; единственный первоначальный ERROR классифицирован как ложноположительный результат старого расчёта. Осталось проверить `appsscript.json`, OAuth scopes, deployments, Script Properties, project file fingerprint и Drive backup metadata/content. Исправленный source-код диагностики не установлен в Dots beta 4; live workbook не изменялся.
 
 ### Следующее безопасное действие в Dots beta 4
 
