@@ -54,7 +54,7 @@ fixture(({ sourceDir }) => {
   });
   test("rejects Preview from an unsupported source branch", () => {
     assert.throws(() => buildManifest({ ...base, tag: "dots-inventory-v4.1.0-preview.1",
-      channel: "preview", sourceBranch: "bugfix/new-feature", sourceDir }), /feature\\/\\*.*release\\/\\*.*hotfix\\/\\*/);
+      channel: "preview", sourceBranch: "bugfix/new-feature", sourceDir }), /исходную ветку/);
   });
   test("rejects stable release from a feature branch", () => {
     assert.throws(() => buildManifest({ ...base, sourceBranch: "feature/work", sourceDir }), /из main/);
