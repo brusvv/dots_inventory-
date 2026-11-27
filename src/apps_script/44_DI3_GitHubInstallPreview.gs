@@ -125,7 +125,10 @@ function di3PrepareGitHubInstallPreview() {
     try { SpreadsheetApp.getUi().alert("GitHub · подготовка обновления", noRelease.message, SpreadsheetApp.getUi().ButtonSet.OK); } catch (ignoreNoRelease) {}
     return noRelease;
   }
-  var project = di3GetAppsScriptProjectContent_(), downloaded = [], totalBytes = 0;
+  var project = di3GetAppsScriptProjectContent_();
+  var compatibility = di3GetGitHubInstallCompatibilityReport_(releaseResult.manifest, project.content.files);
+  if (compatibility.status !== "READY") throw new Error("Установка GitHub-релиза заблокирована проверкой совместимости:\\n• " + compatibility.issues.join("\\n• "));
+  var downloaded = [], totalBytes = 0;
   releaseResult.manifest.files.forEach(function (file) {
     var result = di3FetchPinnedGitHubSource_(file);
     totalBytes += result.size_bytes;
@@ -134,6 +137,7 @@ function di3PrepareGitHubInstallPreview() {
   });
   var preview = di3BuildGitHubInstallPreview_(releaseResult.manifest, project.content.files, downloaded);
   preview.release = releaseResult.release; preview.project_id = project.script_id; preview.downloaded_bytes = totalBytes;
+  preview.compatibility = compatibility;
   preview.source_project_fingerprint = di3AppsScriptFilesFingerprint_(project.content.files);
   var lines = [
     "Канал: " + (preview.release_channel === "preview" ? "PREVIEW" : "STABLE") + (preview.source_branch ? " · ветка: " + preview.source_branch : ""),
