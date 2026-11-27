@@ -16,8 +16,8 @@ function di3AppsScriptFilesFingerprint_(files) {
       throw new Error("Fingerprint остановлен: файл Apps Script имеет неполные поля.");
     }
     var name = String(file.name), type = String(file.type);
-    var key = type + "|" + name.toLowerCase();
-    if (seen[key]) throw new Error("Fingerprint остановлен: дублирующийся файл " + name + " (" + type + ").");
+    var key = name.toLowerCase();
+    if (seen[key]) throw new Error("Fingerprint остановлен: дублирующееся имя файла между типами " + name + ".");
     seen[key] = true;
     return { name: name, type: type, source: file.source };
   });
