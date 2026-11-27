@@ -69,6 +69,46 @@
 
 **Статус R0: PARTIAL.** Runtime Dry Run, основные проверки Installation Diagnostics и геометрия Dashboard подтверждены. Grid sizing принят как PASS по фактической геометрии; единственный первоначальный ERROR классифицирован как ложноположительный результат старого расчёта. Осталось проверить `appsscript.json`, OAuth scopes, deployments, Script Properties, project file fingerprint и Drive backup metadata/content. Исправленный source-код диагностики не установлен в Dots beta 4; live workbook не изменялся.
 
+
+### Проверка Backup и fingerprint установленного Apps Script — 28.11.2026
+
+Пользователь запустил read-only аудит через Apps Script API и Google Drive.
+
+**Bootstrap backup подтверждён:**
+- В Drive найден ровно один файл `DotsInventory_AppsScript_Source_20261126231507_BOOTSTRAP.json`, размер 30 496 bytes.
+- JSON читается; payload SHA-256 и SHA-256/размеры обоих вложенных файлов совпали.
+- Script ID и Spreadsheet ID совпадают с целевым тестовым проектом.
+- Drive description содержит `DI3_APPS_SCRIPT_SOURCE_BACKUP_V1`, status `VERIFIED`.
+- Важно: backup содержит только pre-install `appsscript.json` и `DI3_GitHubBootstrap`, а не 47 установленных модулей и не Script Properties.
+
+**Состав Apps Script проекта:**
+- Всего 58 файлов, включая manifest; 56 SERVER_JS с учётом Bootstrap.
+- 47 ожидаемых штатных модулей найдены.
+- 9 дополнительных файлов пользователь попросил исключить из текущего аудита; не анализировать и не удалять без отдельного запроса.
+- Runtime fingerprint всего проекта: `db44788e59b6186595a123b6b623b9cdc2de621e178cff58b202b076584b87d8`. Он включает дополнительные файлы и не является fingerprint только 47 модулей.
+
+**Сверка 47 модулей с Bootstrap commit `39ae1b1af9753a31ab3c92175d5fe6d33ef92f16`:**
+- 44/47 модулей совпали побайтно по Git blob SHA-1 и размеру.
+- Три различия: `11_DI3_SupplyDomain`, `19_DI3_WarehouseViews`, `35_DI3_HistoricalSupplyTests`.
+- Missing = 0; GitHub download errors = 0.
+- Предварительные фрагменты показывают в SupplyDomain дополнительную очистку validations перед восстановлением дат, а в HistoricalSupplyTests — дополнительную проверку вызова locked worker ровно один раз. Но полный diff пока не получен: последний присланный журнал снова содержит label `DI3_THREE_FILE_DIFF_SUMMARY`, а не `DI3_MISMATCH_DETAILS`. Поэтому эти изменения не классифицировать как окончательно принятые и не перезаписывать.
+- `19_DI3_WarehouseViews` требует отдельного полного сравнения; по одному совпадающему префиксу безопасность изменения не определяется.
+
+**Повторяемая проверка добавлена в GitHub:**
+- `runtime/probes/DI3_APPS_SCRIPT_SOURCE_AUDIT_PROBE.gs` — read-only экспорт компактного runtime snapshot: имена, Git blob SHA-1, размеры, метаданные и проверки backup; исходный код и секреты не экспортируются.
+- `tools/audit_apps_script_snapshot.js` — локальное сравнение runtime snapshot с checkout `src/apps_script`; дополнительные файлы отображаются как `extra_ignored`, не ломая сравнение.
+- `tools/tests/audit_apps_script_snapshot.test.js` — 6 unit tests: Git blob SHA-1, exact match, ignored extras, missing modules, content/size mismatch, invalid backup и format handling.
+- `docs/INSTALLED_APPS_SCRIPT_AUDIT.md` — инструкция по запуску.
+- Tests включены в Apps Script quality gates и Release pipeline checks. Installation package workflow исправлен для копирования вложенной папки `tools/tests`.
+
+CI на commit `ce1a0b86ea791e2b70296990a6c0c37c41665688`:
+- Apps Script quality gates #46080600097 — SUCCESS; snapshot auditor 6/6, syntax 55 .gs files, regression suites прошли.
+- Release pipeline checks #46080600138 — SUCCESS.
+- Package build #46080600028 — SUCCESS.
+- CI проверяет сам audit tool, но не имеет доступа к приватному live Apps Script проекту; runtime snapshot нужно экспортировать отдельно.
+
+**Следующий шаг:** добавить временный probe из `runtime/probes/DI3_APPS_SCRIPT_SOURCE_AUDIT_PROBE.gs` в тестовый bound project, запустить `di3AuditExportRuntimeSourceSnapshot()`, сохранить JSON из Execution log локально и выполнить `node tools/audit_apps_script_snapshot.js --snapshot runtime-snapshot.json` из checkout этой ветки. Затем отдельно получить корректный `DI3_MISMATCH_DETAILS` для трёх отличающихся модулей. Никаких установок, восстановлений или изменений данных не выполнять.
+
 ### Следующее безопасное действие в Dots beta 4
 
 В Apps Script editor получить оба отчёта без записи в бизнес-таблицы. Чтобы вернуть значения в Execution log, временно добавить helper в тестовый проект, запустить и затем удалить его:
