@@ -593,6 +593,7 @@ function configureRollbackHarness(answer, outcome) {
     if (outcome === "concurrent-change" && readCount >= 2) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function concurrentEdit() {}\\n"), currentFiles[1]] } };
     if (outcome === "readback-unavailable" && readCount >= 3) throw new Error("rollback read-back unavailable");
     if (outcome === "readback-mismatch" && readCount >= 3) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function wrong() {}\n"), currentFiles[1]] } };
+    if (readCount >= 3) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function old() {}\n"), installFile("appsscript", "JSON", '{"timeZone":"Europe/Moscow"}')] } };
     return baseline;
   };
   context.di3ReadVerifiedRollbackBackup_ = () => {
