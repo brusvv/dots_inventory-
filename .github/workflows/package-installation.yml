@@ -48,7 +48,7 @@ jobs:
           DOTS INVENTORY v4 — ПАКЕТ ИСХОДНИКОВ ДЛЯ УСТАНОВКИ
           
           Состав:
-          - Apps_Script/ — все .gs модули текущей ветки clean-final-baseline.
+          - Apps_Script/ — все .gs модули текущей ветки feature/github-preview-releases.
           - Runtime_Probes/ — временные диагностические/приёмочные пробы. НЕ загружать как штатные модули приложения и не запускать на рабочей таблице.
           - Documentation/ — инструкция, индекс модулей, runtime-пробы и актуальный roadmap.
           - QA_Tools/ — локальные проверки и Node regression runners.
