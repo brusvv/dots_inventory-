@@ -5,10 +5,9 @@
 ## 1. Текущая точка GitHub
 
 - Рабочая ветка: `feature/github-preview-releases`.
-- Последний commit ветки после обновления этого плана: `5940bc52cd11a5cebdf8ad1bc785e13551cb4b59` (документация).
+- План обновлён непосредственно в рабочей ветке; точный актуальный HEAD следует смотреть в GitHub, поскольку последующие правки самого плана создают новые documentation commits.
 - Последний проверенный code/package HEAD: `f4b294eae28da6fdb8c1718ee032c938415cbaf6`.
 - PR #7 — [D-02: Stable and feature-branch Preview release channels](https://github.com/brusvv/dots_inventory-/pull/7), Draft, открыт, не объединён; base: `feature/github-runtime-acceptance`.
-- Сравнение веток: Preview branch ahead 89 / behind 0 относительно `feature/github-runtime-acceptance` на момент проверки.
 - PR #8 — [D-08: Browser-only GitHub first-install bootstrap](https://github.com/brusvv/dots_inventory-/pull/8) — отдельная работа по первоначальной загрузке через браузер; не считать частью уже принятого D-07.
 - PR #1 — N-03 clean final schema baseline; остаётся отдельным незавершённым review/merge item. PR #2–#6 формируют предшествующую цепочку release/runtime acceptance. PR #9 закрыт по просьбе автора и не является активной веткой работы.
 - Не создано ни одного release tag или опубликованного GitHub Release. PR #7 не объединён. Stable/Preview runtime flow ещё не запускался.
