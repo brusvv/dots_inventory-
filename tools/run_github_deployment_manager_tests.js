@@ -580,7 +580,8 @@ function configureRollbackHarness(answer, outcome) {
   const oldProject = { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function old() {}\n"), installFile("appsscript", "JSON", '{"timeZone":"UTC"}')] } };
   const selectedEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(oldProject) + ", 'sheet-123', '2026-11-27T00:00:00.000Z')", context);
   const currentEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(baseline) + ", 'sheet-123', '2026-11-28T00:00:00.000Z')", context);
-  let readCount = 0, updateCalls = 0, alerts = [];
+  let readCount = 0, updateCalls = 0, alerts = [], selectedBackupReadCount = 0,
+    selectedBackupMode = "normal";
   context.SpreadsheetApp = { getUi: () => ({
     Button: { OK: "OK", CANCEL: "CANCEL", YES: "YES", NO: "NO" },
     ButtonSet: { OK_CANCEL: "OK_CANCEL", YES_NO: "YES_NO", OK: "OK" },
