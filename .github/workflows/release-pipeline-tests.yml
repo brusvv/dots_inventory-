@@ -49,6 +49,8 @@ jobs:
         run: bash -n tools/validate_release_tag.sh && bash -n tools/test_release_tag_policy.sh && bash tools/test_release_tag_policy.sh
       - name: Validate all Apps Script modules
         run: bash tools/check_syntax.sh
+      - name: Installed Apps Script snapshot auditor tests
+        run: node --test tools/tests/audit_apps_script_snapshot.test.js
       - name: Existing source regression suites (run independently and aggregate failures)
         shell: bash
         run: |
