@@ -1,3 +1,55 @@
+# Актуальное обновление плана — 28.11.2026
+
+> Этот блок — самая свежая запись и имеет приоритет над более ранними статусами ниже. Полный исполняемый чек-лист вынесен в [RC9_WORK_PLAN_CHECKLIST.md](./RC9_WORK_PLAN_CHECKLIST.md).
+
+## Текущая точка GitHub
+
+- Рабочая ветка: `feature/github-preview-releases`.
+- HEAD на момент обновления: `1e453927f60f6c4d3d8eb43fd8929f5496f248f6`.
+- Последние два коммита:
+  - `ad74660af06677fd3761e39e6d5135c7d8e73d57` — защита GitHub API и signed asset downloads от небезопасных redirect chains.
+  - `1e453927f60f6c4d3d8eb43fd8929f5496f248f6` — regression tests на fail-closed redirect handling.
+- Изменения только в исходниках updater и его Node test runner; live Apps Script, Google Sheets и Drive не затрагивались.
+- После этих двух коммитов CI ещё не подтверждён: доступные проверки статуса не вернули workflow result. Не считать новые тесты прошедшими до появления результата GitHub Actions.
+- PR #7 остаётся Draft и не объединён. Preview/Stable release, tags и production update не выполнялись.
+
+## Что изменилось в плане
+
+1. **N-02 runtime fault-injection отложен по просьбе владельца.** Не запускать сейчас; вернуться к нему после остальных доступных source-side работ.
+2. Продолжается статический аудит GitHub Release Pipeline: installer preview, полный набор файлов, preservation unmanaged files, отмена установки, uncertain update response, post-write verification и rollback.
+3. Security fix redirect handling уже внесён в ветку; остаётся подтвердить CI и продолжить аудит смежных границ.
+4. Следующий безопасный приоритет — закончить source audit и checklist/CI, затем подготовить read-only R0 evidence. Runtime/write acceptance остаётся отдельным согласуемым этапом.
+
+## Актуальные статусы направлений
+
+| Направление | Текущий статус | Следующее доказательство |
+|---|---|---|
+| R0 — Dots beta 4 inventory | PARTIAL | manifest/scopes, deployments, Script Properties (только имена/наличие), полный fingerprint и backup metadata |
+| N-03 — clean final schema v4 | Runtime pending | изолированный clean install, повторный запуск, interruption/recovery; destructive шаги только после отдельного подтверждения |
+| N-02 — FIFO recovery | DEFERRED BY USER | fault injection и retry/quarantine lifecycle; не запускать до возобновления |
+| Supply Workspace / UX | Partially accepted | оставшийся сценарий identity товара, UX-07–10 отказ через NO, статусы и полный lifecycle |
+| W — Warehouse Dashboard | Geometry PASS; visual/data acceptance pending | подтвердить диаграмму и W-1–W-10 в живой таблице |
+| F-01 — возвраты | Source ready; runtime pending | отправка A → другая складская операция → возврат A |
+| F-02 — исторические продажи | Source ready; runtime pending | business date, FIFO chronology, PeriodGuard и миграция только в disposable copy |
+| F-03–F-10, F-13–F-20 | Source status varies; runtime pending | см. отдельные пункты чек-листа; не считать source hardening runtime acceptance |
+| Commission / Finance | Source ready; runtime pending | BUYER/SELLER cases, финансовая сверка и Finance Dashboard |
+| Backup / Restore / Lock | Source implemented; runtime pending | Drive read-back, Restore-as-new, параллельные сессии, lock/fault tests |
+| D-01–D-06 updater | Source implemented; runtime pending | isolated Apps Script project: inspect, backup, preview, confirm install, verify, rollback |
+| D-07 release runtime acceptance | BLOCKED / NOT RUN | отдельный disposable Apps Script project + disposable workbook |
+| D-08 browser bootstrap | Separate PR / runtime pending | отдельная проверка первоначальной установки; не смешивать с D-07 |
+| Historical supplies import | NOT STARTED | закрыть недостающие источники/сверку, подготовить preview; не писать в склад напрямую |
+
+## Правила выполнения
+
+- Production RC8 и рабочая таблица не являются тестовым полигоном; тесты выполнять только на согласованной disposable/test copy.
+- Read-only проверки можно готовить и анализировать без отдельного разрешения, если они действительно не меняют проект или данные.
+- Clean Start, миграции, FIFO rebuild/replay, restore, приёмка поставок, заказы, ручные IN/OUT и любые операции записи требуют отдельного явного подтверждения.
+- Отмена D-05 установки оставляет только созданный source backup; проект не меняется. При `UPDATE_RESULT_UNCERTAIN` не повторять установку до read-only проверки текущего проекта.
+- Source/Node CI не является доказательством работы Apps Script runtime или Google Drive.
+- Не объединять PR, не создавать tags/releases, не публиковать Preview/Stable и не обновлять production без отдельного разрешения.
+
+---
+
 # Актуальный сводный план проекта и приёмки — 28.11.2026
 
 > Этот раздел — текущая точка отсчёта и имеет приоритет над датированными историческими записями ниже. Старые разделы сохранены как журнал решений и промежуточных результатов; их статусы не следует трактовать как актуальные без сверки с этим блоком.
