@@ -10,7 +10,7 @@ const hash = (x) => crypto.createHash("sha256").update(x).digest("hex");
 function fixture(fn) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dots-release-test-"));
   const sourceDir = path.join(root, "src"); fs.mkdirSync(sourceDir);
-  fs.writeFileSync(path.join(sourceDir, "00_DI3_AppConfig.gs"), 'var DI3_APP_CONFIG = { TIME_ZONE: "Europe/Helsinki" };');
+  fs.writeFileSync(path.join(sourceDir, "00_DI3_AppConfig.gs"), 'var DI3_APP_CONFIG = { TIME_ZONE: "Europe/Moscow" };');
   fs.writeFileSync(path.join(sourceDir, "33_DI3_SchemaVersioning.gs"), "var DI3_SCHEMA_VERSION = 4;");
   fs.writeFileSync(path.join(sourceDir, "01_Module.gs"), "function alpha() { return 1; }\n");
   fs.writeFileSync(path.join(sourceDir, "02_Module.gs"), "function beta() { return 2; }\n");
@@ -24,7 +24,8 @@ fixture(({ sourceDir }) => {
     const a = buildManifest({ ...base, sourceDir }), b = buildManifest({ ...base, sourceDir });
     assert.deepEqual(a, b); assert.equal(a.format, "dots-inventory-release/v1"); assert.equal(a.target_schema_version, 4);
     assert.equal(a.release_channel, "stable"); assert.equal(a.source_branch, "main");
-    assert.equal(a.application_time_zone, "Europe/Helsinki"); assert.equal(a.manifest_policy, "PRESERVE_TARGET_PROJECT_MANIFEST");
+    assert.equal(a.application_time_zone, "Europe/Moscow");
+    assert.equal(a.minimum_updater_version, "0.2.0"); assert.equal(a.manifest_policy, "PRESERVE_TARGET_PROJECT_MANIFEST");
     assert.equal(a.files.length, 4); assert.ok(a.files.every((f) => f.raw_url.includes(base.commit)));
   });
   test("SHA-256 matches exact source bytes", () => {
