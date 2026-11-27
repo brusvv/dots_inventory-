@@ -1052,3 +1052,14 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - Package build for `76cfd01`: PASS [run 46084373385](https://github.com/brusvv/dots_inventory-/actions/runs/46084373385).
 - Release Pipeline [run 46084373426](https://github.com/brusvv/dots_inventory-/actions/runs/46084373426) and Apps Script quality gates [run 46084373429](https://github.com/brusvv/dots_inventory-/actions/runs/46084373429) were still IN_PROGRESS at the time of this entry; do not mark CI accepted until both complete successfully.
 - Source/Node test only. No Apps Script project, Drive backup, spreadsheet or production workbook was changed. No N-02 runtime fault injection, migration, release publication or PR merge was performed.
+
+
+## 2026-11-28 — Rollback selected-backup revalidation follow-up
+
+- Added a post-confirmation second read of the selected rollback Drive backup. The second read validates file ID/name, VERIFIED description metadata (including file count and payload hash), Script ID, configured folder membership, envelope checksum and every source file hash. The restored target is rebuilt and its fingerprint must match the previewed target before the current project fingerprint guard and `projects.updateContent`.
+- Source commit: `0b8f3f30ff6375162748b57796438ab51b7a1c67`.
+- Initial regression-test commit `76cfd0140ce39c403a203251a76dac7740eed3dd` exposed a test-harness scoping error (ReferenceError: selectedBackupReadCount). Do not treat that test run as passed.
+- Harness fix commit: `05a84fbc290543fe1684e264c477d1a3c4fbd02a`. Two regression cases cover a successful second read and backup becoming unavailable after YES (zero update calls expected).
+- Package build for the initial test commit passed; Release Pipeline failed only in GitHub Deployment Manager runner due to that harness ReferenceError; Apps Script quality gates passed.
+- CI for the harness fix was still running at time of this note. Final acceptance requires Release Pipeline, Apps Script quality gates and Package build green for the same final source/test commit.
+- This is source/Node work only. No Apps Script runtime, Drive file, spreadsheet, production workbook, N-02 fault-injection, migration or release action was run.
