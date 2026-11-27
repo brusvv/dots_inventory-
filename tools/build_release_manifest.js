@@ -29,8 +29,8 @@ function buildManifest({ repository, commit, tag, sourceDir, channel, sourceBran
   const releaseChannel = String(channel || inferredChannel).toLowerCase();
   if (releaseChannel !== inferredChannel) throw new Error("Канал релиза не соответствует суффиксу Git-тега.");
   const branch = String(sourceBranch || "").trim();
-  if (releaseChannel === "preview" && (!branch || branch === "main" || branch === "master")) {
-    throw new Error("Для Preview требуется явно указать исходную feature/release ветку, отличную от main.");
+  if (releaseChannel === "preview" && !/^(feature|release|hotfix)\/[A-Za-z0-9._/-]+$/.test(branch)) {
+    throw new Error("Для Preview требуется исходная ветка feature/*, release/* или hotfix/*.");
   }
   if (releaseChannel === "stable" && branch && branch !== "main") {
     throw new Error("Stable-релиз должен собираться из main.");
