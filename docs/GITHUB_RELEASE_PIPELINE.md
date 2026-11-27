@@ -4,7 +4,7 @@
 
 This adds the release contract and GitHub Actions packaging. It does not install code into Apps Script and does not change any spreadsheet or deployment.
 
-The future in-project Deployment Manager will read a published manifest, fetch files from immutable commit URLs, verify SHA-256, preserve the target project's actual appsscript.json, back up current code, and require separate confirmation before updating.
+The in-project Deployment Manager reads a published manifest, fetches files from immutable commit URLs, verifies SHA-256, preserves the target project's actual appsscript.json, backs up current code, and requires separate confirmation before updating.
 
 ## Release contract: dots-inventory-release/v1
 
@@ -61,11 +61,20 @@ The deployment manager rejects a manifest whose channel does not match the confi
 
 Preview is intended for a disposable restored spreadsheet and a separate Apps Script Script ID. Do not install it into the production workbook. Code installation does not run setup, schema migration, FIFO rebuild or stock operations.
 
+### Mandatory compatibility gates before installation
+
+Before downloading release source files or creating a Drive backup, the updater checks that:
+- the release `minimum_updater_version` is valid strict MAJOR.MINOR.PATCH and does not exceed the running updater version (`0.2.0`);
+- the workbook's `_AppMeta.schema_version`, the currently installed code's `DI3_SCHEMA_VERSION`, and the release `target_schema_version` are identical;
+- `DI3_APP_CONFIG.TIME_ZONE`, the actual target `appsscript.json` `timeZone`, `Session.getScriptTimeZone()`, the spreadsheet timezone, and the release `application_time_zone` are identical.
+
+The schema/timezone check is read-only and is repeated immediately before `projects.updateContent`. Any missing value or mismatch blocks installation. The updater never migrates schema or changes timezone settings. Align timezone settings deliberately before installing; do not rewrite existing dates or timestamps as part of this operation.
+
 No tag or release is created by this implementation.
 ## Safety contract
 
 - URLs are pinned to a full Git commit, never main or a moving branch.
-- Future updater must validate manifest format, tag, file names/count, byte lengths, SHA-256, schema compatibility and updater version before any write.
+- The updater validates manifest format, tag, file names/count, byte lengths, SHA-256, minimum updater version, schema compatibility and timezone compatibility before any write.
 - Apps Script API projects.updateContent replaces ALL project files. The updater must first call projects.getContent, preserve the actual appsscript manifest and explicitly unmanaged files, then construct the complete replacement set. Missing/unexpected files fail closed.
 - The repository intentionally has no .clasp.json or appsscript.json. No Script ID or manifest is fabricated.
 - Code update does not run setup, schema migration or FIFO rebuild. Code rollback is not a data rollback.
@@ -112,7 +121,7 @@ The source backup includes every file returned by `projects.getContent` (SERVER_
 - D-04 creates a Drive file only; it never calls `projects.updateContent`.
 - No schema migration, setup, FIFO rebuild, restore or stock operation is triggered.
 - The actual target `appsscript.json` is included in the source snapshot and is never synthesized by this repository.
-- No release installation or code rollback is implemented in this stage.
+- D-05 confirmed installation and D-06 code rollback are implemented in source; live Apps Script runtime acceptance remains pending.
 
 
 ## D-05 staged phase — read-only installation preview
@@ -127,7 +136,7 @@ The first D-05 increment adds **Система → GitHub и обновлени�
 - Fails closed on missing/duplicate manifest, duplicate project file identity, missing source, hash/size mismatch, file-type name collision or unexpected file set.
 - Reports zero deletions and performs no Drive writes or Apps Script project writes.
 
-**Hard boundary:** preview only. It does not call projects.updateContent, save a pending install payload, migrate schema, run setup, rebuild FIFO or alter spreadsheet data. Confirmed install and post-write verification remain unimplemented and require separate review and runtime acceptance.
+**Hard boundary:** preview only. It does not call projects.updateContent, save a pending install payload, migrate schema, run setup, rebuild FIFO or alter spreadsheet data. The read-only preview is followed by the separately implemented confirmed installer described below; live Apps Script runtime acceptance is still required.
 
 Validation on PR #4: CI [45882939657](https://github.com/brusvv/dots_inventory-/actions/runs/45882939657) passed — 52/52 Apps Script syntax files, 151/151 existing regressions, 9/9 release-manifest tests and 16/16 deployment-manager tests (176/176 automated tests). This is source/Node CI, not Apps Script runtime acceptance.
 
