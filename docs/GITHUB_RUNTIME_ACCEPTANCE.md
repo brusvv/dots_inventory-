@@ -62,6 +62,8 @@
 ## 2. Протокол исходного состояния
 
 Перед первым запуском заполнить:
+
+Перед любым D-05 install отдельно проверить, что `DI3_APP_CONFIG.TIME_ZONE`, фактический `appsscript.json.timeZone`, `Session.getScriptTimeZone()`, часовой пояс Google Sheets и `application_time_zone` релиза совпадают с утверждённым `Europe/Moscow`. `_AppMeta.schema_version`, `DI3_SCHEMA_VERSION` текущего кода и `target_schema_version` релиза также должны совпадать. При любом несовпадении остановиться: updater не меняет timezone, не переписывает даты и не выполняет миграции схемы.
 - дата/время и часовой пояс;
 - spreadsheet ID;
 - Apps Script Script ID;
