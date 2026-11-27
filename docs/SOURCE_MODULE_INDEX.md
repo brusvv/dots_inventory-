@@ -1,6 +1,6 @@
 # Apps Script source inventory
 
-The base `.gs` modules came from the supplied `40.rar`. The current working tree contains 43 Apps Script modules (39 base modules + UX regression modules 39–41 + Finance schema test module 42), 7 runtime probes and source patches UX-01–UX-10, commission payer/schema v3, F-01 and static hardening F-03/F-04/F-05/F-09/F-11/F-13/F-15/F-16/F-18. Consult the patch logs for exact scopes and runtime limitations. Numeric gap `06` is present in the source naming sequence; no module `06_*.gs` was included in this upload. This repository does not infer whether that gap is intentional.
+The base `.gs` modules came from the supplied `40.rar`. The current working tree contains 45 Apps Script modules (39 base modules + UX regression modules 39–41 + Finance schema test module 42 + historical batch staging modules 43–44), 7 runtime probes and source patches UX-01–UX-10, commission payer/schema v3, F-01 and static hardening F-03/F-04/F-05/F-09/F-11/F-13/F-15/F-16/F-18. Consult the patch logs for exact scopes and runtime limitations. Numeric gap `06` is present in the source naming sequence; no module `06_*.gs` was included in this upload. This repository does not infer whether that gap is intentional.
 
 | Module | Role inferred from module name/content |
 |---|---|
@@ -46,6 +46,6 @@ The base `.gs` modules came from the supplied `40.rar`. The current working tree
 | `39_DI3_SupplyWorkspaceUxTests.gs` | UX-01–UX-03 regression tests for Supply Workspace and FIFO menu safety |
 | `40_DI3_CatalogOrderUxTests.gs` | UX-04–UX-06 regression tests for Catalog, Order and navigation |
 | `41_DI3_SystemSafetyUxTests.gs` | UX-07–UX-10 regression tests for confirmations before batch recovery, Money/FIFO migration, period reopening and manual warehouse movement; extended for payload guard and backup flush checks |
-| `42_DI3_FinanceSchemaTests.gs` | Four local tests for Finance Dashboard schema-name column mapping and the removal of hard-coded source-table indexes |
+| `42_DI3_FinanceSchemaTests.gs` | Four local tests for Finance Dashboard schema-name column mapping and the removal of hard-coded source-table indexes |\n| `43_DI3_HistoricalSupplyBatchImport.gs` | Read-only historical supply batch staging, source reconciliation and fail-closed import guard; no direct stock/FIFO writes |\n| `44_DI3_HistoricalSupplyBatchImportTests.gs` | Source-only tests for the historical batch import register and blocking conditions |
 
 Additional local tools: `tools/run_finance_schema_tests.js` runs the Finance schema suite. `tools/run_order_domain_tests.js`, `tools/run_supply_workspace_ux_tests.js`, `tools/run_system_safety_ux_tests.js`, `tools/run_catalog_order_ux_tests.js` and `tools/run_warehouse_dashboard_tests.js` are source-only regression runners.
