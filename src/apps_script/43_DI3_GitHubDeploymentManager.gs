@@ -135,8 +135,10 @@ function di3FetchGitHubResponse_(url, accept, followRedirects) {
   if (accept) headers.Accept = accept;
   var response;
   try {
+    // GitHub API endpoints should not redirect. Fail closed rather than
+    // forwarding an Authorization header to a redirect target.
     response = UrlFetchApp.fetch(url, { method: "get", headers: headers, muteHttpExceptions: true,
-      followRedirects: followRedirects !== false });
+      followRedirects: false });
   } catch (error) {
     throw new Error("Не удалось обратиться к GitHub. Проверь доступ к сети и разрешение script.external_request. " +
       (error && error.message ? error.message : String(error)));
@@ -242,21 +244,45 @@ function di3FetchGitHubAsset_(asset, expectedName) {
   if (!di3IsSafeGitHubAssetRedirect_(location)) {
     throw new Error("GitHub asset " + expectedName + " перенаправляет на недоверенный адрес; загрузка остановлена.");
   }
-  // The signed asset URL is fetched without the GitHub token to avoid forwarding
-  // repository credentials to a redirect host.
-  var redirected;
-  try {
-    redirected = UrlFetchApp.fetch(location, {
-      method: "get", headers: { Accept: "application/octet-stream" },
-      muteHttpExceptions: true, followRedirects: true
+  // Fetch signed asset URLs without credentials and validate every redirect
+  // hop. A trusted first host must not be allowed to redirect to an arbitrary host.
+  var currentUrl = location;
+  var maxRedirects = 5;
+  for (var hop = 0; hop <= maxRedirects; hop++) {
+    if (!di3IsSafeGitHubAssetRedirect_(currentUrl)) {
+      throw new Error("GitHub asset " + expectedName + " перенаправляет на недоверенный адрес; загрузка остановлена.");
+    }
+    var redirected;
+    try {
+      redirected = UrlFetchApp.fetch(currentUrl, {
+        method: "get", headers: { Accept: "application/octet-stream" },
+        muteHttpExceptions: true, followRedirects: false
+      });
+    } catch (error) {
+      throw new Error("Не удалось скачать GitHub asset после безопасного перенаправления: " +
+        (error && error.message ? error.message : String(error)));
+    }
+    var redirectedCode = Number(redirected.getResponseCode());
+    if (redirectedCode === 200) return String(redirected.getContentText() || "");
+    if ([301, 302, 303, 307, 308].indexOf(redirectedCode) === -1) {
+      throw new Error("GitHub asset " + expectedName + " вернул HTTP " + redirectedCode + " после перенаправления.");
+    }
+    if (hop === maxRedirects) throw new Error("GitHub asset " + expectedName + " превысил лимит перенаправлений.");
+    var redirectHeaders = redirected.getAllHeaders ? redirected.getAllHeaders() : {};
+    var nextUrl = "";
+    Object.keys(redirectHeaders || {}).some(function (key) {
+      if (String(key).toLowerCase() === "location") {
+        nextUrl = String(redirectHeaders[key] || "");
+        return true;
+      }
+      return false;
     });
-  } catch (error) {
-    throw new Error("Не удалось скачать GitHub asset после безопасного перенаправления: " +
-      (error && error.message ? error.message : String(error)));
+    if (!nextUrl || !di3IsSafeGitHubAssetRedirect_(nextUrl)) {
+      throw new Error("GitHub asset " + expectedName + " перенаправляет на недоверенный адрес; загрузка остановлена.");
+    }
+    currentUrl = nextUrl;
   }
-  var redirectedCode = Number(redirected.getResponseCode());
-  if (redirectedCode !== 200) throw new Error("GitHub asset " + expectedName + " вернул HTTP " + redirectedCode + " после перенаправления.");
-  return String(redirected.getContentText() || "");
+  throw new Error("GitHub asset " + expectedName + " остановлен: недостижимое состояние загрузчика.");
 }
 
 function di3GetLatestGitHubReleaseManifest_() {
