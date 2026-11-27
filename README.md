@@ -26,7 +26,7 @@ The uploaded RAR contained Apps Script source modules and runtime probes only. I
 - a complete Node regression harness or package manifest;
 - the earlier project documentation and full original repository history.
 
-These files were not fabricated. Before deployment, recover the actual `appsscript.json` and `.clasp.json` from the bound Apps Script project or the previous authoritative repository. The source config currently declares `DI3_APP_CONFIG.TIME_ZONE = "Europe/Helsinki"`; verify that the manifest `timeZone` and spreadsheet timezone match it.
+These files were not fabricated. Before deployment, recover the actual `appsscript.json` and `.clasp.json` from the bound Apps Script project or the previous authoritative repository. The source config currently declares `DI3_APP_CONFIG.TIME_ZONE = "Europe/Helsinki"`; verify that the actual manifest `timeZone` and spreadsheet timezone are also `Europe/Moscow`; the release updater blocks on any mismatch and does not change these settings.
 
 ## Quick checks
 
