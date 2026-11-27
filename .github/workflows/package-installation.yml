@@ -14,6 +14,19 @@ on:
       - "README.md"
       - "tools/**"
       - ".github/workflows/package-installation.yml"
+  pull_request:
+    branches:
+      - feature/github-runtime-acceptance
+    paths:
+      - "src/apps_script/**"
+      - "runtime/probes/**"
+      - "docs/INSTALLATION_AND_RUNTIME_ACCEPTANCE.md"
+      - "docs/RUNTIME_PROBES.md"
+      - "docs/SOURCE_MODULE_INDEX.md"
+      - "docs/ROADMAP_AND_STATUS.md"
+      - "README.md"
+      - "tools/**"
+      - ".github/workflows/package-installation.yml"
   workflow_dispatch:
 
 permissions:
