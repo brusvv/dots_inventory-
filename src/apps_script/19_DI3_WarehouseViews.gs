@@ -15,7 +15,7 @@ var DI3_WAREHOUSE_VALUE_CHART_HELPER_START_COLUMN = 14;
  * sorted by inventory value descending, and capped at the configured Top-N size.
  * This avoids non-contiguous chart ranges that can misalign labels and values in Sheets.
  */
-function di3BuildWarehouseValueChartData_(rows, maxItems) {
+function di3BuildWarehouseValueChartDataV2_(rows, maxItems) {
   var limit = Math.max(1, Math.min(50, Math.floor(Number(maxItems) || DI3_WAREHOUSE_VALUE_CHART_MAX_PRODUCTS)));
   return (rows || []).filter(function (row) {
     if (!row || row.length < 11) return false;
@@ -238,7 +238,7 @@ function di3RefreshWarehouseDashboard() {
   // This deliberately avoids separate non-adjacent ranges (B and G), which can cause
   // Google Sheets to associate category labels with the wrong series rows.
   sheet.getCharts().forEach(function (chart) { sheet.removeChart(chart); });
-  var chartPairs = di3BuildWarehouseValueChartData_(rows, DI3_WAREHOUSE_VALUE_CHART_MAX_PRODUCTS);
+  var chartPairs = di3BuildWarehouseValueChartDataV2_(rows, DI3_WAREHOUSE_VALUE_CHART_MAX_PRODUCTS);
   var chartRow = Math.max(15, start + rows.length + 2);
   var helperColumn = DI3_WAREHOUSE_VALUE_CHART_HELPER_START_COLUMN;
   if (sheet.getMaxColumns() >= helperColumn + 1) {
@@ -257,7 +257,6 @@ function di3RefreshWarehouseDashboard() {
     // addRange()/setNumHeaders()/setHiddenDimensionStrategy() return the base
     // EmbeddedChartBuilder, which does not expose reverseCategories().
     var chartBuilder = sheet.newChart().asBarChart();
-    chartBuilder.reverseCategories();
     var chart = chartBuilder
       .addRange(sheet.getRange(1, helperColumn, chartMatrix.length, 2))
       // One header row; for a two-column range the first text column is the domain.
@@ -267,9 +266,10 @@ function di3RefreshWarehouseDashboard() {
       .setPosition(chartRow, 1, 0, 0)
       .setOption("title", "Топ-20 товаров по стоимости оценённых остатков")
       .setOption("legend", { position: "none" })
-      .setOption("width", 980)
+      .setOption("width", 1120)
       .setOption("height", chartHeight)
-      .setOption("chartArea", { left: 285, top: 42, width: "68%", height: "82%" })
+      // Reserve a little more horizontal room for long product labels; avoid width/height overrides.
+      .setOption("chartArea", { left: 380 })
       .setOption("hAxis", { title: "Стоимость, ₽", minValue: 0, format: "#,##0" })
       .build();
     sheet.insertChart(chart);
