@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-28  
 Working branch: `feature/github-preview-releases`  
-Branch HEAD at update: `5302163d88e657444c2c7e18377260d68ecb95d3`
+Branch HEAD at update: `27d56ec7ebde6776851ed1ccedf1cab3f8544ec2`
 
 > This is the execution checklist. Mark an item `[x]` only when the stated evidence exists. `[ ]` means not done or not evidenced; `[~]` means partially completed; `[!]` means blocked/deferred. Source implementation, CI, and live Google Apps Script acceptance are separate evidence classes.
 
@@ -254,4 +254,5 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 | 2026-11-28 | GitHub source branch | 1e5fa418 | GitHub + Google API redirect hardening; 40 deployment-manager tests, quality gates and package build passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46082609384), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46082609396), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46082609330) |
 | 2026-11-28 | GitHub source branch | 3c7d67c8 | Cross-type duplicate identity hardening; installer cancel/uncertain-write/post-write read-back regression tests; 47 deployment-manager tests passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083590635), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083590632), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083590656) |
 | 2026-11-28 | GitHub source branch | 5302163d | Added rollback cancel/uncertain-write/read-back failure regression tests; 51 deployment-manager tests passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083678406), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083678413), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083678340) |
+| 2026-11-28 | GitHub source branch | 27d56ec7 | Added installer and rollback final fingerprint/concurrency guard tests; 53 deployment-manager tests passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083741968), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083742016), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083741941) |
 
