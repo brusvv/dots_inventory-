@@ -1,52 +1,156 @@
-## D-07 runtime acceptance — runbook prepared, execution blocked — 26.11.2026
+# Dots Inventory — актуальный Roadmap и статус работ
+Дата актуализации: 27.11.2026
+Рабочий поток установки: `feature/github-browser-bootstrap`; PR #8 открыт, Draft, не слит.
+Целевая чистая схема: v4. Часовой пояс приложения и Apps Script manifest: `Europe/Moscow`.
+Рабочая RC8-таблица, production deployment и `main` не изменялись.
 
-- Added [docs/GITHUB_RUNTIME_ACCEPTANCE.md](GITHUB_RUNTIME_ACCEPTANCE.md) with isolated-test-project prerequisites, D-03/D-04/D-05/D-06 happy path, negative/fault-injection scenarios, PASS/FAIL criteria and an evidence log template.
-- The runbook explicitly requires a restored disposable Google Sheets copy and a separate bound Apps Script Script ID. Production RC8 and `main` remain out of scope.
-- Current repository state has no published GitHub Releases, and PR #2–#5 remain unmerged. D-07 cannot execute its release-backed happy path until the release chain is separately reviewed/merged and an annotated stable tag is intentionally published.
-- D-07 status remains **BLOCKED / NOT RUN**. Documentation is not runtime acceptance and does not change that gate.
+## 1. Актуальное состояние ветки и PR #8
+
+PR [#8 — D-08: Browser-only GitHub first-install bootstrap](https://github.com/brusvv/dots_inventory-/pull/8):
+- State: OPEN; Draft; not merged; base `feature/github-preview-releases`.
+- Current PR head: `dbc204a9e56fdcb6b5f800bbfa771869705fa82f`.
+- The Bootstrap is pinned to immutable source commit `39ae1b1af9753a31ab3c92175d5fe6d33ef92f16`.
+- PR description still mentions the older pin `2631969aa256fbf077e9f5356f35d45a9f647a76`; this documentation mismatch must be corrected before review/merge.
+- Last observed workflow run for PR head: [45903472605](https://github.com/brusvv/dots_inventory-/actions/runs/45903472605), completed successfully. Job `release-contract`: all steps successful.
+- Static checks in PR description/source: Apps Script syntax 55/55 (47 app modules + 7 runtime probes + 1 Bootstrap); Bootstrap safety policy 7/7; release manifest 13/13; Stable/Preview tag policy passed; deployment-manager tests 27/27. Existing regression suites also passed in the workflow.
+- These are source/CI checks only. They do not prove Apps Script API authorization, Drive backup behavior, or live Google Sheets installation.
+
+## 2. D-08 — browser-only first installation
+
+**Source implementation present; live runtime acceptance NOT RUN.**
+
+The initial installation no longer requires local `clasp`, Git clone, Node.js or a local source checkout. It does require a one-time manual bootstrap action: create a new spreadsheet-bound test Apps Script project, expose/edit `appsscript.json`, add the Bootstrap file from GitHub, configure OAuth scopes and enable Apps Script API.
+
+Bootstrap behavior implemented in `bootstrap/DI3_GitHubBootstrap.gs`:
+- fixed repository `brusvv/dots_inventory-` and immutable source commit pin;
+- resolve commit object and its tree SHA, reject mismatches/truncated tree;
+- enumerate exactly 47 `.gs` app modules under `src/apps_script/`;
+- download pinned raw source and verify Git blob SHA-1 and byte length for each file;
+- require a blank bound project containing only `appsscript.json`, Bootstrap and optionally empty `Code.gs`;
+- validate `Europe/Moscow` and required scopes;
+- create Drive source backup, read it back and verify envelope, file count, per-file SHA-256 and payload checksum;
+- display YES/NO confirmation;
+- re-read project before write to detect concurrent edits;
+- call Apps Script API `projects.updateContent`;
+- read full project back and report success only on exact fingerprint match;
+- does not run setup, migration, FIFO, trigger creation, deployment, imports or stock operations.
+
+**Safety boundary:** only a new disposable test project is allowed. It must not be pointed at the production RC8 Script ID. A failed or ambiguous post-write verification must be investigated using the saved backup; never blindly rerun the Bootstrap.
+
+Runbook: [docs/BROWSER_ONLY_BOOTSTRAP.md](BROWSER_ONLY_BOOTSTRAP.md).
+
+## 3. D-series installation and update plan
+
+| ID | Scope | Source status | Runtime / next gate |
+|---|---|---|---|
+| D-01 | Deterministic release manifest | Implemented | Review release contract |
+| D-02 | Stable/Preview annotated tag policy and release workflow | Implemented | Merge release chain only after review; deliberately publish Preview |
+| D-03 | In-project release check and comparison | Implemented | OAuth + GitHub release check in disposable Apps Script |
+| D-04 | Verified Apps Script source backup | Implemented | Drive create/read-back acceptance |
+| D-05 | Preview, explicit confirmation, full project write and post-write verification | Implemented | Test NO and YES paths in disposable project |
+| D-06 | Verified code rollback | Implemented | Test backup validation, current-manifest preservation and restore |
+| D-07 | Runtime acceptance for D-03–D-06 | Runbook prepared | NOT RUN; requires Preview release and isolated project |
+| D-08 | Browser-only initial bootstrap | Implemented in PR #8 | NOT RUN; test initial install, scopes, Drive backup, exact post-write fingerprint and abort path |
+
+### Recommended sequence
+
+1. Review/correct PR #8 pin metadata and merge dependencies only after explicit review and approval.
+2. Create a new disposable Google Sheet and bound Apps Script project with a separate Script ID.
+3. Set manifest `timeZone: Europe/Moscow`; preserve required project fields and configure all documented OAuth scopes without dropping existing necessary scopes.
+4. Enable Google Apps Script API in the linked Cloud project and complete consent/authorization.
+5. Copy the exact Bootstrap file once from the reviewed PR branch into `DI3_GitHubBootstrap.gs`; save it.
+6. Run `di3GitHubBootstrapInstall()`. Inspect execution log and dialog details. Do not approve YES until file count, commit, timezone, Script ID and verified Drive backup are correct.
+7. First run NO / cancel path, confirm no Apps Script project content write occurred (the verified backup may exist).
+8. Restore a clean disposable starting state if needed, run again and execute YES only on the dedicated test Script ID.
+9. Confirm `INSTALLED_AND_VERIFIED`; reload the Sheet; record project fingerprint, backup ID/URL/checksum, execution timestamp and Script ID.
+10. Only after D-08 passes, proceed with Preview release publication and D-03–D-06 update/rollback tests. No Stable tag/release before all release and runtime gates pass.
+
+### Local clasp fallback
+
+`clasp` remains an optional engineering fallback for source inspection or manual recovery, not the preferred installation path and not a user prerequisite. Do not instruct the user to install Node.js or clone the repository for the browser-only flow.
+
+## 4. Current installation instructions and timezone
+
+The authoritative first-install procedure is `docs/BROWSER_ONLY_BOOTSTRAP.md`. The older generic `INSTALLATION_AND_RUNTIME_ACCEPTANCE.md` now marks manual source replacement as fallback only.
+
+Canonical timezone is `Europe/Moscow` in:
+- `src/apps_script/00_DI3_AppConfig.gs`;
+- Bootstrap configuration;
+- target test project's `appsscript.json`.
+
+The current Bootstrap refuses to proceed if manifest timezone or required OAuth scopes are missing. Keep any existing necessary scopes; do not replace a manifest blindly with a minimal example.
+
+## 5. Broader Dots Inventory implementation status
+
+The underlying v4 clean-final source remains substantially implemented, but runtime acceptance is still outstanding.
+
+### Source implemented; runtime gate remains
+- **F-01:** return FIFO lookup uses original dispatch movement/allocation provenance; test dispatch A → unrelated later FIFO run → return A on a restored copy.
+- **F-02:** historical sales, business date, dispatch/completion timestamps and v3→v4 migration are in source; runtime migration and end-to-end chronology remain open.
+- **F-03–F-07, F-09–F-10, F-13–F-16, F-18, F-20:** source hardening recorded in dated sections below; runtime evidence is required. F-04 chunked payload storage is not included.
+- **N-02:** quarantine/retry/manual-resolution code exists; runtime fault injection and operator acceptance remain open.
+- **N-03:** clean v4 baseline, preflight, interrupted-start recovery and populated-workspace guard exist; clean setup/rerun/interruption and migration are runtime gates.
+- Commission payer logic and Finance schema mapping are source-implemented; real migrated-order settlement and Dashboard reconciliation remain open.
+
+### Still open / decisions required
+- **F-08:** restore cancelled supply — not closed.
+- **F-17 / C-14:** delivery-method catalogue and CRUD/order integration require the user's real list of methods; do not invent values.
+- **F-04:** chunked payload storage not implemented.
+- **C-03:** partial-return policy must be agreed before implementation.
+- **C-17:** permission/protection role model is needed before enabling protections.
+- Warehouse Dashboard chart still needs read-only diagnosis of N1:O21 and actual chart ranges in Google Sheets.
+
+## 6. Runtime acceptance remaining
+
+All checks below must use a restored/disposable copy with a separate Script ID. Source CI is not runtime evidence.
+
+1. D-08: browser bootstrap initial install, verified Drive backup, NO/YES paths and post-write fingerprint.
+2. D-03/D-04/D-05/D-06: Preview release check, backup, dry preview, cancellation, install and rollback.
+3. N-03: clean v4 setup, Dry Run, rerun, interruption/recovery; separately test v3→v4 migration with backup and PeriodGuard.
+4. Supply Workspace: full edit G6/G7, menus, dirty-form confirmation and no unintended stock/FIFO writes.
+5. F-01/F-02: return-after-later-FIFO-run; historical sale with correct business/dispatch/completion dates and FIFO ordering.
+6. Commission/Finance: buyer-paid vs seller-paid fee, discounts, profit, migrated orders and Finance Dashboard.
+7. Warehouse Dashboard: read-only diagnostic of N1:O21, chart ranges, refresh/rendering.
+8. N-02/F-06/C-04/C-05: quarantine/retry, archive integrity, fault injection, lost acknowledgements and recovery.
+9. C-06/F-14: two independent Apps Script execution sessions against ScriptLock.
+10. C-01/C-08/C-09/C-10/C-15/C-16: real performance, TextFinder, UNKNOWN/FREE, Money Core and finance reconciliation.
+11. C-07/C-11/C-12/C-13/C-14/C-17: installed triggers, preflight, timezone/settings, sheet order, delivery methods, visual/permissions.
+12. BM-01–BM-06: Restore-as-new, backup catalogue, schedules, retention, isolated restore and release runbooks.
+
+## 7. RC9 release gate
+
+RC9 is not ready until a disposable restored Google Sheets copy proves:
+- end-to-end Supply → Receipt → FIFO → Order → Dispatch → Return → Finance;
+- schema migration and PeriodGuard behavior;
+- backup and restore-as-new;
+- retry/recovery and idempotency;
+- ScriptLock concurrency;
+- Preview update and rollback;
+- clean install and repeated setup safety.
+
+No production RC8 migration or code deployment is authorized by this roadmap. Stable release, PR merges, destructive migration and production rollout require separate explicit approval.
+
+## 8. Deferred beyond RC9 unless reprioritized
+
+- `SUPPLY_CORRECTION`;
+- partial returns (until policy is agreed);
+- duplicate historical-supply detection;
+- cancelled-supply restoration;
+- selective document/ledger import-export;
+- expanded backup retention automation.
 
 ---
 
-## Consolidated status — 26.11.2026 (supersedes older point-in-time notes below)
+## 9. Maintenance protocol
 
-Working branch: `feature/clean-final-baseline`; PR #1 remains Draft and unmerged. Target clean schema: v4. Existing RC8 workbook/deployment and `main` are not modified.
+For every completed item record:
+1. branch/commit and files changed;
+2. source tests and CI run;
+3. runtime evidence in actual disposable Apps Script/Sheets;
+4. backup/recovery result;
+5. remaining risks and dependencies.
 
-### Latest verified source CI
-GitHub Actions run [45864704114](https://github.com/brusvv/dots_inventory-/actions/runs/45864704114), head `0257f3c9faef202bd8224e208e2adc1b5f83de9a`:
-- Apps Script syntax: 50/50 `.gs` files.
-- FIFO replay: 42/42.
-- Order Domain: 22/22.
-- Supply Workspace UX: 17/17.
-- Catalog/Order UX: 14/14.
-- System Safety UX: 39/39.
-- Warehouse Dashboard: 9/9.
-- Finance schema: 4/4.
-- Total: **151/151**.
-
-This is Node/source CI, not Google Apps Script runtime acceptance.
-
-### Source implementation status
-- **F-01:** fixed by selecting dispatch `CONSUME` allocations by original `dispatch_movement_id`; runtime return-after-later-FIFO-run scenario remains open.
-- **F-02:** historical-sale workflow, date-only `business_date`, explicit dispatch/completion date-time, v3→v4 migration and retry guards implemented in PR source; runtime migration and end-to-end historical sale remain open.
-- **F-03–F-07, F-09–F-10, F-13–F-16, F-18, F-20:** source hardening implemented as described in the dated sections below; runtime evidence remains outstanding. F-04 chunked payload storage is not included.
-- **F-08, F-17:** not closed. F-17 requires the user's real delivery-method catalogue; do not invent options.
-- **F-19:** pure-domain regression suite is executed by CI and passes 42/42. This does not replace Apps Script write-boundary fault injection.
-- **N-03:** clean v4 baseline, preflight, interrupted-start recovery and populated-workspace guard are implemented in source. Empty-workbook setup/rerun/interruption and v3→v4 migration remain runtime gates.
-- **N-02:** transient Sheets/service errors leave FIFO replay `PREPARED` for retry; immutable-input/integrity violations move it to `QUARANTINED`. Added `di3ResolveQuarantinedFifoReplay()` and a separate menu action. It verifies archived source fingerprints, requires explicit owner attestation and a detailed reason, appends immutable `MANUALLY_RESOLVED`, marks only the failed run as `MANUALLY_RESOLVED`, and requeues a linked quarantined operation into a new retry epoch. It does not edit StockLedger/StockLots/StockAllocations/FifoProductState or execute a stock operation. Source regression and diagnostics tests pass, including linked-operation requeue and damaged-archive fail-closed cases; runtime fault-injection and operator acceptance remain open.
-- **Warehouse Dashboard:** chart source and diagnostics are implemented, but the user-reported blank chart still needs read-only inspection of N1:O21 and actual chart ranges in Sheets.
-- **Commission/Finance:** buyer-vs-seller payer logic and Finance schema mapping are source-implemented; real migrated-order settlement and Finance Dashboard reconciliation remain open.
-
-### Remaining work that cannot be truthfully closed by source CI
-1. Restored-copy runtime acceptance: supply full edit/G6/G7/menu, F-01 return, historical sales, commission settlement, dashboard chart, PeriodGuard, same-day event order, manual IN/OUT, and all relevant UX confirmation-No paths.
-2. FIFO/OperationExecutor: N-02 quarantined replay resolution design and acceptance; F-06 write-boundary interruption and archive recovery; C-04/C-05 retries and lost acknowledgements; C-06 two-session ScriptLock.
-3. Runtime performance/finance: C-01 benchmarks, C-08 TextFinder, C-09 UNKNOWN/FREE, C-10 Money Core migration, C-15 commission reconciliation, C-16 Finance Dashboard.
-4. Setup/UX: C-11 preflight, C-12 settings/timezone, C-13 tab order, C-14 delivery methods, C-17 visual/protection review.
-5. Backup/release: BM-01 Restore-as-new and BM-02–BM-06 catalog/scheduling/retention/isolated restore/release runbooks.
-6. Decisions needed before implementation: actual delivery-method options for F-17/C-14; business policy for partial returns C-03; a role model before enabling sheet protections in C-17.
-7. Deferred beyond RC9 unless explicitly reprioritized: `SUPPLY_CORRECTION`, partial returns, duplicate historical-supply detection, cancelled-supply restoration, selective document/ledger import-export, expanded backup retention automation.
-
-### Release gate
-RC9 remains blocked until a restored disposable Google Sheets copy proves the end-to-end supply → receipt → FIFO → order → dispatch → return → finance flow, plus backup/restore, schema migration, recovery and concurrency. Do not merge PR #1 before those runtime gates pass.
+Never mark a task complete solely because static CI passes. Preserve the distinction between **source implemented**, **source tested**, and **runtime accepted**.
 
 ---
 
