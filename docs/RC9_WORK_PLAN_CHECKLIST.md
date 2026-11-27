@@ -29,6 +29,10 @@ Branch HEAD at update: `4f4508ada61e175670c80467e86ed3357663da36`
 
 ### 1.2 Continue static installer / rollback audit
 
+- [x] Re-open and fully revalidate the selected rollback backup after YES: file identity, name, metadata, Script ID, folder membership, envelope/hash, and target fingerprint are checked again immediately before update.
+- [x] Regression tests: selected backup is re-read after confirmation; if it becomes unavailable before write, rollback fails closed and makes zero `projects.updateContent` calls.
+- [~] CI for commit `76cfd0140ce39c403a203251a76dac7740eed3dd`: package build passed; Release Pipeline and Apps Script quality gates were still running when recorded. Await both results before accepting the source change.
+
 - [x] Source review + regression test: preview preserves exact target `appsscript.json`.
 - [x] Source review + regression test: preview preserves non-`SERVER_JS` files and unmanaged local `SERVER_JS` modules.
 - [x] Source review + regression test: Apps Script `SERVER_JS` name normalization verified.
@@ -258,3 +262,10 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 
 
 | 2026-11-28 | GitHub source branch | 4f4508ad | Installer now revalidates Drive backup metadata, payload identity and backup-folder membership; 55 deployment-manager tests passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083992642), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083992555), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083992637) |
+
+
+## 2026-11-28 — Evidence: rollback backup revalidation
+
+| Date | Target copy | Commit | Test ID | Result | Evidence |
+|---|---|---|---|---|---|
+| 2026-11-28 | GitHub source branch | 76cfd014 | Re-read selected rollback backup after YES; block if backup disappears before write | Source change + regression tests committed; package build PASS; two CI workflows pending at record time | [Source commit](https://github.com/brusvv/dots_inventory-/commit/0b8f3f30ff6375162748b57796438ab51b7a1c67), [Test commit](https://github.com/brusvv/dots_inventory-/commit/76cfd0140ce39c403a203251a76dac7740eed3dd), [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084373426), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084373429), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084373385) |
