@@ -82,11 +82,25 @@ function di3ReadVerifiedRollbackBackup_(fileId, expectedScriptId) {
   catch (error) { throw new Error("Файл source backup содержит некорректный JSON."); }
   var verified = di3VerifyAppsScriptSourceBackupEnvelope_(envelope);
   if (verified.status !== "VERIFIED" || String(verified.script_id) !== String(expectedScriptId) ||
-      metadata.payload_sha256 !== envelope.payload_sha256) {
+      Number(metadata.file_count) !== verified.file_count || metadata.payload_sha256 !== envelope.payload_sha256) {
     throw new Error("Файл backup не прошёл сверку с VERIFIED метаданными.");
   }
   return { file_id: id, file_name: fileName, url: file.getUrl(), envelope: envelope,
-    verification: verified, created_at_utc: envelope.payload.created_at_utc };
+    verification: verified, created_at_utc: envelope.payload.created_at_utc,
+    payload_sha256: envelope.payload_sha256 };
+}
+
+function di3AssertRollbackBackupUnchanged_(initialBackup, recheckedBackup) {
+  if (!initialBackup || !recheckedBackup ||
+      String(initialBackup.file_id) !== String(recheckedBackup.file_id) ||
+      String(initialBackup.file_name) !== String(recheckedBackup.file_name) ||
+      String(initialBackup.payload_sha256 || initialBackup.envelope && initialBackup.envelope.payload_sha256 || "") !==
+        String(recheckedBackup.payload_sha256 || recheckedBackup.envelope && recheckedBackup.envelope.payload_sha256 || "") ||
+      String(initialBackup.verification && initialBackup.verification.script_id || initialBackup.envelope && initialBackup.envelope.payload && initialBackup.envelope.payload.script_id || "") !==
+        String(recheckedBackup.verification && recheckedBackup.verification.script_id || recheckedBackup.envelope && recheckedBackup.envelope.payload && recheckedBackup.envelope.payload.script_id || "")) {
+    throw new Error("Откат остановлен: выбранная резервная копия изменилась после подтверждения. Повтори выбор backup.");
+  }
+  return true;
 }
 
 function di3RollbackAppsScriptCodeWithConfirmation() {
@@ -128,6 +142,16 @@ function di3RollbackAppsScriptCodeWithConfirmation() {
   if (answer !== ui.Button.YES) {
     return { status: "CANCELLED", write_performed: false, selected_backup: selectedBackup,
       current_backup: verifiedCurrentBackup };
+  }
+
+  // Re-open and fully revalidate the selected Drive backup after YES. This closes
+  // the confirmation-dialog window in which the file, its metadata or its folder
+  // membership could have changed after the initial selection.
+  var recheckedSelectedBackup = di3ReadVerifiedRollbackBackup_(selectedId, baseline.script_id);
+  di3AssertRollbackBackupUnchanged_(selectedBackup, recheckedSelectedBackup);
+  var recheckedRollbackPreview = di3BuildRollbackTargetFiles_(recheckedSelectedBackup.envelope, baseline);
+  if (recheckedRollbackPreview.target_fingerprint !== rollbackPreview.target_fingerprint) {
+    throw new Error("Откат остановлен: состав выбранной резервной копии изменился после подтверждения.");
   }
 
   var immediatelyBeforeWrite = di3GetAppsScriptProjectContent_();
