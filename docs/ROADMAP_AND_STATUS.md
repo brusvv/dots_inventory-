@@ -1027,3 +1027,10 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - Latest code/test commit: `5302163d88e657444c2c7e18377260d68ecb95d3`; GitHub Deployment Manager suite is now **51/51 PASS**.
 - CI: [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083678406), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083678413), and [package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083678340) passed.
 - Test doubles exercise the control flow and status classification; this is not live Drive/Apps Script acceptance. Remaining gaps include rollback Drive metadata/folder tampering, final concurrency-change guard, and live runtime behavior. N-02 remains deferred. No production or live Apps Script project was modified.
+## 28.11.2026 — Installer and rollback concurrency guard tests
+
+- Added regression tests that mutate the mocked Apps Script project between the initial fingerprint and the final pre-write read.
+- Both confirmed install and confirmed rollback now have explicit test evidence that a changed project is rejected before `projects.updateContent`; update call count remains zero.
+- GitHub Deployment Manager suite: **53/53 PASS**. Release pipeline, Apps Script quality gates and package build passed on commit `27d56ec7ebde6776851ed1ccedf1cab3f8544ec2`.
+- CI: [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083741968), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083742016), [package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083741941).
+- This covers the final fingerprint guard under deterministic mocked interleaving; it does not replace a two-session Apps Script runtime test. Drive metadata/folder tampering and live runtime acceptance remain open. N-02 remains deferred.
