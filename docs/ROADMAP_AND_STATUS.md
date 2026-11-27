@@ -1016,3 +1016,14 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - CI: [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083590635), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083590632), [package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083590656) all passed.
 - These are source/Node regression results with mocked Apps Script services. They do not establish live Apps Script API or Drive runtime acceptance. No live project, spreadsheet, deployment, trigger, schema, FIFO or stock data was modified. PR #7 remains Draft/unmerged; no tag or release was published.
 - Still pending in the installer/rollback test matrix: rollback cancellation and write-result uncertainty, rollback read-back unavailable/mismatch, Drive backup metadata/folder tampering, and final concurrency-change guard. N-02 runtime fault injection remains deferred by the user.
+
+## 28.11.2026 — Confirmed rollback failure-path regression coverage
+
+- Added mocked integration-style regression tests for the confirmed source rollback workflow:
+  - NO at the confirmation dialog returns `CANCELLED` and never calls `projects.updateContent`.
+  - An update transport failure returns `ROLLBACK_RESULT_UNCERTAIN`; the write state is unknown and the updater does not retry.
+  - An accepted update followed by unavailable read-back returns `ROLLBACK_VERIFICATION_UNAVAILABLE`.
+  - An accepted update followed by a different file set returns `ROLLBACK_VERIFICATION_FAILED`.
+- Latest code/test commit: `5302163d88e657444c2c7e18377260d68ecb95d3`; GitHub Deployment Manager suite is now **51/51 PASS**.
+- CI: [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083678406), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083678413), and [package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083678340) passed.
+- Test doubles exercise the control flow and status classification; this is not live Drive/Apps Script acceptance. Remaining gaps include rollback Drive metadata/folder tampering, final concurrency-change guard, and live runtime behavior. N-02 remains deferred. No production or live Apps Script project was modified.
