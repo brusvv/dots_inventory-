@@ -3,7 +3,7 @@ name: Package Dots Inventory v4 installation bundle
 on:
   push:
     branches:
-      - feature/clean-final-baseline
+      - feature/github-preview-releases
     paths:
       - "src/apps_script/**"
       - "runtime/probes/**"
@@ -29,6 +29,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          APP_TIME_ZONE="$(sed -nE 's/.*TIME_ZONE:[[:space:]]*"([^"]+)".*/\1/p' src/apps_script/00_DI3_AppConfig.gs | head -n 1)"
+          if [[ "$APP_TIME_ZONE" != "Europe/Moscow" ]]; then
+            echo "Expected project timezone Europe/Moscow, found: ${APP_TIME_ZONE:-<missing>}" >&2
+            exit 1
+          fi
           ROOT="DotsInventory_v4_install"
           mkdir -p "$ROOT/Apps_Script" "$ROOT/Runtime_Probes" "$ROOT/Documentation" "$ROOT/QA_Tools"
           cp src/apps_script/*.gs "$ROOT/Apps_Script/"
@@ -56,7 +61,7 @@ jobs:
           2. Сделай и проверь резервную копию тестовой таблицы.
           3. Открой Apps Script проект, привязанный к тестовой таблице.
           4. Создай/замени .gs файлы из Apps_Script/, сохраняя точные имена. Не удаляй существующий модуль только из-за пропуска номера в последовательности.
-          5. Сохрани фактический appsscript.json. Его timeZone должен быть Europe/Helsinki — как DI3_APP_CONFIG.TIME_ZONE в 00_DI3_AppConfig.gs.
+          5. Сохрани фактический appsscript.json. Его timeZone должен быть Europe/Moscow — как DI3_APP_CONFIG.TIME_ZONE в 00_DI3_AppConfig.gs.
           6. Сохрани проект, перезагрузи таблицу и сначала выполни только read-only di3DryRunInstallation().
           7. Проверь результат Dry Run и только затем отдельно планируй разрешённую установку на чистой тестовой книге.
           
@@ -67,8 +72,8 @@ jobs:
           - Не запускать Runtime_Probes на рабочей таблице. Часть проб изменяет тестовые данные или удерживает ScriptLock; см. Documentation/RUNTIME_PROBES.md.
           - Кодовые CI-тесты не заменяют runtime-приёмку в Google Sheets.
           
-          Конфигурация часового пояса в исходниках: Europe/Helsinki.
-          Текущая ветка: feature/clean-final-baseline.
+          Конфигурация часового пояса в исходниках: Europe/Moscow.
+          Текущая ветка: feature/github-preview-releases.
           EOF
           find "$ROOT" -type f -print0 | sort -z | xargs -0 sha256sum > "$ROOT/SHA256SUMS.txt"
           zip -qr "DotsInventory_v4_install.zip" "$ROOT"
