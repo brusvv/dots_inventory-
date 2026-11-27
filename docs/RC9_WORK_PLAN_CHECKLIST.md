@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-28  
 Working branch: `feature/github-preview-releases`  
-Branch HEAD at update: `1e453927f60f6c4d3d8eb43fd8929f5496f248f6`
+Branch HEAD at update: `3c7d67c801c017f462c0154416f1a28301a696ad`
 
 > This is the execution checklist. Mark an item `[x]` only when the stated evidence exists. `[ ]` means not done or not evidenced; `[~]` means partially completed; `[!]` means blocked/deferred. Source implementation, CI, and live Google Apps Script acceptance are separate evidence classes.
 
@@ -32,7 +32,7 @@ Branch HEAD at update: `1e453927f60f6c4d3d8eb43fd8929f5496f248f6`
 - [x] Source review + regression test: preview preserves exact target `appsscript.json`.
 - [x] Source review + regression test: preview preserves non-`SERVER_JS` files and unmanaged local `SERVER_JS` modules.
 - [x] Source review + regression test: Apps Script `SERVER_JS` name normalization verified.
-- [~] Duplicate manifest names, non-server name collisions, missing source, source hash/size mismatch and extra downloaded files are fail-closed; broader cross-type project identity cases remain to be tested.
+- [x] Duplicate manifest names, non-server name collisions, missing source, source hash/size mismatch, extra downloaded files and cross-type project-name collisions are fail-closed across preview, fingerprint and source-backup creation/validation.
 - [x] Source review + regression tests: fingerprint includes name, type and source, sorted deterministically.
 - [x] Source review: NO returns `CANCELLED` without `projects.updateContent`; verified source backup is retained and returned.
 - [x] Source review: fingerprint checked against preview, after backup, and immediately before `projects.updateContent`.
@@ -40,7 +40,7 @@ Branch HEAD at update: `1e453927f60f6c4d3d8eb43fd8929f5496f248f6`
 - [x] Source review: unavailable read-back and mismatched read-back return separate statuses with backup link.
 - [x] Source review: rollback validates Drive metadata, folder membership, Script ID, envelope and per-file hashes.
 - [x] Source review + regression test: rollback preserves current manifest and post-write verifies the complete target file set.
-- [~] Regression coverage now 40 tests; preview, integrity and rollback guard cases covered, but explicit UI cancel/YES, uncertain update and post-write read-back failure injection still need tests.
+- [x] Regression coverage: 47 GitHub Deployment Manager tests. Added integration-style mocked installer tests for NO cancellation (verified backup retained, no updateContent), uncertain update result (single call/no retry), unavailable post-write read-back, and mismatched post-write file set. Live Apps Script behavior remains unverified.
 - [x] Limits documented in release pipeline and rollback confirmation.
 
 ### 1.3 Release governance
@@ -252,4 +252,5 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 | Date | Target copy | Commit | Test ID | Result | Evidence |
 |---|---|---|---|---|---|
 | 2026-11-28 | GitHub source branch | 1e5fa418 | GitHub + Google API redirect hardening; 40 deployment-manager tests, quality gates and package build passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46082609384), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46082609396), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46082609330) |
+| 2026-11-28 | GitHub source branch | 3c7d67c8 | Cross-type duplicate identity hardening; installer cancel/uncertain-write/post-write read-back regression tests; 47 deployment-manager tests passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083590635), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083590632), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083590656) |
 
