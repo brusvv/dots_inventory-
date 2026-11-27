@@ -168,13 +168,19 @@ function di3ValidateGitHubReleaseManifest_(manifest, releaseTag) {
   var channel = String(manifest && manifest.release_channel || "");
   var sourceBranch = String(manifest && manifest.source_branch || "");
   if (channel !== "stable" && channel !== "preview") issues.push("Некорректный release_channel в манифесте.");
-  if (channel === "stable" && (sourceBranch !== "main" || String(releaseTag || "").indexOf("-preview.") !== -1)) issues.push("Stable-релиз должен иметь source_branch=main и стабильный тег.");
-  if (channel === "preview" && (!sourceBranch || sourceBranch === "main" || !/-preview[.][0-9]+$/.test(String(releaseTag || "")))) issues.push("Preview должен иметь preview-тег и исходную ветку, отличную от main.");
+  var tag = String(releaseTag || "");
+  if (channel === "stable" && (sourceBranch !== "main" || !/^dots-inventory-v\d+\.\d+\.\d+$/.test(tag))) {
+    issues.push("Stable-релиз должен иметь source_branch=main и точный тег dots-inventory-vX.Y.Z.");
+  }
+  if (channel === "preview" && (!/^(feature|release|hotfix)\/[A-Za-z0-9._/-]+$/.test(sourceBranch) ||
+      !/^dots-inventory-v\d+\.\d+\.\d+-preview\.\d+$/.test(tag))) {
+    issues.push("Preview должен иметь тег dots-inventory-vX.Y.Z-preview.N и source_branch из feature/*, release/* или hotfix/*.");
+  }
   if (channel && channel !== config.release_channel) issues.push("Канал манифеста (" + channel + ") не совпадает с выбранным каналом установки (" + config.release_channel + ").");
   var repository = config.repository;
   var commit = String(manifest && manifest.git_commit || "").toLowerCase();
   if (!manifest || manifest.format !== DI3_GITHUB_RELEASE_FORMAT) issues.push("Неподдерживаемый format манифеста.");
-  if (!/^dots-inventory-v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(String(releaseTag || ""))) {
+  if (!/^dots-inventory-v\d+\.\d+\.\d+(?:-preview\.\d+)?$/.test(String(releaseTag || ""))) {
     issues.push("Некорректный GitHub release tag.");
   }
   if (manifest && manifest.git_tag !== releaseTag) issues.push("git_tag манифеста не совпадает с GitHub Release.");
