@@ -502,6 +502,7 @@ function configureInstallerHarness(answer, outcome) {
   context.DriveApp = { getFileById: () => verifiedFile };
   context.SpreadsheetApp = { getUi: () => ({
     alert: (...args) => { alerts.push(args); return answer; },
+    Button: { YES: "YES", NO: "NO", OK: "OK" },
     ButtonSet: { YES_NO: "YES_NO", OK: "OK" }
   }) };
   context.di3GetGitHubInstallCompatibilityReport_ = () => ({ status: "READY", issues: [] });
