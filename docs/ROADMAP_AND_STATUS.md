@@ -12,6 +12,43 @@
 - PR #1 — N-03 clean final schema baseline; остаётся отдельным незавершённым review/merge item. PR #2–#6 формируют предшествующую цепочку release/runtime acceptance. PR #9 закрыт по просьбе автора и не является активной веткой работы.
 - Не создано ни одного release tag или опубликованного GitHub Release. PR #7 не объединён. Stable/Preview runtime flow ещё не запускался.
 
+## 1.1 R0 — предварительная инвентаризация Dots beta 4 — 28.11.2026
+
+### Что подтверждено по журналу первоначальной загрузки
+
+- Spreadsheet: `Dots beta 4`; Spreadsheet ID зафиксирован в протоколе владельца.
+- Bound Apps Script Script ID отдельный; ID зафиксирован в протоколе владельца.
+- Первоначальный Browser Bootstrap сообщил `INSTALLED_AND_VERIFIED`: 47/47 source modules, manifest и Bootstrap сохранены, исходный source backup создан и прочитан обратно.
+- Backup: `DotsInventory_AppsScript_Source_20261126231507_BOOTSTRAP.json`.
+- В журнале указано `Europe/Moscow`.
+- Clean Start, schema migration, FIFO rebuild и складские операции не запускались.
+- Это подтверждает первоначальную загрузку исходников на тот момент, но не подтверждает актуальность установленного кода, runtime-схему или готовность N-03.
+
+### Сопоставление установленного снимка и последнего проверенного кода
+
+- Bootstrap был закреплён на commit `39ae1b1af9753a31ab3c92175d5fe6d33ef92f16`.
+- Последний проверенный code/package HEAD: `f4b294eae28da6fdb8c1718ee032c938415cbaf6`.
+- GitHub compare показывает diverged history (45 commits ahead / 26 behind); это не линейное обновление.
+- Подтверждены содержательные различия в `11_DI3_SupplyDomain.gs`, `19_DI3_WarehouseViews.gs`, `43_DI3_GitHubDeploymentManager.gs`, `44_DI3_GitHubInstallPreview.gs` и `45_DI3_GitHubConfirmedInstaller.gs`. В частности, последний проверенный код содержит дополнительные fail-closed compatibility gates по версии updater, схеме и timezone, которых нет в первоначальном Bootstrap-снимке.
+- `00_DI3_AppConfig.gs` совпадает между этими снимками и содержит `Europe/Moscow`.
+
+**Статус R0: PARTIAL.** Идентификаторы и факт Bootstrap восстановлены из предыдущего протокола; прямое чтение текущего Google Sheets / Apps Script / Drive в этой сессии недоступно. Не проверены фактический `appsscript.json`, фактическая timezone таблицы, scopes, project file fingerprint, deployments, Script Properties, триггеры и содержимое backup. Нельзя ставить PASS по одному журналу Bootstrap.
+
+### Следующее безопасное действие в Dots beta 4
+
+В Apps Script editor выполнить только две read-only функции и сохранить полный JSON из Execution log:
+
+1. `di3RunInstallationDryRun()` — возвращает `read_only: true`, структуру схем, clean-baseline/legacy classification, unknown populated tabs, issues/warnings и `planned_changes`.
+2. `di3RunInstallationDiagnostics()` — проверяет фактические листы и заголовки, schema version/journal, Settings, money/FIFO state, pending/quarantined operations, FIFO integrity, timezone, triggers и размеры workspace grids.
+
+В дополнение вручную сверить в Project Settings фактический `appsscript.json.timeZone` и OAuth scopes; в Apps Script Deployments — deployment IDs/versions; в Triggers — handlers; в Script Properties — только имена ключей и наличие release markers (значения секретов не копировать). Сверить Drive backup по имени, размеру, Script ID и VERIFIED/hash metadata, не изменяя его.
+
+Ожидаемое поведение: обе функции только читают данные (возможен краткий toast), не создают листы и не меняют схему, timezone, триггеры, Script Properties, FIFO или складские записи. `planned_changes` — только план, не выполненное изменение.
+
+**Запрещено на этом этапе:** `setupDotsInventoryV3()`, Clean Start, миграции, `di3EnsureSchemaVersioning_()`, money/FIFO rebuild, восстановление операций, приёмка поставок, заказы, ручные IN/OUT, backup restore и любые команды с YES, запускающие запись.
+
+Если Dry Run показывает BLOCKED или неизвестные заполненные листы, остановиться и передать полный JSON для анализа. Если показывает READY, это разрешает только следующий этап согласования N-03 — не автоматический запуск Setup.
+
 ## 2. Подтверждённые source/CI результаты
 
 Последние проверки на HEAD `f4b294eae28da6fdb8c1718ee032c938415cbaf6`:
