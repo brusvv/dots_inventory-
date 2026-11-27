@@ -24,24 +24,24 @@ Branch HEAD at update: `1e453927f60f6c4d3d8eb43fd8929f5496f248f6`
 - [x] Validate every redirect hop as HTTPS and allowlisted to GitHub asset hosts.
 - [x] Enforce redirect hop limit and fail closed on untrusted host / invalid response.
 - [x] Add regression tests for untrusted second-hop redirect and API 302 behavior.
-- [ ] Confirm GitHub Actions result for commit `1e453927f60f6c4d3d8eb43fd8929f5496f248f6`.
-- [ ] Review workflow logs and record exact test totals for this commit.
+- [x] GitHub Actions passed for commit `1e5fa4181f106ba31560aa2578248599424abd4a` (includes redirect tests).
+- [x] Workflow logs reviewed: 40 GitHub deployment-manager tests passed; release contract and tag policy passed; Apps Script quality gates passed; package build passed.
 
 ### 1.2 Continue static installer / rollback audit
 
-- [ ] Preview preserves exact target `appsscript.json`.
-- [ ] Preview preserves every non-`SERVER_JS` file and unmanaged local `SERVER_JS` module.
-- [ ] Preview correctly normalizes Apps Script file names and types.
-- [ ] Duplicate names, type collisions, missing source, hash/size mismatch and unexpected file set fail closed.
-- [ ] Project fingerprint covers all file identities, types and source in deterministic order.
-- [ ] Cancellation/NO leaves project content unchanged; any pre-confirmation source backup is clearly reported.
-- [ ] Source fingerprint is checked before preview/install and immediately before write.
-- [ ] `UPDATE_RESULT_UNCERTAIN` never triggers automatic retry.
-- [ ] `POST_WRITE_VERIFICATION_UNAVAILABLE` and `POST_WRITE_VERIFICATION_FAILED` are distinct and actionable.
-- [ ] Rollback requires a verified backup matching Script ID and payload hashes.
-- [ ] Rollback preserves the current target manifest and verifies every restored file.
-- [ ] Tests cover installer and rollback failure paths, not only happy paths.
-- [ ] Document exact limits: source rollback does not restore spreadsheet data, triggers, Script Properties or deployments.
+- [x] Source review + regression test: preview preserves exact target `appsscript.json`.
+- [x] Source review + regression test: preview preserves non-`SERVER_JS` files and unmanaged local `SERVER_JS` modules.
+- [x] Source review + regression test: Apps Script `SERVER_JS` name normalization verified.
+- [~] Duplicate manifest names, non-server name collisions, missing source, source hash/size mismatch and extra downloaded files are fail-closed; broader cross-type project identity cases remain to be tested.
+- [x] Source review + regression tests: fingerprint includes name, type and source, sorted deterministically.
+- [x] Source review: NO returns `CANCELLED` without `projects.updateContent`; verified source backup is retained and returned.
+- [x] Source review: fingerprint checked against preview, after backup, and immediately before `projects.updateContent`.
+- [x] Source review: ambiguous update error returns `UPDATE_RESULT_UNCERTAIN`; no retry or rollback is invoked automatically.
+- [x] Source review: unavailable read-back and mismatched read-back return separate statuses with backup link.
+- [x] Source review: rollback validates Drive metadata, folder membership, Script ID, envelope and per-file hashes.
+- [x] Source review + regression test: rollback preserves current manifest and post-write verifies the complete target file set.
+- [~] Regression coverage now 40 tests; preview, integrity and rollback guard cases covered, but explicit UI cancel/YES, uncertain update and post-write read-back failure injection still need tests.
+- [x] Limits documented in release pipeline and rollback confirmation.
 
 ### 1.3 Release governance
 
@@ -251,5 +251,5 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 
 | Date | Target copy | Commit | Test ID | Result | Evidence |
 |---|---|---|---|---|---|
-| 2026-11-28 | GitHub source branch | 1e453927 | Redirect security patch committed; CI pending | PARTIAL | branch history |
+| 2026-11-28 | GitHub source branch | 1e5fa418 | GitHub + Google API redirect hardening; 40 deployment-manager tests, quality gates and package build passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46082609384), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46082609396), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46082609330) |
 
