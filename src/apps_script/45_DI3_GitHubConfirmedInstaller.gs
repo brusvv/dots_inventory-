@@ -154,6 +154,9 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
     throw new Error("Установка отменена: Apps Script проект изменился после подтверждения резервной копии. Повтори preview и подтверждение.");
   }
 
+  var finalCompatibility = di3GetGitHubInstallCompatibilityReport_({ target_schema_version: preview.target_schema_version, application_time_zone: preview.target_time_zone }, immediatelyBeforeWrite.content.files);
+  if (finalCompatibility.status !== "READY") throw new Error("Установка отменена: совместимость схемы или часовых поясов изменилась после подтверждения:\\n• " + finalCompatibility.issues.join("\\n• "));
+
   var updateResult;
   try {
     updateResult = di3UpdateAppsScriptProjectContent_(baseline.script_id, preview.target_files);
