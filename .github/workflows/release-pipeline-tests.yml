@@ -49,13 +49,29 @@ jobs:
         run: bash -n tools/validate_release_tag.sh && bash -n tools/test_release_tag_policy.sh && bash tools/test_release_tag_policy.sh
       - name: Validate all Apps Script modules
         run: bash tools/check_syntax.sh
-      - name: Existing source regression suites
+      - name: Existing source regression suites (run independently and aggregate failures)
+        shell: bash
         run: |
-          node tools/run_fifo_replay_tests.js
-          node tools/run_order_domain_tests.js
-          node tools/run_supply_workspace_ux_tests.js
-          node tools/run_catalog_order_ux_tests.js
-          node tools/run_system_safety_ux_tests.js
-          node tools/run_warehouse_dashboard_tests.js
-          node tools/run_finance_schema_tests.js
-          node tools/run_github_deployment_manager_tests.js
+          failed=0
+          run_suite() {
+            label="$1"
+            shift
+            echo "::group::$label"
+            if "$@"; then
+              echo "PASS: $label"
+            else
+              result=$?
+              echo "FAIL: $label (exit $result)"
+              failed=1
+            fi
+            echo "::endgroup::"
+          }
+          run_suite "FIFO replay" node tools/run_fifo_replay_tests.js
+          run_suite "Order Domain" node tools/run_order_domain_tests.js
+          run_suite "Supply Workspace UX" node tools/run_supply_workspace_ux_tests.js
+          run_suite "Catalog/Order UX" node tools/run_catalog_order_ux_tests.js
+          run_suite "System Safety UX" node tools/run_system_safety_ux_tests.js
+          run_suite "Warehouse Dashboard" node tools/run_warehouse_dashboard_tests.js
+          run_suite "Finance Schema" node tools/run_finance_schema_tests.js
+          run_suite "GitHub Deployment Manager" node tools/run_github_deployment_manager_tests.js
+          exit "$failed"
