@@ -56,7 +56,7 @@ jobs:
           cp docs/RUNTIME_PROBES.md "$ROOT/Documentation/"
           cp docs/SOURCE_MODULE_INDEX.md "$ROOT/Documentation/"
           cp docs/ROADMAP_AND_STATUS.md "$ROOT/Documentation/"
-          cp tools/* "$ROOT/QA_Tools/"
+          cp -R tools/. "$ROOT/QA_Tools/"
           cat > "$ROOT/INSTALLATION_RU.txt" <<'EOF'
           DOTS INVENTORY v4 — ПАКЕТ ИСХОДНИКОВ ДЛЯ УСТАНОВКИ
           
