@@ -31,7 +31,7 @@ Branch HEAD at update: `4f4508ada61e175670c80467e86ed3357663da36`
 
 - [x] Re-open and fully revalidate the selected rollback backup after YES: file identity, name, metadata, Script ID, folder membership, envelope/hash, and target fingerprint are checked again immediately before update.
 - [x] Regression tests: selected backup is re-read after confirmation; if it becomes unavailable before write, rollback fails closed and makes zero `projects.updateContent` calls.
-- [~] CI for commit `76cfd0140ce39c403a203251a76dac7740eed3dd`: package build passed; Release Pipeline and Apps Script quality gates were still running when recorded. Await both results before accepting the source change.
+- [x] CI for source/test state `57327687990979594ed69aa7ee88cb7f6b132738`: Release Pipeline, Apps Script quality gates and package build all passed. Release Pipeline includes the corrected selected-backup revalidation tests.
 
 - [x] Source review + regression test: preview preserves exact target `appsscript.json`.
 - [x] Source review + regression test: preview preserves non-`SERVER_JS` files and unmanaged local `SERVER_JS` modules.
@@ -279,3 +279,10 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 | Date | Target | Commit | Result | Evidence |
 |---|---|---|---|---|
 | 2026-11-28 | GitHub source branch | 0b8f3f30 / 76cfd014 / 05a84fbc | Source fix committed; first runner attempt failed due to test harness ReferenceError; harness corrected; CI pending at evidence update | [Source](https://github.com/brusvv/dots_inventory-/commit/0b8f3f30ff6375162748b57796438ab51b7a1c67), [Tests](https://github.com/brusvv/dots_inventory-/commit/76cfd0140ce39c403a203251a76dac7740eed3dd), [Harness fix](https://github.com/brusvv/dots_inventory-/commit/05a84fbc290543fe1684e264c477d1a3c4fbd02a), [Release Pipeline run](https://github.com/brusvv/dots_inventory-/actions/runs/46084428704), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084428707), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084428715) |
+
+
+## Evidence update — selected rollback backup revalidation
+
+| Date | Target | Source/test state | Result | Evidence |
+|---|---|---|---|---|
+| 2026-11-28 | GitHub source branch | `57327687990979594ed69aa7ee88cb7f6b132738` | PASS — Release Pipeline, Apps Script quality gates, package build; includes rollback backup reread after YES and unavailable-backup fail-closed test | [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084515885), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084515883), [Package](https://github.com/brusvv/dots_inventory-/actions/runs/46084515887) |
