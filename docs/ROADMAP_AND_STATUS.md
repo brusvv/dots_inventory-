@@ -521,10 +521,10 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Each `.gs` entry is pinned to an immutable `raw.githubusercontent.com` URL and records byte length and SHA-256. The manifest has a detached SHA-256 sidecar; source hashes are recorded separately.
 - Only `.gs` modules from `src/apps_script/` are included as Apps Script files. Runtime probes, QA tools and docs are not executable project modules.
 - Added tag-triggered `.github/workflows/release.yml`. It requires an annotated `dots-inventory-vMAJOR.MINOR.PATCH` tag whose commit is already reachable from `main`, runs release-manifest tests, builds a source ZIP and publishes GitHub Release assets.
-- The release deliberately omits `appsscript.json` and `.clasp.json`. The future updater must preserve the actual target manifest and must not fabricate a Script ID.
+- The release deliberately omits `appsscript.json` and `.clasp.json`. The in-project updater preserves the actual target manifest and does not fabricate a Script ID.
 - **CI:** run [45880750420](https://github.com/brusvv/dots_inventory-/actions/runs/45880750420) passed 9/9 manifest tests, Apps Script syntax 50/50 and all seven source regression suites 151/151. The PR quality-gates run [45880757060](https://github.com/brusvv/dots_inventory-/actions/runs/45880757060) also passed.
 - PR #2: [D-01/D-02 release pipeline](https://github.com/brusvv/dots_inventory-/pull/2), Draft, based on `feature/clean-final-baseline`. No release tag has been created; publication awaits merge of the baseline into `main` and a deliberate version tag.
-- **Not implemented yet:** D-03 in-project update check/diff UI, D-04 current Apps Script code backup, D-05 confirmed installation and post-write verification, D-06 code rollback, and D-07 live Apps Script runtime acceptance.
+- **Status at this historical D-01/D-02 checkpoint:** D-03 through D-07 had not yet been implemented. Subsequent sections below record the later D-03/D-04, D-05 and D-06 implementation. D-07 live Apps Script runtime acceptance remains NOT RUN.
 - No live Apps Script project, Google Sheet, RC8 workbook or deployment was modified. Replacing code through `projects.updateContent` remains a future operation and must preserve the target manifest and all explicitly unmanaged files because the API replaces the full project file set.
 
 
@@ -541,7 +541,7 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - Added 11 deployment-manager unit tests covering manifest validation, safe redirect hosts, file comparison, manifest preservation and backup tamper detection.
 - CI run [45882134713](https://github.com/brusvv/dots_inventory-/actions/runs/45882134713) passed: 51/51 Apps Script syntax files; 151/151 existing regression tests; 9/9 release-manifest tests; 11/11 deployment-manager tests.
 - PR #3: [D-03/D-04 GitHub release check and source backup](https://github.com/brusvv/dots_inventory-/pull/3), Draft, based on PR #2's feature branch. PR #2 remains Draft; neither PR has been merged.
-- **D-05 staged:** read-only install preview builds a complete replacement set while preserving the actual manifest, all non-server files and unmanaged local modules; it does not call `projects.updateContent`. Confirmed install/post-write verification remains unimplemented. D-06 code rollback and D-07 live runtime acceptance remain pending.
+- **Status at this historical D-03/D-04 checkpoint:** D-05 was then staged as a read-only preview. The later sections below record the confirmed installer and D-06 rollback implementation. D-07 live runtime acceptance remains pending.
 - No live Apps Script project, Google Sheet, RC8 workbook, source code, deployment or spreadsheet data was accessed or modified. Actual OAuth consent and Drive backup test must be performed separately in a disposable/test Apps Script project.
 
 
@@ -554,7 +554,7 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 - The candidate file set exists only in memory and is shown as a summary. No Apps Script project content, Drive file, deployment, spreadsheet, schema, FIFO or stock data is written or changed.
 - CI [45882939657](https://github.com/brusvv/dots_inventory-/actions/runs/45882939657) passed: 52/52 syntax files, 151/151 existing regressions, 9/9 release-manifest tests, 16/16 deployment-manager tests (176/176 total).
 - Added a separately confirmed installer: it requires an exact D-04 Drive backup, a YES/NO dialog, a final concurrency check, and post-write full-file verification. It calls projects.updateContent only after explicit YES. This code has not been run against a live Apps Script project.
-- Still pending: code rollback (D-06) and live runtime acceptance (D-07). No install has been performed.
+- At this historical preview checkpoint, D-06 and D-07 were pending. D-06 was implemented in the subsequent section; D-07 remains NOT RUN. No live install has been performed.
 
 
 ## 26.11.2026 — D-05 confirmed installer implementation
@@ -583,4 +583,19 @@ The confirmed separate date-picker + mandatory `HH:mm` time-input pattern applie
 
 ## GitHub Preview release channels (2026-11-26)
 
-Implemented on `feature/github-preview-releases`: Stable tags are restricted to commits reachable from `main`; Preview tags use `-preview.N`, carry an explicit `source-branch:` annotation, and publish as GitHub prereleases. Manifest pins channel, source branch and full commit SHA. Apps Script config selects `stable` (default) or `preview`; manager rejects cross-channel releases. No tag/release was created and no live Apps Script project or spreadsheet was modified. CI passed on PR #7 (run 45888826706): 13/13 manifest tests, 9/9 isolated Git tag-policy scenarios, 54/54 Apps Script syntax checks, 27/27 deployment-manager tests and all existing regression suites. This is source CI only; no actual GitHub Release/tag was created and D-07 Apps Script/Drive runtime acceptance remains NOT RUN.
+Implemented on `feature/github-preview-releases`: Stable tags are restricted to commits reachable from `main`; Preview tags use `-preview.N`, carry an explicit `source-branch:` annotation, and publish as GitHub prereleases. Manifest pins channel, source branch and full commit SHA. Apps Script config selects `stable` (default) or `preview`; manager rejects cross-channel releases. No tag/release was created and no live Apps Script project or spreadsheet was modified. CI passed on PR #7 (run 45888826706): 13/13 manifest tests, 9/9 isolated Git tag-policy scenarios, 54/54 Apps Script syntax checks, 27/27 deployment-manager tests and all existing regression suites at that checkpoint. This is source CI only; no actual GitHub Release/tag was created and D-07 Apps Script/Drive runtime acceptance remains NOT RUN.
+
+
+## 28.11.2026 — Release updater hardening and CI acceptance
+
+- Updated the project timezone in `DI3_APP_CONFIG.TIME_ZONE` to the approved `Europe/Moscow`. The package workflow now targets `feature/github-preview-releases` and fails if the source config does not declare `Europe/Moscow`.
+- Fixed all Warehouse Dashboard test references to the current `di3BuildWarehouseValueChartDataV2_` helper.
+- Added updater version `0.2.0` and strict numeric `MAJOR.MINOR.PATCH` comparison. The release manifest must declare a valid `minimum_updater_version`; older updaters reject releases requiring a newer updater.
+- Added read-only, fail-closed install compatibility checks: workbook `_AppMeta.schema_version`, installed `DI3_SCHEMA_VERSION` and release `target_schema_version` must match; configured timezone, actual target `appsscript.json.timeZone`, Apps Script runtime timezone, spreadsheet timezone and release timezone must all match.
+- The compatibility gate runs during Preview and is repeated immediately before `projects.updateContent`. The updater does not migrate schema, modify timezone settings or rewrite existing dates/timestamps.
+- CI workflow now runs the regression suites independently and aggregates failures instead of stopping at the first failing suite.
+- Latest PR #7 CI run [46064817478](https://github.com/brusvv/dots_inventory-/actions/runs/46064817478) passed: Apps Script syntax 54/54 modules; release manifest 13/13; Stable/Preview tag policy 9/9; FIFO 46/46; Order Domain 22/22; Supply Workspace UX 17/17; Catalog/Order UX 14/14; System Safety UX 39/39; Warehouse Dashboard 9/9; Finance Schema 4/4; GitHub Deployment Manager 32/32.
+- The eight source regression suites total 183/183 passing assertions. Manifest/tag-policy tests and syntax checks are additional checks, not included in that 183 total.
+- PR #7 remains Draft and unmerged, targeting `feature/github-runtime-acceptance`. No release tag or GitHub Release was created.
+- D-07 remains **BLOCKED / NOT RUN** until the release chain is reviewed/merged and an intentionally published release exists. Runtime acceptance must use a disposable restored spreadsheet and separate Apps Script Script ID.
+- No production RC8 workbook, live Apps Script project, spreadsheet data, FIFO state, deployment or trigger was modified. No schema migration or stock operation was run.
