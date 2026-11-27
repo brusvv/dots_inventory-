@@ -53,10 +53,31 @@ function di3ReadAndVerifyInstallBackup_(backup, expectedScriptId, expectedFinger
   try { envelope = JSON.parse(text); }
   catch (error) { throw new Error("Source backup в Drive содержит некорректный JSON; установка заблокирована."); }
   var verified = di3VerifyInstallBackupMatches_(envelope, expectedScriptId, expectedFingerprint);
-  if (String(file.getName()) !== String(backup.file_name || "")) {
-    throw new Error("Имя файла резервной копии изменилось после создания; установка заблокирована.");
+  var config = di3GetGitHubDeploymentConfig_();
+  var fileName = String(file.getName() || "");
+  if (fileName !== String(backup.file_name || "") || fileName.indexOf(config.source_backup_prefix) !== 0) {
+    throw new Error("Имя файла резервной копии изменилось или не соответствует префиксу; установка заблокирована.");
   }
-  return { file_id: backup.file_id, file_name: file.getName(), url: file.getUrl(), verification: verified };
+  var description = String(file.getDescription() || "");
+  var descriptionPrefix = "DI3_APPS_SCRIPT_SOURCE_BACKUP_V1:";
+  if (description.indexOf(descriptionPrefix) !== 0) {
+    throw new Error("В метаданных Drive отсутствует маркер VERIFIED source backup; установка заблокирована.");
+  }
+  var metadata;
+  try { metadata = JSON.parse(description.slice(descriptionPrefix.length)); }
+  catch (error) { throw new Error("Метаданные Drive source backup повреждены; установка заблокирована."); }
+  if (!metadata || metadata.status !== "VERIFIED" || String(metadata.script_id) !== String(expectedScriptId) ||
+      Number(metadata.file_count) !== verified.file_count || metadata.payload_sha256 !== envelope.payload_sha256) {
+    throw new Error("Метаданные Drive source backup не совпадают с проверенным содержимым проекта; установка заблокирована.");
+  }
+  var parents = file.getParents();
+  var expectedFolderId = di3GetBackupFolder_().getId();
+  var inExpectedFolder = false;
+  while (parents.hasNext()) {
+    if (String(parents.next().getId()) === String(expectedFolderId)) inExpectedFolder = true;
+  }
+  if (!inExpectedFolder) throw new Error("Source backup находится вне папки резервных копий Dots Inventory; установка заблокирована.");
+  return { file_id: backup.file_id, file_name: fileName, url: file.getUrl(), verification: verified };
 }
 
 function di3AssertAppsScriptContentMatches_(expectedFiles, actualFiles) {
