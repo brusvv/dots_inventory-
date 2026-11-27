@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const FORMAT = "dots-inventory-release/v1";
-const MIN_UPDATER = "0.1.0";
+const MIN_UPDATER = "0.2.0";
 const sha256 = (data) => crypto.createHash("sha256").update(data).digest("hex");
 function match(source, regex, label) {
   const found = source.match(regex);
