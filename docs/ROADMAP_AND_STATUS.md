@@ -1001,3 +1001,18 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - PR #7 remains Draft and unmerged, targeting `feature/github-runtime-acceptance`. No release tag or GitHub Release was created.
 - D-07 remains **BLOCKED / NOT RUN** until the release chain is reviewed/merged and an intentionally published release exists. Runtime acceptance must use a disposable restored spreadsheet and separate Apps Script Script ID.
 - No production RC8 workbook, live Apps Script project, spreadsheet data, FIFO state, deployment or trigger was modified. No schema migration or stock operation was run.
+
+## 28.11.2026 — Cross-type identity and confirmed-installer regression coverage
+
+- Hardened Apps Script project identity checks so file names must be unique across file types, not merely within each type. The rule now applies when building and validating source-backup envelopes, creating install previews, and fingerprinting the current project.
+- Added regression coverage for duplicate names across `SERVER_JS` / `HTML` identities. A duplicate project identity fails closed before a source backup can be accepted or an install preview can be used.
+- Added mocked integration-style tests around the confirmed installer:
+  - NO cancellation returns `CANCELLED`, retains the verified pre-install source backup and never calls `projects.updateContent`.
+  - An update transport failure returns `UPDATE_RESULT_UNCERTAIN`, records write state as unknown and does not retry.
+  - An accepted update followed by unavailable read-back returns `POST_WRITE_VERIFICATION_UNAVAILABLE`.
+  - An accepted update followed by a different file set returns `POST_WRITE_VERIFICATION_FAILED`.
+- Latest source commit: `3c7d67c801c017f462c0154416f1a28301a696ad`.
+- GitHub Deployment Manager suite: **47/47 PASS**. Existing suites also passed: FIFO 46, Order Domain 22, Supply Workspace UX 17, Historical Supply 12, Catalog/Order UX 14, System Safety UX 39, Warehouse Dashboard 11, Finance Schema 4.
+- CI: [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083590635), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083590632), [package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083590656) all passed.
+- These are source/Node regression results with mocked Apps Script services. They do not establish live Apps Script API or Drive runtime acceptance. No live project, spreadsheet, deployment, trigger, schema, FIFO or stock data was modified. PR #7 remains Draft/unmerged; no tag or release was published.
+- Still pending in the installer/rollback test matrix: rollback cancellation and write-result uncertainty, rollback read-back unavailable/mismatch, Drive backup metadata/folder tampering, and final concurrency-change guard. N-02 runtime fault injection remains deferred by the user.
