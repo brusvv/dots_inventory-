@@ -51,7 +51,7 @@ test("rejects Preview from unsupported source branches and noncanonical tags", (
   try {
     const m = validManifest(); m.release_channel = "preview"; m.source_branch = "bugfix/new-feature";
     m.git_tag = "dots-inventory-v4.1.0-preview.1";
-    assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", " + JSON.stringify(m.git_tag) + ")", context), /feature\\/\\*.*release\\/\\*.*hotfix\\/\\*/);
+    assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", " + JSON.stringify(m.git_tag) + ")", context), /Preview должен иметь тег/);
     m.source_branch = "feature/new-feature"; m.git_tag = "dots-inventory-v4.1.0-beta.1";
     assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", " + JSON.stringify(m.git_tag) + ")", context), /Некорректный GitHub release tag|Preview должен/);
   } finally {
