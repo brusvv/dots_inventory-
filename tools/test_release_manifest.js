@@ -50,7 +50,7 @@ fixture(({ sourceDir }) => {
   });
   test("rejects Preview without a non-main source branch", () => {
     assert.throws(() => buildManifest({ ...base, tag: "dots-inventory-v4.1.0-preview.1",
-      channel: "preview", sourceBranch: "main", sourceDir }), /исходную ветку/);
+      channel: "preview", sourceBranch: "main", sourceDir }), /исходная ветка/);
   });
   test("rejects Preview from an unsupported source branch", () => {
     assert.throws(() => buildManifest({ ...base, tag: "dots-inventory-v4.1.0-preview.1",
