@@ -164,7 +164,7 @@ function di3BuildMenus_() {
     menu.addSubMenu(subMenu("Создание", function (child) {
       child.addItem("Новая поставка", "di3NewSupplyForm")
         .addItem("Внести старую поставку", "di3StartHistoricalSupplyEntry")
-        .addItem("Сохранить и оприходовать старую поставку", "di3CommitHistoricalSupplyEntry");
+        .addItem("Сохранить и оприходовать старую поставку", "di3CommitHistoricalSupplyEntry")\n        .addSeparator()\n        .addItem("Preview пакетного импорта старых поставок (без записи)", "di3PreviewHistoricalSupplyBatchImport");
     }));
 
     menu.addSubMenu(subMenu("Выбор и просмотр", function (child) {
