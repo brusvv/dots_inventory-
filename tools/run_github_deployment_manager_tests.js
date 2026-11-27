@@ -476,6 +476,8 @@ function configureInstallerHarness(answer, outcome) {
   const verifiedFile = {
     getBlob: () => ({ getDataAsString: () => JSON.stringify(envelope) }),
     getName: () => backup.file_name,
+    getDescription: () => "DI3_APPS_SCRIPT_SOURCE_BACKUP_V1:" + JSON.stringify({ status: "VERIFIED", script_id: "script-123", file_count: envelope.payload.file_count, payload_sha256: envelope.payload_sha256 }),
+    getParents: () => { let consumed = false; return { hasNext: () => !consumed, next: () => { consumed = true; return { getId: () => "backup-folder-123" }; } }; },
     getUrl: () => "https://drive.google.com/file/d/backup-file-123456/view"
   };
   const targetFiles = [
@@ -501,6 +503,7 @@ function configureInstallerHarness(answer, outcome) {
   };
   context.di3CreateAppsScriptSourceBackup = () => backup;
   context.DriveApp = { getFileById: () => verifiedFile };
+  context.di3GetBackupFolder_ = () => ({ getId: () => "backup-folder-123" });
   context.SpreadsheetApp = { getUi: () => ({
     alert: (...args) => { alerts.push(args); return answer; },
     Button: { YES: "YES", NO: "NO", OK: "OK" },
