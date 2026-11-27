@@ -593,6 +593,7 @@ function configureRollbackHarness(answer, outcome) {
     if (outcome === "concurrent-change" && readCount >= 2) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function concurrentEdit() {}\\n"), currentFiles[1]] } };
     if (outcome === "readback-unavailable" && readCount >= 3) throw new Error("rollback read-back unavailable");
     if (outcome === "readback-mismatch" && readCount >= 3) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function wrong() {}\n"), currentFiles[1]] } };
+    if (outcome === "restore-expected" && readCount >= 3) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function old() {}\n"), installFile("appsscript", "JSON", '{"timeZone":"Europe/Moscow"}')] } };
     if (readCount >= 3) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function old() {}\n"), installFile("appsscript", "JSON", '{"timeZone":"Europe/Moscow"}')] } };
     return baseline;
   };
@@ -663,7 +664,7 @@ test("installer rejects source backup moved outside configured backup folder", (
 });
 
 test("rollback reopens the selected backup after YES before updateContent", () => {
-  const h = configureRollbackHarness("YES", "normal");
+  const h = configureRollbackHarness("YES", "restore-expected");
   try {
     const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
     assert.equal(result.status, "ROLLED_BACK_AND_VERIFIED");
