@@ -38,6 +38,11 @@ function buildManifest({ repository, commit, tag, sourceDir, channel, sourceBran
   const config = fs.readFileSync(path.join(sourceDir, "00_DI3_AppConfig.gs"), "utf8");
   const schema = fs.readFileSync(path.join(sourceDir, "33_DI3_SchemaVersioning.gs"), "utf8");
   const timeZone = match(config, /TIME_ZONE\s*:\s*"([^"]+)"/, "DI3_APP_CONFIG.TIME_ZONE");
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date());
+  } catch (error) {
+    throw new Error("DI3_APP_CONFIG.TIME_ZONE должен быть корректным идентификатором IANA: " + timeZone);
+  }
   const schemaVersion = Number(match(schema, /var\s+DI3_SCHEMA_VERSION\s*=\s*(\d+)\s*;/, "DI3_SCHEMA_VERSION"));
   if (!Number.isSafeInteger(schemaVersion) || schemaVersion < 1) throw new Error("DI3_SCHEMA_VERSION должен быть положительным целым числом.");
   const files = listAppsScriptFiles(sourceDir).map((name) => {
