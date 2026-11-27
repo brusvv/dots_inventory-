@@ -62,7 +62,12 @@ function di3GetHistoricalSupplyBatchSource_() {
         { product: "Dream Gamer Neptune", variant: "", packs: 1, pcs: 80, line_kopecks: 70900 },
         { product: "Have Fun Gaming Nix", variant: "", packs: 1, pcs: 40, line_kopecks: 30900 },
         { product: "Hitomi Dots", variant: "3 models x 20", packs: 1, pcs: 60, line_kopecks: 30900 },
-        { product: "Dor Saint", variant: "4 models x 20", packs: 1, pcs: 80, line_kopecks: 70900, components: [\n          { name: "Meng Yi", style: "Fast", shape: "Balanced Flat", material: "PTFE", diameter_mm: "6.5", thickness_mm: "0.85", foam: true, pcs: 20 },\n          { name: "Lyu Yu", style: "Fast", shape: "Balanced Flat", material: "PTFE", diameter_mm: "6.5", thickness_mm: "0.85", foam: true, pcs: 20 },\n          { name: "Zi Dian", style: "Balanced Control", shape: "Balanced Flat", material: "PTFE", diameter_mm: "6.5", thickness_mm: "0.85", foam: true, pcs: 20 },\n          { name: "Yue Yan", style: "Control", shape: "Balanced Flat", material: "UHMW-PE", diameter_mm: "6.5", thickness_mm: "0.85", foam: true, pcs: 20 }\n        ] }
+        { product: "Dor Saint", variant: "4 models x 20", packs: 1, pcs: 80, line_kopecks: 70900, components: [
+          { name: "Meng Yi", style: "Fast", shape: "Balanced Flat", material: "PTFE", diameter_mm: "6.5", thickness_mm: "0.85", foam: true, pcs: 20 },
+          { name: "Lyu Yu", style: "Fast", shape: "Balanced Flat", material: "PTFE", diameter_mm: "6.5", thickness_mm: "0.85", foam: true, pcs: 20 },
+          { name: "Zi Dian", style: "Balanced Control", shape: "Balanced Flat", material: "PTFE", diameter_mm: "6.5", thickness_mm: "0.85", foam: true, pcs: 20 },
+          { name: "Yue Yan", style: "Control", shape: "Balanced Flat", material: "UHMW-PE", diameter_mm: "6.5", thickness_mm: "0.85", foam: true, pcs: 20 }
+        ] }
       ]},
       { seq: 11, supplier: "Real Eagles Trading Store", order_date: "2026-08-26", sent_at: "2026-09-01T07:21", awaiting_at: "2026-09-10T12:29", received_at: "2026-09-10T13:13", order_number: "5548 4064 6978 4525", goods_kopecks: 132200, source_claimed_goods_kopecks: 370100, shipping_kopecks: 48100, partner_discount_kopecks: 50000, items: [
         { product: "AGLOW × Westlab", variant: "", packs: 1, pcs: 60, line_kopecks: 52900 },
