@@ -11,7 +11,7 @@ This repository snapshot is a source export, not a fully bound clasp project. Th
 3. Open the Apps Script project bound to that copy.
 4. Replace/create `.gs` files using the exact names under `src/apps_script/`.
 5. Do not delete a module merely because the numbering has a gap (`06` is not present in this source snapshot).
-6. Preserve the actual project `appsscript.json`; confirm its `timeZone` equals `Europe/Helsinki`, matching `00_DI3_AppConfig.gs`.
+6. Preserve the actual project `appsscript.json`; confirm its `timeZone` equals `Europe/Moscow`, matching `DI3_APP_CONFIG.TIME_ZONE` in `00_DI3_AppConfig.gs`. Do not change the manifest or spreadsheet timezone as an incidental install step; the GitHub updater requires all timezone sources to match and fails closed otherwise.
 7. Save and reload the spreadsheet.
 8. Run the applicable Apps Script unit test functions listed in README / context.
 9. Run runtime acceptance only on the test copy and record the complete Execution log JSON.
