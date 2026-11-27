@@ -569,4 +569,54 @@ test("installer distinguishes accepted write with mismatched post-write files", 
   }
 });
 
+function configureRollbackHarness(answer, outcome) {
+  const currentFiles = [installFile("Code", "SERVER_JS", "function current() {}\n"), installFile("appsscript", "JSON", '{"timeZone":"Europe/Moscow"}')];
+  const baseline = { script_id: "script-123", content: { files: currentFiles } };
+  const oldProject = { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function old() {}\n"), installFile("appsscript", "JSON", '{"timeZone":"UTC"}')] } };
+  const selectedEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(oldProject) + ", 'sheet-123', '2026-11-27T00:00:00.000Z')", context);
+  const currentEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(baseline) + ", 'sheet-123', '2026-11-28T00:00:00.000Z')", context);
+  let readCount = 0, updateCalls = 0, alerts = [];
+  context.SpreadsheetApp = { getUi: () => ({
+    Button: { OK: "OK", CANCEL: "CANCEL", YES: "YES", NO: "NO" },
+    ButtonSet: { OK_CANCEL: "OK_CANCEL", YES_NO: "YES_NO", OK: "OK" },
+    prompt: () => ({ getSelectedButton: () => "OK", getResponseText: () => "selected-backup-123456" }),
+    alert: (...args) => { alerts.push(args); return answer; }
+  }) };
+  context.di3GetAppsScriptProjectContent_ = () => {
+    readCount++;
+    if (outcome === "readback-unavailable" && readCount >= 3) throw new Error("rollback read-back unavailable");
+    if (outcome === "readback-mismatch" && readCount >= 3) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function wrong() {}\n"), currentFiles[1]] } };
+    return baseline;
+  };
+  context.di3ReadVerifiedRollbackBackup_ = () => ({ file_id: "selected-backup-123456", file_name: "DI3_SOURCE_BACKUP_old.json", created_at_utc: "2026-11-27T00:00:00Z", envelope: selectedEnvelope, url: "https://drive.google.com/selected" });
+  context.di3CreateAppsScriptSourceBackup = () => ({ status: "VERIFIED", file_id: "current-backup-123456", file_name: "DI3_SOURCE_BACKUP_current.json" });
+  context.di3ReadAndVerifyInstallBackup_ = () => ({ file_id: "current-backup-123456", file_name: "DI3_SOURCE_BACKUP_current.json", url: "https://drive.google.com/current" });
+  context.di3UpdateAppsScriptProjectContent_ = () => { updateCalls++; if (outcome === "update-uncertain") throw new Error("simulated rollback transport timeout"); return { updateTime: "2026-11-28T00:00:00Z" }; };
+  context.PropertiesService = { getScriptProperties: () => ({ deleteProperty: () => {} }) };
+  return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; }, alerts };
+}
+
+test("rollback NO cancellation never calls updateContent", () => {
+  const h = configureRollbackHarness("NO", "normal");
+  try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "CANCELLED"); assert.equal(result.write_performed, false); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 1); }
+  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+});
+
+test("rollback classifies uncertain update and does not retry", () => {
+  const h = configureRollbackHarness("YES", "update-uncertain");
+  try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "ROLLBACK_RESULT_UNCERTAIN"); assert.equal(result.write_performed, "UNKNOWN"); assert.equal(h.updateCalls, 1); assert.equal(h.readCount, 2); }
+  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+});
+
+test("rollback distinguishes unavailable post-write verification", () => {
+  const h = configureRollbackHarness("YES", "readback-unavailable");
+  try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "ROLLBACK_VERIFICATION_UNAVAILABLE"); assert.equal(result.write_performed, true); assert.equal(h.updateCalls, 1); assert.equal(h.readCount, 3); }
+  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+});
+
+test("rollback distinguishes mismatched post-write file set", () => {
+  const h = configureRollbackHarness("YES", "readback-mismatch");
+  try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "ROLLBACK_VERIFICATION_FAILED"); assert.equal(result.write_performed, true); assert.match(result.error, /отличается от подготовленного/); assert.equal(h.updateCalls, 1); assert.equal(h.readCount, 3); }
+  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+});
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
