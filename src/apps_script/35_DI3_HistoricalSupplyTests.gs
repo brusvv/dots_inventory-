@@ -90,10 +90,22 @@ function di3RunHistoricalSupplyUnitTests() {
     input.expected_date = new Date(future.getTime() - 1 * 24 * 60 * 60 * 1000);
     throws(function () { di3ValidateHistoricalSupplyDates_(input); }, /не может быть в будущем/);
   });
-  test("historical mode uses one explicit standard SUPPLY_RECEIVE idempotency key", function () {
-    var source = di3CommitHistoricalSupplyEntry.toString();
-    equal(source.indexOf("di3ReceiveSupply_(supply, snapshot.received_at)") !== -1, true);
-    equal(source.indexOf("SUPPLY_RECEIVE:" + " + supply.supply_id") !== -1 || source.indexOf("di3GetSupplyReceiptOperation_") !== -1, true);
+  test("historical mode routes receipt through the standard idempotent SUPPLY_RECEIVE pipeline", function () {
+    // The public entry point performs preflight/confirmation; the locked worker
+    // performs the actual receipt, so assert against the worker rather than wrapper.
+    var commitSource = di3CommitHistoricalSupplyEntryLocked_.toString();
+    var receiveCall = "di3ReceiveSupply_(supply, snapshot.received_at)";
+    equal(commitSource.indexOf(receiveCall) !== -1, true,
+      "Historical commit must use the standard receipt function with the confirmed receipt timestamp");
+    equal(commitSource.indexOf(receiveCall), commitSource.lastIndexOf(receiveCall),
+      "Historical commit must invoke the receipt pipeline exactly once");
+
+    // The standard receipt function owns the stable key and operation lookup.
+    var receiveSource = di3ReceiveSupply_.toString();
+    equal(receiveSource.indexOf('var idempotencyKey = "SUPPLY_RECEIVE:" + supply.supply_id;') !== -1, true,
+      "Standard receipt pipeline must derive its idempotency key from supply_id");
+    equal(receiveSource.indexOf("di3GetSupplyReceiptOperation_(supply.supply_id)") !== -1, true,
+      "Standard receipt pipeline must check for an existing receipt operation before creating one");
   });
 
   test("date panel clears stale stage validations before restoring saved values", function () {
