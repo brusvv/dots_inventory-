@@ -1,6 +1,6 @@
 # Apps Script source inventory
 
-The base `.gs` modules came from the supplied `40.rar`. The current working tree contains 43 Apps Script modules (39 base modules + UX regression modules 39–41 + Finance schema test module 42), 7 runtime probes and source patches UX-01–UX-10, commission payer/schema v3, F-01 and static hardening F-03/F-04/F-05/F-09/F-11/F-13/F-15/F-16/F-18. Consult the patch logs for exact scopes and runtime limitations. Numeric gap `06` is present in the source naming sequence; no module `06_*.gs` was included in this upload. This repository does not infer whether that gap is intentional.
+The base `.gs` modules came from the supplied `40.rar`. The current working tree contains 47 Apps Script modules (39 base modules + UX regression modules 39–41 + Finance schema test module 42 + GitHub release/deployment modules 43–46), 7 runtime probes and source patches UX-01–UX-10, commission payer/schema v3, business-date/schema v4, F-01 and static hardening F-03/F-04/F-05/F-09/F-11/F-13/F-15/F-16/F-18. GitHub release modules implement D-03 through D-06 at source level; D-07 runtime acceptance remains NOT RUN. Consult the patch logs and runtime acceptance runbook for exact scopes and limitations. Numeric gap `06` is present in the source naming sequence; no module `06_*.gs` was included in this upload. This repository does not infer whether that gap is intentional.
 
 | Module | Role inferred from module name/content |
 |---|---|
@@ -37,7 +37,7 @@ The base `.gs` modules came from the supplied `40.rar`. The current working tree
 | `30_DI3_MoneyCore.gs` | Integer money calculations and rounding |
 | `31_DI3_FinanceDashboard.gs` | Finance dashboard; commission payer changes buyer-paid and seller-revenue metrics; table columns are resolved by schema field names |
 | `32_DI3_BackupRestore.gs` | Backup and restore; flushes pending spreadsheet writes before backup snapshot/copy |
-| `33_DI3_SchemaVersioning.gs` | Schema versioning and migrations (schema v3; RC8_ORDER_COMMISSION_PAYER_V3) |
+| `33_DI3_SchemaVersioning.gs` | Schema versioning and migrations through schema v4; v3 adds `commission_payer`, v4 adds `business_date` from `created_at` using the configured timezone |
 | `34_DI3_HistoricalSupply.gs` | Historical supply entry and receipt; confirmation dialogs run outside global lock, then state/form fingerprint is revalidated under lock before writes |
 | `35_DI3_HistoricalSupplyTests.gs` | Historical supply tests |
 | `36_DI3_SupplyFullEdit.gs` | Full supply edit Phase A/B |
@@ -47,5 +47,9 @@ The base `.gs` modules came from the supplied `40.rar`. The current working tree
 | `40_DI3_CatalogOrderUxTests.gs` | UX-04–UX-06 regression tests for Catalog, Order and navigation |
 | `41_DI3_SystemSafetyUxTests.gs` | UX-07–UX-10 regression tests for confirmations before batch recovery, Money/FIFO migration, period reopening and manual warehouse movement; extended for payload guard and backup flush checks |
 | `42_DI3_FinanceSchemaTests.gs` | Four local tests for Finance Dashboard schema-name column mapping and the removal of hard-coded source-table indexes |
+| `43_DI3_GitHubDeploymentManager.gs` | D-03/D-04 release inspection, immutable manifest/source validation, Apps Script project read and verified Drive source backup; updater v0.2.0 schema/timezone compatibility gate |
+| `44_DI3_GitHubInstallPreview.gs` | D-05 read-only preview of pinned release source files; preserves target manifest, non-server files and unmanaged local modules |
+| `45_DI3_GitHubConfirmedInstaller.gs` | D-05 explicitly confirmed complete-project write with verified backup, concurrency recheck and exact post-write verification |
+| `46_DI3_GitHubCodeRollback.gs` | D-06 verified Apps Script source rollback from a matching Drive backup while preserving the target manifest |
 
-Additional local tools: `tools/run_finance_schema_tests.js` runs the Finance schema suite. `tools/run_order_domain_tests.js`, `tools/run_supply_workspace_ux_tests.js`, `tools/run_system_safety_ux_tests.js`, `tools/run_catalog_order_ux_tests.js` and `tools/run_warehouse_dashboard_tests.js` are source-only regression runners.
+Additional local tools: `tools/run_finance_schema_tests.js` runs the Finance schema suite; `tools/run_github_deployment_manager_tests.js` runs the D-03–D-06 updater/backup/preview/install/rollback source regression suite. `tools/run_order_domain_tests.js`, `tools/run_supply_workspace_ux_tests.js`, `tools/run_system_safety_ux_tests.js`, `tools/run_catalog_order_ux_tests.js` and `tools/run_warehouse_dashboard_tests.js` are source-only regression runners.
