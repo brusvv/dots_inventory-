@@ -44,7 +44,10 @@ Branch HEAD at update: `4f4508ada61e175670c80467e86ed3357663da36`
 - [x] Source review: unavailable read-back and mismatched read-back return separate statuses with backup link.
 - [x] Source review: rollback validates Drive metadata, folder membership, Script ID, envelope and per-file hashes.
 - [x] Source review + regression test: rollback preserves current manifest and post-write verifies the complete target file set.
-- [x] Regression coverage: 55 GitHub Deployment Manager tests. Added mocked integration-style installer and rollback tests for NO cancellation, uncertain update result (single call/no retry), unavailable post-write read-back, mismatched post-write file set, final fingerprint/concurrency guards, Drive metadata mismatch and backup moved outside the configured folder. Live Apps Script behavior remains unverified.
+- [x] Regression coverage before selected-backup revalidation: 55 GitHub Deployment Manager tests. Added mocked integration-style installer and rollback tests for NO cancellation, uncertain update result (single call/no retry), unavailable post-write read-back, mismatched post-write file set, final fingerprint/concurrency guards, Drive metadata mismatch and backup moved outside the configured folder. Live Apps Script behavior remains unverified.
+- [x] Source: rollback reopens and fully revalidates the selected Drive backup after YES, rebuilds the rollback target and checks the target fingerprint before update.
+- [x] Tests: added successful post-confirmation re-read and fail-closed backup-unavailable-after-YES cases.
+- [~] First test run exposed a harness ReferenceError; corrected in commit `05a84fbc290543fe1684e264c477d1a3c4fbd02a`. Await CI for this corrected commit before accepting.
 - [x] Limits documented in release pipeline and rollback confirmation.
 
 ### 1.3 Release governance
@@ -269,3 +272,10 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 | Date | Target copy | Commit | Test ID | Result | Evidence |
 |---|---|---|---|---|---|
 | 2026-11-28 | GitHub source branch | 76cfd014 | Re-read selected rollback backup after YES; block if backup disappears before write | Source change + regression tests committed; package build PASS; two CI workflows pending at record time | [Source commit](https://github.com/brusvv/dots_inventory-/commit/0b8f3f30ff6375162748b57796438ab51b7a1c67), [Test commit](https://github.com/brusvv/dots_inventory-/commit/76cfd0140ce39c403a203251a76dac7740eed3dd), [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084373426), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084373429), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084373385) |
+
+
+## Evidence update — post-confirmation selected-backup revalidation
+
+| Date | Target | Commit | Result | Evidence |
+|---|---|---|---|---|
+| 2026-11-28 | GitHub source branch | 0b8f3f30 / 76cfd014 / 05a84fbc | Source fix committed; first runner attempt failed due to test harness ReferenceError; harness corrected; CI pending at evidence update | [Source](https://github.com/brusvv/dots_inventory-/commit/0b8f3f30ff6375162748b57796438ab51b7a1c67), [Tests](https://github.com/brusvv/dots_inventory-/commit/76cfd0140ce39c403a203251a76dac7740eed3dd), [Harness fix](https://github.com/brusvv/dots_inventory-/commit/05a84fbc290543fe1684e264c477d1a3c4fbd02a), [Release Pipeline run](https://github.com/brusvv/dots_inventory-/actions/runs/46084428704), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084428707), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084428715) |
