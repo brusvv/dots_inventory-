@@ -184,7 +184,7 @@ function di3ValidateGitHubReleaseManifest_(manifest, releaseTag) {
   }
   if (!manifest || !String(manifest.application_time_zone || "").trim()) issues.push("В манифесте отсутствует application_time_zone.");
   var minimumUpdater = String(manifest && manifest.minimum_updater_version || "").trim();
-  if (!/^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/.test(minimumUpdater)) issues.push("В манифесте отсутствует корректная minimum_updater_version (MAJOR.MINOR.PATCH).");
+  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(minimumUpdater)) issues.push("В манифесте отсутствует корректная minimum_updater_version (MAJOR.MINOR.PATCH).");
   else if (di3CompareUpdaterVersions_(DI3_GITHUB_UPDATER_VERSION, minimumUpdater) < 0) issues.push("Релиз требует минимальную версию updater " + minimumUpdater + ", текущая версия " + DI3_GITHUB_UPDATER_VERSION + ". Обнови updater отдельно перед установкой.");
   if (!manifest || manifest.manifest_policy !== "PRESERVE_TARGET_PROJECT_MANIFEST") {
     issues.push("Манифест не гарантирует сохранение appsscript.json целевого проекта.");
