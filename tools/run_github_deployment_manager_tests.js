@@ -463,4 +463,109 @@ test("install preview rejects existing cross-type duplicate project names", () =
     context), /дублирующееся имя файла проекта между типами/);
 });
 
+
+function configureInstallerHarness(answer, outcome) {
+  const files = [
+    installFile("Code", "SERVER_JS", "function current() {}\n"),
+    installFile("appsscript", "JSON", '{"timeZone":"Europe/Moscow"}')
+  ];
+  const project = { script_id: "script-123", content: { files } };
+  const fingerprint = vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(files) + ")", context);
+  const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", 'sheet-123', '2026-11-28T00:00:00.000Z')", context);
+  const backup = { status: "VERIFIED", file_id: "backup-file-123456", file_name: "DI3_SOURCE_BACKUP_test.json" };
+  const verifiedFile = {
+    getBlob: () => ({ getDataAsString: () => JSON.stringify(envelope) }),
+    getName: () => backup.file_name,
+    getUrl: () => "https://drive.google.com/file/d/backup-file-123456/view"
+  };
+  const targetFiles = [
+    installFile("Code", "SERVER_JS", "function released() {}\n"),
+    files[1]
+  ];
+  let readCount = 0, updateCalls = 0, alerts = [];
+  context.di3PrepareGitHubInstallPreview = () => ({
+    status: "PREVIEW_READY", summary: { removed: 0, target_file_count: 2, added: 0, changed: 1, unchanged: 1, preserved_unmanaged: 0, preserved_non_server: 1 },
+    project_id: "script-123", source_project_fingerprint: fingerprint,
+    release_channel: "stable", release_tag: "dots-inventory-v4.0.0", commit: "a".repeat(40),
+    diff: { added: [], changed: ["Code.gs"] }, target_files: targetFiles,
+    target_schema_version: 4, target_time_zone: "Europe/Moscow"
+  });
+  context.di3GetAppsScriptProjectContent_ = () => {
+    readCount++;
+    if (outcome === "readback-unavailable" && readCount >= 3) throw new Error("read-back unavailable");
+    if (outcome === "readback-mismatch" && readCount >= 3) {
+      return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function wrong() {}\n"), files[1]] } };
+    }
+    return project;
+  };
+  context.di3CreateAppsScriptSourceBackup = () => backup;
+  context.DriveApp = { getFileById: () => verifiedFile };
+  context.SpreadsheetApp = { getUi: () => ({
+    alert: (...args) => { alerts.push(args); return answer; },
+    ButtonSet: { YES_NO: "YES_NO", OK: "OK" }
+  }) };
+  context.di3GetGitHubInstallCompatibilityReport_ = () => ({ status: "READY", issues: [] });
+  context.di3UpdateAppsScriptProjectContent_ = () => {
+    updateCalls++;
+    if (outcome === "update-uncertain") throw new Error("simulated transport timeout");
+    return { updateTime: "2026-11-28T00:00:00Z" };
+  };
+  context.PropertiesService = { getScriptProperties: () => ({ setProperty: () => {} }) };
+  return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; }, alerts, backup };
+}
+
+test("installer NO cancellation preserves verified backup and never calls updateContent", () => {
+  const h = configureInstallerHarness("NO", "normal");
+  try {
+    const result = vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context);
+    assert.equal(result.status, "CANCELLED");
+    assert.equal(result.write_performed, false);
+    assert.equal(result.backup.file_id, h.backup.file_id);
+    assert.equal(h.updateCalls, 0);
+    assert.equal(h.readCount, 1);
+  } finally {
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+  }
+});
+
+test("installer classifies uncertain update result and does not retry", () => {
+  const h = configureInstallerHarness("YES", "update-uncertain");
+  try {
+    const result = vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context);
+    assert.equal(result.status, "UPDATE_RESULT_UNCERTAIN");
+    assert.equal(result.write_performed, "UNKNOWN");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.readCount, 2);
+  } finally {
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+  }
+});
+
+test("installer distinguishes accepted write with unavailable post-write read-back", () => {
+  const h = configureInstallerHarness("YES", "readback-unavailable");
+  try {
+    const result = vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context);
+    assert.equal(result.status, "POST_WRITE_VERIFICATION_UNAVAILABLE");
+    assert.equal(result.write_performed, true);
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.readCount, 3);
+  } finally {
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+  }
+});
+
+test("installer distinguishes accepted write with mismatched post-write files", () => {
+  const h = configureInstallerHarness("YES", "readback-mismatch");
+  try {
+    const result = vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context);
+    assert.equal(result.status, "POST_WRITE_VERIFICATION_FAILED");
+    assert.equal(result.write_performed, true);
+    assert.match(result.error, /отличается от подготовленного/);
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.readCount, 3);
+  } finally {
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+  }
+});
+
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
