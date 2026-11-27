@@ -155,7 +155,7 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
   }
 
   var finalCompatibility = di3GetGitHubInstallCompatibilityReport_({ target_schema_version: preview.target_schema_version, application_time_zone: preview.target_time_zone }, immediatelyBeforeWrite.content.files);
-  if (finalCompatibility.status !== "READY") throw new Error("Установка отменена: совместимость схемы или часовых поясов изменилась после подтверждения:\\n• " + finalCompatibility.issues.join("\\n• "));
+  if (finalCompatibility.status !== "READY") throw new Error("Установка отменена: совместимость схемы или часовых поясов изменилась после подтверждения:\n• " + finalCompatibility.issues.join("\n• "));
 
   var updateResult;
   try {
@@ -193,7 +193,7 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
   if (after.script_id !== baseline.script_id) {
     var wrongProjectError = "После записи API вернул другой Script ID.";
     try { ui.alert("GitHub · требуется проверка", wrongProjectError +
-      "\\nРезервная копия: " + verifiedBackup.url, ui.ButtonSet.OK); } catch (ignoreWrongProjectAlert) {}
+      "\nРезервная копия: " + verifiedBackup.url, ui.ButtonSet.OK); } catch (ignoreWrongProjectAlert) {}
     return { status: "POST_WRITE_VERIFICATION_FAILED", write_performed: true, backup: verifiedBackup,
       release_tag: preview.release_tag, error: wrongProjectError };
   }
