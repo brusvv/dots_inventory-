@@ -484,7 +484,8 @@ function configureInstallerHarness(answer, outcome) {
     installFile("Code", "SERVER_JS", "function released() {}\n"),
     files[1]
   ];
-  let readCount = 0, updateCalls = 0, alerts = [];
+  let readCount = 0, updateCalls = 0, alerts = [], selectedBackupReadCount = 0,
+    selectedBackupMode = "normal";
   context.di3PrepareGitHubInstallPreview = () => ({
     status: "PREVIEW_READY", summary: { removed: 0, target_file_count: 2, added: 0, changed: 1, unchanged: 1, preserved_unmanaged: 0, preserved_non_server: 1 },
     project_id: "script-123", source_project_fingerprint: fingerprint,
@@ -593,12 +594,22 @@ function configureRollbackHarness(answer, outcome) {
     if (outcome === "readback-mismatch" && readCount >= 3) return { script_id: "script-123", content: { files: [installFile("Code", "SERVER_JS", "function wrong() {}\n"), currentFiles[1]] } };
     return baseline;
   };
-  context.di3ReadVerifiedRollbackBackup_ = () => ({ file_id: "selected-backup-123456", file_name: "DI3_SOURCE_BACKUP_old.json", created_at_utc: "2026-11-27T00:00:00Z", envelope: selectedEnvelope, url: "https://drive.google.com/selected" });
+  context.di3ReadVerifiedRollbackBackup_ = () => {
+    selectedBackupReadCount++;
+    if (selectedBackupMode === "deleted-after-confirmation" && selectedBackupReadCount >= 2) {
+      throw new Error("selected source backup not found");
+    }
+    return { file_id: "selected-backup-123456", file_name: "DI3_SOURCE_BACKUP_old.json",
+      created_at_utc: "2026-11-27T00:00:00Z", envelope: selectedEnvelope,
+      payload_sha256: selectedEnvelope.payload_sha256, verification:{script_id:"script-123"},
+      url: "https://drive.google.com/selected" };
+  };
   context.di3CreateAppsScriptSourceBackup = () => ({ status: "VERIFIED", file_id: "current-backup-123456", file_name: "DI3_SOURCE_BACKUP_current.json" });
   context.di3ReadAndVerifyInstallBackup_ = () => ({ file_id: "current-backup-123456", file_name: "DI3_SOURCE_BACKUP_current.json", url: "https://drive.google.com/current" });
   context.di3UpdateAppsScriptProjectContent_ = () => { updateCalls++; if (outcome === "update-uncertain") throw new Error("simulated rollback transport timeout"); return { updateTime: "2026-11-28T00:00:00Z" }; };
   context.PropertiesService = { getScriptProperties: () => ({ deleteProperty: () => {} }) };
-  return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; }, alerts };
+  return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; },
+    get selectedBackupReadCount() { return selectedBackupReadCount; }, set selectedBackupMode(value) { selectedBackupMode = value; }, alerts };
 }
 
 test("rollback NO cancellation never calls updateContent", () => {
@@ -648,4 +659,29 @@ test("installer rejects source backup moved outside configured backup folder", (
   try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /находится вне папки резервных копий/); assert.equal(h.updateCalls, 0); }
   finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "di3GetBackupFolder_", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
 });
+
+test("rollback reopens the selected backup after YES before updateContent", () => {
+  const h = configureRollbackHarness("YES", "normal");
+  try {
+    const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
+    assert.equal(result.status, "ROLLED_BACK_AND_VERIFIED");
+    assert.equal(h.selectedBackupReadCount, 2);
+    assert.equal(h.updateCalls, 1);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+  }
+});
+
+test("rollback fails closed if selected backup becomes unavailable after YES", () => {
+  const h = configureRollbackHarness("YES", "normal");
+  h.selectedBackupMode = "deleted-after-confirmation";
+  try {
+    assert.throws(() => vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context), /selected source backup not found/);
+    assert.equal(h.selectedBackupReadCount, 2);
+    assert.equal(h.updateCalls, 0);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+  }
+});
+
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
