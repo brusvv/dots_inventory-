@@ -1034,3 +1034,11 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - GitHub Deployment Manager suite: **53/53 PASS**. Release pipeline, Apps Script quality gates and package build passed on commit `27d56ec7ebde6776851ed1ccedf1cab3f8544ec2`.
 - CI: [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083741968), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083742016), [package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083741941).
 - This covers the final fingerprint guard under deterministic mocked interleaving; it does not replace a two-session Apps Script runtime test. Drive metadata/folder tampering and live runtime acceptance remain open. N-02 remains deferred.
+## 28.11.2026 — Installer Drive backup identity verification
+
+- Tightened `di3ReadAndVerifyInstallBackup_()`: after re-reading and validating the source envelope, installer now also checks the configured filename prefix, Drive description marker, VERIFIED status, Script ID, file count, payload SHA-256 and membership in the configured backup folder.
+- This closes the gap where a backup with intact JSON content could be renamed, moved or have its Drive metadata changed after creation and still pass the installer-side recheck.
+- Added negative regression cases for metadata/payload mismatch and a backup moved outside the configured folder.
+- Latest tested commit: `4f4508ada61e175670c80467e86ed3357663da36`. GitHub Deployment Manager suite: **55/55 PASS**; Apps Script syntax 55/55; all existing regression suites, release manifest and tag-policy checks passed.
+- CI: [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083992642), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083992555), [package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083992637).
+- Evidence is source/Node CI with mocked Drive objects, not live Drive or Apps Script acceptance. No production workbook or live Apps Script project was modified.
