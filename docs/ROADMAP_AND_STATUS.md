@@ -5,7 +5,8 @@
 ## 1. Текущая точка GitHub
 
 - Рабочая ветка: `feature/github-preview-releases`.
-- Текущий подтверждённый HEAD: `f4b294eae28da6fdb8c1718ee032c938415cbaf6`.
+- Последний commit ветки после обновления этого плана: `571f6d5a3024d8015fabb3db3e96a3f9d67d8fd6` (документация).
+- Последний проверенный code/package HEAD: `f4b294eae28da6fdb8c1718ee032c938415cbaf6`.
 - PR #7 — [D-02: Stable and feature-branch Preview release channels](https://github.com/brusvv/dots_inventory-/pull/7), Draft, открыт, не объединён; base: `feature/github-runtime-acceptance`.
 - Сравнение веток: Preview branch ahead 87 / behind 0 относительно `feature/github-runtime-acceptance` на момент проверки.
 - PR #8 — [D-08: Browser-only GitHub first-install bootstrap](https://github.com/brusvv/dots_inventory-/pull/8) — отдельная работа по первоначальной загрузке через браузер; не считать частью уже принятого D-07.
