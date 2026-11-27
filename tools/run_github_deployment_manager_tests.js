@@ -14,7 +14,8 @@ const context = vm.createContext({
     computeDigest: (_algorithm, value) => Array.from(crypto.createHash("sha256").update(String(value), "utf8").digest()).map((b) => b > 127 ? b - 256 : b),
     newBlob: (value) => ({ getBytes: () => Array.from(Buffer.from(String(value), "utf8")).map((b) => b > 127 ? b - 256 : b) })
   },
-  DI3_APP_CONFIG: { GITHUB_RELEASE: { REPOSITORY: "brusvv/dots_inventory-" } }
+  DI3_APP_CONFIG: { TIME_ZONE: "Europe/Moscow", GITHUB_RELEASE: { REPOSITORY: "brusvv/dots_inventory-" } },
+  DI3_SCHEMA_VERSION: 4
 });
 for (const file of ["43_DI3_GitHubDeploymentManager.gs", "44_DI3_GitHubInstallPreview.gs", "45_DI3_GitHubConfirmedInstaller.gs", "46_DI3_GitHubCodeRollback.gs"]) {
   const source = fs.readFileSync(path.join(root, "src/apps_script", file), "utf8");
@@ -27,13 +28,43 @@ function validManifest() {
   const hash = crypto.createHash("sha256").update(code).digest("hex");
   return {
     format: "dots-inventory-release/v1", git_tag: "dots-inventory-v4.0.0", release_channel: "stable", source_branch: "main",
-    git_commit: "a".repeat(40), target_schema_version: 4, application_time_zone: "Europe/Helsinki",
+    git_commit: "a".repeat(40), target_schema_version: 4, application_time_zone: "Europe/Moscow", minimum_updater_version: "0.2.0",
     manifest_policy: "PRESERVE_TARGET_PROJECT_MANIFEST", source_policy: "PINNED_COMMIT_RAW_FILES",
     files: [{ name: "01_Module.gs", type: "SERVER_JS", source_path: "src/apps_script/01_Module.gs",
       raw_url: "https://raw.githubusercontent.com/brusvv/dots_inventory-/" + "a".repeat(40) + "/src/apps_script/01_Module.gs",
       size_bytes: Buffer.byteLength(code), sha256: hash }]
   };
 }
+test("compares strict updater semantic versions", () => {
+  assert.equal(vm.runInContext("di3CompareUpdaterVersions_('0.2.0', '0.1.9')", context), 1);
+  assert.equal(vm.runInContext("di3CompareUpdaterVersions_('1.0.0', '1.0.0')", context), 0);
+  assert.equal(vm.runInContext("di3CompareUpdaterVersions_('0.1.9', '0.2.0')", context), -1);
+  assert.throws(() => vm.runInContext("di3CompareUpdaterVersions_('0.2', '0.1.0')", context), /Некорректная версия updater/);
+});
+test("rejects a release requiring a newer updater", () => {
+  const m = validManifest(); m.minimum_updater_version = "0.2.1";
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.0.0')", context), /минимальную версию updater/);
+});
+test("rejects missing minimum updater version", () => {
+  const m = validManifest(); delete m.minimum_updater_version;
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.0.0')", context), /minimum_updater_version/);
+});
+test("schema and all four timezone sources must match the release before install", () => {
+  const manifest = { target_schema_version: 4, application_time_zone: "Europe/Moscow" };
+  const baseline = { workbook_schema_version: 4, code_schema_version: 4, config_time_zone: "Europe/Moscow", manifest_time_zone: "Europe/Moscow", script_time_zone: "Europe/Moscow", spreadsheet_time_zone: "Europe/Moscow" };
+  const ready = vm.runInContext("di3BuildGitHubInstallCompatibilityReport_(" + JSON.stringify(manifest) + ", " + JSON.stringify(baseline) + ")", context);
+  assert.equal(ready.status, "READY");
+  for (const [key, value] of [["workbook_schema_version", 3], ["code_schema_version", 3], ["config_time_zone", "Europe/Helsinki"], ["manifest_time_zone", "Europe/Helsinki"], ["script_time_zone", "Europe/Helsinki"], ["spreadsheet_time_zone", "Europe/Helsinki"]]) {
+    const report = vm.runInContext("di3BuildGitHubInstallCompatibilityReport_(" + JSON.stringify(manifest) + ", " + JSON.stringify({ ...baseline, [key]: value }) + ")", context);
+    assert.equal(report.status, "BLOCKED", key + " must block install"); assert.ok(report.issues.length > 0);
+  }
+});
+test("unknown workbook schema or timezone is fail-closed", () => {
+  const manifest = { target_schema_version: 4, application_time_zone: "Europe/Moscow" };
+  const data = { workbook_schema_version: null, code_schema_version: 4, config_time_zone: "Europe/Moscow", manifest_time_zone: "", script_time_zone: "Europe/Moscow", spreadsheet_time_zone: "Europe/Moscow" };
+  const report = vm.runInContext("di3BuildGitHubInstallCompatibilityReport_(" + JSON.stringify(manifest) + ", " + JSON.stringify(data) + ")", context);
+  assert.equal(report.status, "BLOCKED"); assert.ok(report.issues.length >= 2);
+});
 test("allows only GitHub-owned asset redirect hosts", () => {
   assert.equal(vm.runInContext("di3IsSafeGitHubAssetRedirect_('https://release-assets.githubusercontent.com/file')", context), true);
   assert.equal(vm.runInContext("di3IsSafeGitHubAssetRedirect_('https://objects.githubusercontent.com/file')", context), true);
@@ -81,7 +112,7 @@ test("rejects duplicate file names", () => {
 test("compares API SERVER_JS names with .gs suffix normalization", () => {
   const m = validManifest();
   const files = [{ name: "01_Module", type: "SERVER_JS", source: "function alpha() { return 1; }\n" },
-    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki"}' }];
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Moscow"}' }];
   const r = vm.runInContext("di3BuildGitHubSourceDiff_(" + JSON.stringify(m) + ", " + JSON.stringify(files) + ")", context);
   assert.equal(r.summary.unchanged, 1);
   assert.equal(r.manifest_preserved, true);
@@ -107,7 +138,7 @@ test("refuses to back up an incomplete project without appsscript.json", () => {
 test("builds and verifies a source backup including appsscript.json", () => {
   const project = { script_id: "script-123", content: { files: [
     { name: "Code", type: "SERVER_JS", source: "function x() {}\n" },
-    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki"}' }
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Moscow"}' }
   ] } };
   const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", 'sheet-123', '2026-11-26T00:00:00.000Z')", context);
   const verified = vm.runInContext("di3VerifyAppsScriptSourceBackupEnvelope_(" + JSON.stringify(envelope) + ")", context);
@@ -117,7 +148,7 @@ test("builds and verifies a source backup including appsscript.json", () => {
 test("detects tampered source backup payload", () => {
   const project = { script_id: "script-123", content: { files: [
     { name: "Code", type: "SERVER_JS", source: "function x() {}\n" },
-    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki"}' }
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Moscow"}' }
   ] } };
   const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')", context);
   envelope.payload.files[0].source = "function evil() {}\n";
@@ -126,7 +157,7 @@ test("detects tampered source backup payload", () => {
 test("detects file-level corruption even when payload checksum is recomputed", () => {
   const project = { script_id: "script-123", content: { files: [
     { name: "Code", type: "SERVER_JS", source: "function x() {}\n" },
-    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki"}' }
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Moscow"}' }
   ] } };
   const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')", context);
   envelope.payload.files[0].source = "function evil() {}\n";
@@ -147,7 +178,7 @@ test("builds a complete preview preserving manifest, non-server files and unmana
   m.files.push({ ...m.files[0], name: "02_New.gs", source_path: "src/apps_script/02_New.gs",
     raw_url: m.files[0].raw_url.replace("01_Module.gs", "02_New.gs") });
   const files = [installFile("01_Module", "SERVER_JS", oldCode), installFile("LocalOnly", "SERVER_JS", "function localOnly() {}\\n"),
-    installFile("appsscript", "JSON", '{"timeZone":"Europe/Helsinki"}'), installFile("Index", "HTML", '<div>local</div>')];
+    installFile("appsscript", "JSON", '{"timeZone":"Europe/Moscow"}'), installFile("Index", "HTML", '<div>local</div>')];
   const downloaded = [{ name: "01_Module.gs", source: newCode }, { name: "02_New.gs", source: newCode }];
   const preview = vm.runInContext("di3BuildGitHubInstallPreview_(" + JSON.stringify(m) + ", " + JSON.stringify(files) + ", " + JSON.stringify(downloaded) + ")", context);
   assert.equal(preview.status, "PREVIEW_READY");
@@ -161,7 +192,7 @@ test("builds a complete preview preserving manifest, non-server files and unmana
   assert.equal(preview.target_files.find(f => f.name === "01_Module").source, newCode);
   assert.equal(preview.target_files.find(f => f.name === "02_New").source, newCode);
   assert.equal(preview.target_files.find(f => f.name === "LocalOnly").source, "function localOnly() {}\\n");
-  assert.equal(preview.target_files.find(f => f.name === "appsscript").source, '{"timeZone":"Europe/Helsinki"}');
+  assert.equal(preview.target_files.find(f => f.name === "appsscript").source, '{"timeZone":"Europe/Moscow"}');
 });
 test("refuses install preview without actual appsscript manifest", () => {
   const code = "function alpha() {}\\n", m = installManifest(code);
@@ -190,7 +221,7 @@ test("refuses redirects while downloading a pinned release source", () => {
 
 
 test("fingerprints complete Apps Script files independent of API order", () => {
-  const a = [installFile("Code", "SERVER_JS", "function a() {}\\n"), installFile("appsscript", "JSON", '{"timeZone":"Europe/Helsinki"}')];
+  const a = [installFile("Code", "SERVER_JS", "function a() {}\\n"), installFile("appsscript", "JSON", '{"timeZone":"Europe/Moscow"}')];
   const b = [a[1], a[0]];
   const left = vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(a) + ")", context);
   const right = vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(b) + ")", context);
@@ -209,7 +240,7 @@ test("refuses duplicate project files when fingerprinting", () => {
 test("requires the verified source backup to match the exact pre-install project", () => {
   const project = { script_id: "script-123", content: { files: [
     { name: "Code", type: "SERVER_JS", source: "function x() {}\\n" },
-    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki"}' }
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Moscow"}' }
   ] } };
   const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')", context);
   const fingerprint = vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(project.content.files) + ")", context);
@@ -230,7 +261,7 @@ test("rollback restores the verified snapshot while preserving the current targe
   const backupProject = { script_id: "script-123", content: { files: [
     { name: "Code", type: "SERVER_JS", source: "function oldCode() {}\\n" },
     { name: "Index", type: "HTML", source: "<p>old</p>" },
-    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Helsinki","oauthScopes":["old"]}' }
+    { name: "appsscript", type: "JSON", source: '{"timeZone":"Europe/Moscow","oauthScopes":["old"]}' }
   ] } };
   const currentProject = { script_id: "script-123", content: { files: [
     { name: "Code", type: "SERVER_JS", source: "function newCode() {}\\n" },
