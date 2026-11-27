@@ -476,8 +476,8 @@ function configureInstallerHarness(answer, outcome) {
   const verifiedFile = {
     getBlob: () => ({ getDataAsString: () => JSON.stringify(envelope) }),
     getName: () => backup.file_name,
-    getDescription: () => "DI3_APPS_SCRIPT_SOURCE_BACKUP_V1:" + JSON.stringify({ status: "VERIFIED", script_id: "script-123", file_count: envelope.payload.file_count, payload_sha256: envelope.payload_sha256 }),
-    getParents: () => { let consumed = false; return { hasNext: () => !consumed, next: () => { consumed = true; return { getId: () => "backup-folder-123" }; } }; },
+    getDescription: () => "DI3_APPS_SCRIPT_SOURCE_BACKUP_V1:" + JSON.stringify({ status: "VERIFIED", script_id: "script-123", file_count: envelope.payload.file_count, payload_sha256: outcome === "metadata-mismatch" ? "0".repeat(64) : envelope.payload_sha256 }),
+    getParents: () => { let consumed = false; return { hasNext: () => !consumed, next: () => { consumed = true; return { getId: () => outcome === "wrong-folder" ? "unexpected-folder" : "backup-folder-123" }; } }; },
     getUrl: () => "https://drive.google.com/file/d/backup-file-123456/view"
   };
   const targetFiles = [
@@ -635,5 +635,17 @@ test("rollback final fingerprint guard blocks concurrent project edits", () => {
   const h = configureRollbackHarness("YES", "concurrent-change");
   try { assert.throws(() => vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context), /проект изменился после создания резервной копии/); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2); }
   finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+});
+
+test("installer rejects Drive backup metadata that differs from verified payload", () => {
+  const h = configureInstallerHarness("NO", "metadata-mismatch");
+  try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /метаданные Drive source backup не совпадают/); assert.equal(h.updateCalls, 0); }
+  finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "di3GetBackupFolder_", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+});
+
+test("installer rejects source backup moved outside configured backup folder", () => {
+  const h = configureInstallerHarness("NO", "wrong-folder");
+  try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /находится вне папки резервных копий/); assert.equal(h.updateCalls, 0); }
+  finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "di3GetBackupFolder_", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
 });
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
