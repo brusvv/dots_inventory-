@@ -337,7 +337,9 @@ function di3GetAppsScriptProjectContent_() {
     response = UrlFetchApp.fetch(url, {
       method: "get",
       headers: { Authorization: "Bearer " + token, Accept: "application/json" },
-      muteHttpExceptions: true
+      muteHttpExceptions: true,
+      // Never forward the OAuth bearer token through an automatic redirect.
+      followRedirects: false
     });
   } catch (error) {
     throw new Error("Не удалось вызвать Apps Script API. Включи Google Apps Script API и проверь scopes script.projects и script.external_request. " +
