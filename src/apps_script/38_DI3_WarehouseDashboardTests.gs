@@ -34,13 +34,13 @@ function di3RunWarehouseDashboardUnitTests() {
       row("P4", "Unvalued", 5, 0, "", "Неполная оценка"),
       row("P5", "Partial", 5, 3, "", "Неполная оценка")
     ];
-    equal(di3BuildWarehouseValueChartData_(source), [["Positive", 100]]);
+    equal(di3BuildWarehouseValueChartDataV2_(source), [["Positive", 100]]);
   });
 
   test("warehouse value chart is capped at Top 20", function () {
     var source = [];
     for (var i = 1; i <= 27; i++) source.push(row("P" + i, "Product " + i, 1, 1, i * 100));
-    var result = di3BuildWarehouseValueChartData_(source);
+    var result = di3BuildWarehouseValueChartDataV2_(source);
     equal(result.length, 20);
     equal(result[0], ["Product 27", 2700]);
     equal(result[19], ["Product 8", 800]);
@@ -48,7 +48,7 @@ function di3RunWarehouseDashboardUnitTests() {
 
   test("warehouse value chart is stable for equal values", function () {
     var source = [row("P2", "Beta", 2, 2, 50), row("P1", "Alpha", 2, 2, 50)];
-    equal(di3BuildWarehouseValueChartData_(source), [["Alpha", 50], ["Beta", 50]]);
+    equal(di3BuildWarehouseValueChartDataV2_(source), [["Alpha", 50], ["Beta", 50]]);
   });
 
   test("average known FIFO unit cost is calculated from known value and known units", function () {
@@ -63,7 +63,7 @@ function di3RunWarehouseDashboardUnitTests() {
   test("warehouse value chart does not mutate the source table rows", function () {
     var source = [row("P1", "One", 1, 1, 10), row("P2", "Two", 1, 1, 20)];
     var before = JSON.stringify(source);
-    di3BuildWarehouseValueChartData_(source);
+    di3BuildWarehouseValueChartDataV2_(source);
     equal(JSON.stringify(source), before);
   });
 
