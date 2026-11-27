@@ -434,4 +434,33 @@ test("Apps Script projects.updateContent does not automatically forward OAuth re
   }
 });
 
+
+test("fingerprint rejects duplicate project names across file types", () => {
+  const files = [installFile("Shared", "SERVER_JS", "a"), installFile("shared", "HTML", "b")];
+  assert.throws(() => vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(files) + ")", context),
+    /дублирующееся имя файла между типами/);
+});
+
+test("source backup rejects duplicate names across file types", () => {
+  const project = { script_id: "script-123", content: { files: [
+    { name: "Shared", type: "SERVER_JS", source: "a" },
+    { name: "shared", type: "HTML", source: "b" },
+    { name: "appsscript", type: "JSON", source: "{}" }
+  ] } };
+  assert.throws(() => vm.runInContext(
+    "di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')",
+    context), /имя должно быть уникальным между типами/);
+});
+
+test("install preview rejects existing cross-type duplicate project names", () => {
+  const code = "function alpha() {}\\n", m = installManifest(code);
+  const files = [installFile("01_Module", "SERVER_JS", code),
+    installFile("01_Module", "HTML", "<p>collision</p>"),
+    installFile("appsscript", "JSON", "{}")];
+  const downloaded = [{ name: "01_Module.gs", source: code }];
+  assert.throws(() => vm.runInContext(
+    "di3BuildGitHubInstallPreview_(" + JSON.stringify(m) + ", " + JSON.stringify(files) + ", " + JSON.stringify(downloaded) + ")",
+    context), /дублирующееся имя файла проекта между типами/);
+});
+
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
