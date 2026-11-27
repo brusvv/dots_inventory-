@@ -69,7 +69,7 @@ function auditSnapshot(snapshot, sourceDir) {
 
   return {
     status: missing.length === 0 && mismatched.length === 0 &&
-      backupChecks.every((item) => item.valid) ? "PASS" : "FAIL",
+      backupChecks.length > 0 && backupChecks.every((item) => item.valid) ? "PASS" : "FAIL",
     script_id: snapshot.script_id || null,
     spreadsheet_id: snapshot.spreadsheet_id || null,
     expected_modules: expectedNames.length,
