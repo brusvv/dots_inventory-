@@ -1,3 +1,182 @@
+# Актуальный сводный план проекта и приёмки — 28.11.2026
+
+> Этот раздел — текущая точка отсчёта и имеет приоритет над датированными историческими записями ниже. Старые разделы сохранены как журнал решений и промежуточных результатов; их статусы не следует трактовать как актуальные без сверки с этим блоком.
+
+## 1. Текущая точка GitHub
+
+- Рабочая ветка: `feature/github-preview-releases`.
+- Текущий подтверждённый HEAD: `f4b294eae28da6fdb8c1718ee032c938415cbaf6`.
+- PR #7 — [D-02: Stable and feature-branch Preview release channels](https://github.com/brusvv/dots_inventory-/pull/7), Draft, открыт, не объединён; base: `feature/github-runtime-acceptance`.
+- Сравнение веток: Preview branch ahead 87 / behind 0 относительно `feature/github-runtime-acceptance` на момент проверки.
+- PR #8 — [D-08: Browser-only GitHub first-install bootstrap](https://github.com/brusvv/dots_inventory-/pull/8) — отдельная работа по первоначальной загрузке через браузер; не считать частью уже принятого D-07.
+- PR #1 — N-03 clean final schema baseline; остаётся отдельным незавершённым review/merge item. PR #2–#6 формируют предшествующую цепочку release/runtime acceptance. PR #9 закрыт по просьбе автора и не является активной веткой работы.
+- Не создано ни одного release tag или опубликованного GitHub Release. PR #7 не объединён. Stable/Preview runtime flow ещё не запускался.
+
+## 2. Подтверждённые source/CI результаты
+
+Последние проверки на HEAD `f4b294eae28da6fdb8c1718ee032c938415cbaf6`:
+
+- [Release Pipeline CI #46073321726](https://github.com/brusvv/dots_inventory-/actions/runs/46073321726): success.
+- [Package build #46073321723](https://github.com/brusvv/dots_inventory-/actions/runs/46073321723): success.
+- Apps Script syntax: 54/54.
+- Release manifest tests: 15/15.
+- Stable/Preview tag policy: 9/9.
+- Регрессионные suites: FIFO 46/46; Order Domain 22/22; Supply Workspace UX 17/17; Catalog/Order UX 14/14; System Safety UX 39/39; Warehouse Dashboard 9/9; Finance schema 4/4; GitHub Deployment Manager 36/36.
+- Всего по восьми регрессионным suites: **187/187**. Проверки манифеста, tag policy и синтаксиса считаются отдельно.
+- Пакет [DotsInventory-v4-installation](https://github.com/brusvv/dots_inventory-/actions/runs/46073321723/artifacts/15233334353): 410,757 bytes; SHA-256 `6819ef1881bf22aa1958eedacc6a47d3a34c3cb6f4744b298cbd51d55d30e2f2`; срок хранения до 27.12.2026. Это source ZIP, не clasp-проект и не доказательство runtime-установки.
+
+Эти результаты подтверждают качество исходников и сборки. Они **не** подтверждают работу Apps Script API, Drive backup, реальную миграцию, триггеры, FIFO в Sheets, конкурентность или восстановление.
+
+## 3. Изменения и архитектурные решения, уже отражённые в исходниках
+
+- F-01: возврат выбирает исходные `CONSUME`-аллокации по `dispatch_movement_id`, а не по глобально последнему FIFO run. Runtime-сценарий «отправка A → другая складская операция → возврат A» не принят.
+- F-02: реализован workflow исторической продажи, date-only `business_date`, отдельные фактические дата/время отправки и завершения, миграция v3→v4 и retry guards. Runtime миграция и полный сценарий не приняты.
+- F-03–F-07, F-09–F-10, F-13–F-16, F-18, F-20: соответствующая source-hardening реализация находится в ветке. Это не означает runtime acceptance. F-04 chunked payload storage не реализован: payload выше установленного лимита должен fail closed.
+- F-08 и F-17 не закрыты. F-17/C-14 требуют фактического списка способов доставки от владельца; значения не выдумывать.
+- F-19: pure-domain regression покрыт CI; Apps Script write-boundary fault injection и recovery остаются открытыми.
+- N-02: реализованы PREPARED/QUARANTINED recovery semantics и owner-attested MANUALLY_RESOLVED workflow; runtime fault injection, archive verification и операторская приёмка не проведены.
+- N-03: реализованы clean v4 baseline, preflight, interrupted-start recovery и защита заполненных рабочих областей. Не приняты runtime setup/rerun/interruption и v3→v4 migration.
+- Dashboard: read-only diagnostics добавлены, но причина пустой диаграммы не установлена. Требуется проверить N1:O21 и фактические chart ranges в Google Sheets.
+- Commission/Finance: buyer/seller payer logic и Finance schema mapping реализованы в исходниках; сверка реальных заказов и Finance Dashboard не проведена.
+- Timezone приложения утверждён: `Europe/Moscow`. Код и release checks согласованы с ним. Фактические `appsscript.json.timeZone`, Apps Script runtime timezone и spreadsheet timezone целевого проекта должны уже совпадать; установщик их не переписывает.
+
+## 4. Приоритетный план реализации и приёмки
+
+### Этап A — подготовить и зафиксировать тестовые среды
+
+1. Уточнить, что `Dots beta 4` — именно тестовая таблица, и записать её Spreadsheet ID и bound Apps Script Script ID.
+2. Провести R0 read-only inventory: schema/version, timezone, листы и заголовки, контрольные агрегаты, меню, installable triggers, deployments, Script Properties (без вывода секретов).
+3. Сохранить baseline для StockLedger, StockLots, StockAllocations, FifoProductState, Operations, V3_Orders, V3_Supplies и Settings.
+4. Для N-03 использовать согласованную `Dots beta 4`, если она подтверждена как disposable/test-only. Не создавать новую среду без необходимости.
+5. Для D-07 использовать отдельную восстановленную disposable-копию и отдельный bound Script ID; не считать N-03 тест и D-07 одним и тем же доказательством.
+
+**Гейт:** никакого Clean Start, миграции, FIFO rebuild, записи кода или складской операции до завершения read-only preflight, проверенного backup и отдельного подтверждения конкретного действия.
+
+### Этап B — N-03 / N-02 runtime
+
+- N-03: пустой workbook preflight; Dry Run; защита populated/unknown tabs; подтверждённая чистая установка только на тестовой таблице; повторный запуск; прерывание и resume/recovery.
+- N-03 schema: v3→v4 Dry Run, backup, миграция на disposable-копиях с данными и без данных; проверка заголовков, row IDs, timestamps, business_date и отсутствия изменения старого префикса.
+- N-02: безопасно смоделировать transient service failure и integrity failure; проверить PREPARED retry и QUARANTINED resolution; проверить archived fingerprints, owner attestation, linked-operation requeue и то, что ручное разрешение само не меняет StockLedger/StockLots/StockAllocations/FifoProductState.
+- Отдельно проверить legacy register/form upgrades и same-day date/time ordering, включая DST-invalid local time.
+
+### Этап C — Supply Workspace и исторические поставки
+
+- UX-01–06: повторно проверить только непокрытый duplicate-product-identity path и сохранность несохранённых полей.
+- UX-07–10: реальные подтверждения, выбор NO, повторный запуск и отсутствие побочных записей.
+- G5/G6/G7: проверить даты и переходы статусов, причём G7 — обычная приёмка, не Full Edit.
+- Full Edit: before/after payload, неизменность supply ID/created_at, Operation COMMITTED, отсутствие stock writes; конкурирующие вкладки и PeriodGuard.
+- Меню: доступность действий в каждом статусе; взаимоисключение «Новая поставка» / «Внести старую поставку» / Full Edit.
+- Исторические поставки: сначала read-only сверка документов, затем штатный ввод и приёмка на тестовой копии; никаких прямых записей в StockLedger.
+
+#### Подготовка исторического импорта — 11 документов
+
+Источник данных: `Импорт старых поставок.txt`. Импорт ещё не выполнен. Перед Preview необходимо закрыть:
+- №8 switheskeys Store: восстановить названия/варианты семи строк по исходным изображениям; не придумывать позиции.
+- №11 Real Eagles: сверить общую сумму 3 701 ₽ с известными строками, распределить стоимость двух строк Jade Air только после подтверждения.
+- №4 Mifuny: проверить точную дробную цену 1 579,15 ₽ на 2 упаковки, не округлять незаметно.
+- №4 и №5: общую партнёрскую скидку 500 ₽ распределять между этими двумя поставками пропорционально товарам; NxGLOBAL №6 в неё не входит.
+- №7, №10 и №11: отдельные скидки 500 ₽ по данным реестра.
+- Проверить доставку, скидки, даты заказа/отправки/ожидания/получения и точность сумм всех 11 документов.
+- После ввода выполнить сверку количества упаковок, точек в упаковке, себестоимости FIFO и общего складского остатка.
+
+### Этап D — Warehouse Dashboard и финансовая логика
+
+- Dashboard W-1–W-10: read-only диагностика N1:O21, chart ranges/type/anchor, refresh, скрытые колонки, фильтры и нулевой остаток; только после локализации причины менять код.
+- Commission: контрольные заказы на 300 ₽ goods, 10% fee, FIFO cost 105 ₽ — плательщик BUYER и SELLER; сверить buyer payable, seller revenue, discount, platform fee, profit и persisted payer.
+- C-15/C-16: реальные тестовые заказы, OrderCostSnapshots, UNKNOWN/FREE COGS, фильтры, периоды и Finance Dashboard.
+- Проверить денежное округление half-up, включая 10,075 ₽, и сверку по minor units.
+
+### Этап E — FIFO, OperationExecutor и надёжность
+
+- F-01: dispatch A → unrelated stock movement / later FIFO run → return A; сверить source lots, allocated quantity/cost и новые return lots.
+- F-02: историческая продажа с business_date, фактическими dispatch/completion timestamps, FIFO replay, PeriodGuard, retry/idempotency и признание выручки в completion period.
+- F-03/F-05: lock boundaries, immutable payload fingerprint, повторные отправки и отказ на изменённом payload.
+- F-04: проверить fail-closed поведение на payload limit; chunking не считать реализованным.
+- F-06/F-07: interruption в точках до/после append, allocation archive integrity, deterministic IDs, ledger_sequence, cursor rebuild и replay.
+- F-09/F-10: изоляция представлений, journal warning, close → reopen → re-close с сохранением append-only audit.
+- F-13: Drive backup flush → snapshot → copy → read-back/hash; измерить elapsed, lock wait/held.
+- F-14/C-06: две независимые GAS-сессии; receipt/cancel/dispatch races; доказать CONTENDED/ACQUIRED_AFTER_RELEASE и отсутствие OVERLAP.
+- F-15: конфликт исторического режима и Full Edit; F-18 округление; F-19 fault/recovery на реальном Apps Script boundary.
+
+### Этап F — полный тестовый цикл и матрица C-01–C-17
+
+- C-01: GAS benchmark на 500/1 000/2 000 движениях; runtime, чтения/записи, replay и rebuild.
+- C-02: PeriodGuard, historical profit, snapshots, close/reopen.
+- C-03: частичные возвраты — только после отдельного утверждения бизнес-правил; вне обязательного RC9 scope, если не переоценено.
+- C-04/C-05: fault injection, lost acknowledgement, retries, recovery.
+- C-06: две независимые GAS-сессии / ScriptLock.
+- C-07: unified onEdit, установленные триггеры и маршрутизация.
+- C-08: TextFinder на 5/30 ключах, несколько раундов, row-set и median latency.
+- C-09: следующая FIFO-себестоимость, несколько lots, UNKNOWN/FREE.
+- C-10: Apps Script V8 и Money Core migration/rebuild.
+- C-11: Installation Preflight.
+- C-12: SettingsRepository и timezone.
+- C-13: порядок листов.
+- C-14: методы доставки — после получения реального каталога.
+- C-15: buyer/seller commission reconciliation.
+- C-16: Finance Dashboard.
+- C-17: графики, formatting, filters, permissions/protection — после согласования role model.
+
+### Этап G — Backup/Restore и Schema Versioning
+
+- BM-01: Restore-as-new: spreadsheet, bound script, folders, triggers, data reconciliation.
+- BM-02: масштабируемый backup catalog.
+- BM-03: расписание daily/weekly.
+- BM-04: retention Dry Run, защита последней валидной копии.
+- BM-05: периодический isolated restore test.
+- BM-06: release acceptance и runbook.
+- Проверить schema migrations на disposable empty/non-empty copies. Обратные миграции не предполагаются; rollback — только через проверенный Backup/Restore.
+- Selective document/ledger import-export оставить отдельным backlog, если не будет отдельно повышен приоритет.
+
+### Этап H — GitHub Release Pipeline / D-07 / D-08
+
+- D-01/D-02: source implementation и CI готовы; PR #7 всё ещё Draft и не объединён.
+- D-03: read-only release discovery и manifest/source comparison — source implementation готова; runtime требует опубликованный Preview или Stable release.
+- D-04: Drive source backup + read-back/hash — source implementation готова; требуется реальный тест с Drive.
+- D-05: Preview, YES/NO, last-moment fingerprint, projects.updateContent и exact post-write verification — source implementation готова; runtime не проведён.
+- D-06: verified code rollback с сохранением текущего appsscript.json — source implementation готова; runtime не проведён. Он не восстанавливает spreadsheet data, triggers, Script Properties или deployments.
+- D-07: **BLOCKED / NOT RUN** до review/merge release chain, публикации намеренного Preview-релиза и подготовки отдельной disposable restored copy + Script ID. После Preview acceptance отдельно проверить Stable channel policy.
+- D-08: browser-only first-install Bootstrap — отдельный PR #8; проверить его собственный bootstrap сценарий и runtime на новом пустом тестовом Apps Script project. Не смешивать первоначальную загрузку с обычным обновлением D-03–D-06.
+- Проверить, что target manifest timezone, Apps Script runtime timezone и spreadsheet timezone уже равны `Europe/Moscow`; updater их не меняет.
+- Не создавать release tags, не публиковать prerelease/stable, не переводить PR из Draft и не выполнять merge без отдельного решения владельца.
+
+## 5. RC9 release gate
+
+RC9 не готов, пока на disposable restored Google Sheets copy не доказаны:
+1. полный цикл Supply → Receipt → FIFO → Order → Dispatch → Return → Finance;
+2. F-01 и F-02, включая историческую хронологию и PeriodGuard;
+3. повторные исполнения, fault recovery и FIFO archive integrity;
+4. реальная конкурентность нескольких GAS-сессий;
+5. commission, COGS и profit reconciliation;
+6. Backup/Restore-as-new;
+7. schema migration и clean install/rerun;
+8. GitHub Preview install + exact verification + code rollback;
+9. отсутствие неожиданных изменений triggers, deployments, Script Properties, spreadsheet data и stock;
+10. итоговый UX/permissions review.
+
+## 6. Вне RC9 / отдельные решения владельца
+
+- `SUPPLY_CORRECTION`;
+- partial returns C-03;
+- duplicate historical-supply detection;
+- cancelled-supply restoration F-08;
+- selective document/ledger import-export;
+- expanded backup scheduling/retention automation;
+- delivery methods F-17/C-14 до получения реального списка;
+- sheet protections C-17 до утверждения role model.
+
+## 7. Правила фиксации результата
+
+Каждая задача закрывается только при наличии четырёх отдельных доказательств:
+1. source implementation / commit;
+2. source CI;
+3. Apps Script / Google Sheets runtime evidence (execution log, before/after data, screenshots where useful);
+4. explicit PASS criteria and remaining-risk note.
+
+Source CI никогда не заменяет runtime acceptance. Любой миграционный, Clean Start, FIFO rebuild, restore, stock write или release action — только на disposable/test copy, после backup/read-only preflight и отдельного подтверждения. Production RC8 остаётся нетронутой.
+
+---
+
 ## D-07 runtime acceptance — runbook prepared, execution blocked — 26.11.2026
 
 - Added [docs/GITHUB_RUNTIME_ACCEPTANCE.md](GITHUB_RUNTIME_ACCEPTANCE.md) with isolated-test-project prerequisites, D-03/D-04/D-05/D-06 happy path, negative/fault-injection scenarios, PASS/FAIL criteria and an evidence log template.
