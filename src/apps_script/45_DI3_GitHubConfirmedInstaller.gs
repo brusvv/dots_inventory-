@@ -82,7 +82,9 @@ function di3UpdateAppsScriptProjectContent_(scriptId, files) {
       contentType: "application/json",
       payload: JSON.stringify({ files: files }),
       headers: { Authorization: "Bearer " + token, Accept: "application/json" },
-      muteHttpExceptions: true
+      muteHttpExceptions: true,
+      // Never forward the OAuth bearer token through an automatic redirect.
+      followRedirects: false
     });
   } catch (error) {
     throw new Error("Вызов Apps Script API projects.updateContent завершился ошибкой. Source backup сохранён. " +
