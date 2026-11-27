@@ -15,6 +15,22 @@ function di3RunWarehouseDashboardUnitTests() {
     return [code, label, quantity, known, Math.max(0, quantity - known), 10, value, 100, 15, 5, status || "Оценено", 10, 15];
   }
 
+  test("warehouse dashboard grid reservation matches the 480px chart height", function () {
+    var chart = {
+      getContainerInfo: function () { return { getAnchorRow: function () { return 81; } }; },
+      getOptions: function () { return { get: function (key) { return key === "height" ? 480 : null; } }; }
+    };
+    equal(di3GetEmbeddedChartRequiredRows_(chart), 106);
+  });
+
+  test("warehouse dashboard grid reservation preserves the fallback for charts without a height", function () {
+    var chart = {
+      getContainerInfo: function () { return { getAnchorRow: function () { return 81; } }; },
+      getOptions: function () { return { get: function () { return null; } }; }
+    };
+    equal(di3GetEmbeddedChartRequiredRows_(chart), 99);
+  });
+
   test("warehouse value chart pairs each label with its own value and sorts descending", function () {
     var source = [
       row("PRD-0028", "KYUU DESIGN Lian, 6 мм", 80, 80, 840),
