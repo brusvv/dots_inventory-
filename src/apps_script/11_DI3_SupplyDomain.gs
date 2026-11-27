@@ -326,6 +326,12 @@ function di3RefreshSupplyDatePanel_(supply, options) {
       timeValues[i] = previousTimes[i] || "";
     }
   }
+  // The previous render may have installed blocked validations on completed
+  // stages. Clear them before restoring persisted dates/times; the state
+  // machine below reapplies the correct editable/blocked rules afterwards.
+  // Otherwise setValues() can reject even the already-saved H5:H7 values
+  // when the form is refreshed after a successful receipt.
+  sheet.getRange("G5:H7").clearDataValidations();
   sheet.getRange("G4").setValue(values[0] || "").setNumberFormat("dd.mm.yyyy hh:mm");
   sheet.getRange("G5:G7").setValues(dateValues.map(function (value) { return [value]; })).setNumberFormat("dd.mm.yyyy");
   sheet.getRange("H5:H7").setValues(timeValues.map(function (value) { return [value]; })).setNumberFormat("@");
