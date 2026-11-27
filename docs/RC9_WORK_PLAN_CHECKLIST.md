@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-28  
 Working branch: `feature/github-preview-releases`  
-Branch HEAD at update: `27d56ec7ebde6776851ed1ccedf1cab3f8544ec2`
+Branch HEAD at update: `4f4508ada61e175670c80467e86ed3357663da36`
 
 > This is the execution checklist. Mark an item `[x]` only when the stated evidence exists. `[ ]` means not done or not evidenced; `[~]` means partially completed; `[!]` means blocked/deferred. Source implementation, CI, and live Google Apps Script acceptance are separate evidence classes.
 
@@ -40,7 +40,7 @@ Branch HEAD at update: `27d56ec7ebde6776851ed1ccedf1cab3f8544ec2`
 - [x] Source review: unavailable read-back and mismatched read-back return separate statuses with backup link.
 - [x] Source review: rollback validates Drive metadata, folder membership, Script ID, envelope and per-file hashes.
 - [x] Source review + regression test: rollback preserves current manifest and post-write verifies the complete target file set.
-- [x] Regression coverage: 47 GitHub Deployment Manager tests. Added integration-style mocked installer tests for NO cancellation (verified backup retained, no updateContent), uncertain update result (single call/no retry), unavailable post-write read-back, and mismatched post-write file set. Live Apps Script behavior remains unverified.
+- [x] Regression coverage: 55 GitHub Deployment Manager tests. Added mocked integration-style installer and rollback tests for NO cancellation, uncertain update result (single call/no retry), unavailable post-write read-back, mismatched post-write file set, final fingerprint/concurrency guards, Drive metadata mismatch and backup moved outside the configured folder. Live Apps Script behavior remains unverified.
 - [x] Limits documented in release pipeline and rollback confirmation.
 
 ### 1.3 Release governance
@@ -256,3 +256,5 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 | 2026-11-28 | GitHub source branch | 5302163d | Added rollback cancel/uncertain-write/read-back failure regression tests; 51 deployment-manager tests passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083678406), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083678413), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083678340) |
 | 2026-11-28 | GitHub source branch | 27d56ec7 | Added installer and rollback final fingerprint/concurrency guard tests; 53 deployment-manager tests passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083741968), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083742016), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083741941) |
 
+
+| 2026-11-28 | GitHub source branch | 4f4508ad | Installer now revalidates Drive backup metadata, payload identity and backup-folder membership; 55 deployment-manager tests passed | PASS (source/CI only) | [Release pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46083992642), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46083992555), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46083992637) |
