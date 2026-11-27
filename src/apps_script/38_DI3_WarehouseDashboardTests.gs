@@ -20,7 +20,7 @@ function di3RunWarehouseDashboardUnitTests() {
       row("PRD-0028", "KYUU DESIGN Lian, 6 мм", 80, 80, 840),
       row("PRD-0002", "Wallhack Black (Silent), 7 мм", 40, 40, 2100)
     ];
-    equal(di3BuildWarehouseValueChartData_(source), [
+    equal(di3BuildWarehouseValueChartDataV2_(source), [
       ["Wallhack Black (Silent), 7 мм", 2100],
       ["KYUU DESIGN Lian, 6 мм", 840]
     ]);
