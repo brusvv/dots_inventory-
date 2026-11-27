@@ -472,7 +472,7 @@ function configureInstallerHarness(answer, outcome) {
   const project = { script_id: "script-123", content: { files } };
   const fingerprint = vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(files) + ")", context);
   const envelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", 'sheet-123', '2026-11-28T00:00:00.000Z')", context);
-  const backup = { status: "VERIFIED", file_id: "backup-file-123456", file_name: "DI3_SOURCE_BACKUP_test.json" };
+  const backup = { status: "VERIFIED", file_id: "backup-file-123456", file_name: "DotsInventory_AppsScript_Source_test.json" };
   const verifiedFile = {
     getBlob: () => ({ getDataAsString: () => JSON.stringify(envelope) }),
     getName: () => backup.file_name,
