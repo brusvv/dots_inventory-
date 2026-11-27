@@ -12,6 +12,84 @@
 var DI3_GITHUB_RELEASE_FORMAT = "dots-inventory-release/v1";
 var DI3_SOURCE_BACKUP_FORMAT = "dots-inventory-appsscript-source-backup/v1";
 var DI3_GITHUB_API_VERSION = "2022-11-28";
+var DI3_GITHUB_UPDATER_VERSION = "0.2.0";
+
+/** Compare strict numeric MAJOR.MINOR.PATCH versions. Returns -1, 0 or 1. */
+function di3CompareUpdaterVersions_(left, right) {
+  function parse(value) {
+    var match = String(value || "").trim().match(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+    if (!match) throw new Error("Некорректная версия updater: " + String(value || ""));
+    var parts = match.slice(1).map(Number);
+    if (parts.some(function (part) { return !Number.isSafeInteger(part); })) throw new Error("Версия updater выходит за безопасный числовой диапазон: " + value);
+    return parts;
+  }
+  var a = parse(left), b = parse(right);
+  for (var i = 0; i < 3; i++) { if (a[i] < b[i]) return -1; if (a[i] > b[i]) return 1; }
+  return 0;
+}
+
+function di3BuildGitHubInstallCompatibilityReport_(manifest, context) {
+  context = context || {};
+  var issues = (context.read_errors || []).slice();
+  var targetSchema = Number(manifest && manifest.target_schema_version);
+  var workbookSchema = Number(context.workbook_schema_version);
+  var codeSchema = Number(context.code_schema_version);
+  if (!Number.isSafeInteger(targetSchema) || targetSchema < 1) issues.push("Релиз содержит некорректную целевую версию схемы.");
+  if (!Number.isSafeInteger(workbookSchema) || workbookSchema < 0) issues.push("Не удалось достоверно определить _AppMeta.schema_version текущей таблицы.");
+  else if (Number.isSafeInteger(targetSchema) && workbookSchema !== targetSchema) issues.push("Версия схемы таблицы v" + workbookSchema + " не совпадает со схемой релиза v" + targetSchema + ". Установщик обновляет только код и не выполняет миграции.");
+  if (!Number.isSafeInteger(codeSchema) || codeSchema < 1) issues.push("Не удалось определить DI3_SCHEMA_VERSION текущего кода.");
+  else if (Number.isSafeInteger(targetSchema) && codeSchema !== targetSchema) issues.push("Текущий код поддерживает схему v" + codeSchema + ", а релиз требует v" + targetSchema + ". Обновление кода без отдельной миграции заблокировано.");
+  var targetZone = String(manifest && manifest.application_time_zone || "").trim();
+  if (!targetZone) issues.push("В release manifest отсутствует application_time_zone.");
+  [
+    ["DI3_APP_CONFIG.TIME_ZONE", context.config_time_zone],
+    ["appsscript.json timeZone", context.manifest_time_zone],
+    ["Session.getScriptTimeZone()", context.script_time_zone],
+    ["часовой пояс Google Sheets", context.spreadsheet_time_zone]
+  ].forEach(function (entry) {
+    var actual = String(entry[1] || "").trim();
+    if (!actual) issues.push("Не удалось прочитать " + entry[0] + "; требуется точная проверка часового пояса.");
+    else if (targetZone && actual !== targetZone) issues.push(entry[0] + " = " + actual + ", а релиз требует " + targetZone + ".");
+  });
+  return {
+    status: issues.length ? "BLOCKED" : "READY",
+    target_schema_version: Number.isSafeInteger(targetSchema) ? targetSchema : null,
+    workbook_schema_version: Number.isSafeInteger(workbookSchema) ? workbookSchema : null,
+    current_code_schema_version: Number.isSafeInteger(codeSchema) ? codeSchema : null,
+    target_time_zone: targetZone,
+    time_zones: {
+      app_config: String(context.config_time_zone || ""),
+      appsscript_manifest: String(context.manifest_time_zone || ""),
+      script_runtime: String(context.script_time_zone || ""),
+      spreadsheet: String(context.spreadsheet_time_zone || "")
+    },
+    issues: issues
+  };
+}
+
+/** Read-only compatibility gate. No schema, timezone, date or project data is changed. */
+function di3GetGitHubInstallCompatibilityReport_(manifest, projectFiles) {
+  var context = { read_errors: [] };
+  try { context.workbook_schema_version = di3GetSchemaVersion_(); }
+  catch (error) { context.read_errors.push("Не удалось прочитать версию схемы таблицы: " + (error.message || String(error))); }
+  try { context.code_schema_version = Number(DI3_SCHEMA_VERSION); }
+  catch (error) { context.read_errors.push("Не удалось прочитать DI3_SCHEMA_VERSION: " + (error.message || String(error))); }
+  try { context.config_time_zone = di3GetConfiguredTimeZone_(); }
+  catch (error) { context.read_errors.push("Некорректный DI3_APP_CONFIG.TIME_ZONE: " + (error.message || String(error))); }
+  try { context.script_time_zone = di3GetScriptTimeZone_(); }
+  catch (error) { context.read_errors.push("Не удалось прочитать часовой пояс Apps Script: " + (error.message || String(error))); }
+  try { context.spreadsheet_time_zone = di3GetSpreadsheet_().getSpreadsheetTimeZone(); }
+  catch (error) { context.read_errors.push("Не удалось прочитать часовой пояс Google Sheets: " + (error.message || String(error))); }
+  var manifests = (projectFiles || []).filter(function (file) { return file && file.type === "JSON" && file.name === "appsscript"; });
+  if (manifests.length !== 1) {
+    context.read_errors.push("Для проверки timezone нужен ровно один фактический appsscript.json.");
+  } else {
+    try { context.manifest_time_zone = String(JSON.parse(String(manifests[0].source || "")).timeZone || ""); }
+    catch (error) { context.read_errors.push("Фактический appsscript.json содержит некорректный JSON: " + (error.message || String(error))); }
+  }
+  return di3BuildGitHubInstallCompatibilityReport_(manifest, context);
+}
+
 
 function di3GetGitHubDeploymentConfig_() {
   var config = DI3_APP_CONFIG && DI3_APP_CONFIG.GITHUB_RELEASE ? DI3_APP_CONFIG.GITHUB_RELEASE : {};
@@ -105,6 +183,9 @@ function di3ValidateGitHubReleaseManifest_(manifest, releaseTag) {
     issues.push("Некорректная target_schema_version.");
   }
   if (!manifest || !String(manifest.application_time_zone || "").trim()) issues.push("В манифесте отсутствует application_time_zone.");
+  var minimumUpdater = String(manifest && manifest.minimum_updater_version || "").trim();
+  if (!/^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$/.test(minimumUpdater)) issues.push("В манифесте отсутствует корректная minimum_updater_version (MAJOR.MINOR.PATCH).");
+  else if (di3CompareUpdaterVersions_(DI3_GITHUB_UPDATER_VERSION, minimumUpdater) < 0) issues.push("Релиз требует минимальную версию updater " + minimumUpdater + ", текущая версия " + DI3_GITHUB_UPDATER_VERSION + ". Обнови updater отдельно перед установкой.");
   if (!manifest || manifest.manifest_policy !== "PRESERVE_TARGET_PROJECT_MANIFEST") {
     issues.push("Манифест не гарантирует сохранение appsscript.json целевого проекта.");
   }
