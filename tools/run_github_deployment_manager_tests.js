@@ -449,7 +449,7 @@ test("source backup rejects duplicate names across file types", () => {
   ] } };
   assert.throws(() => vm.runInContext(
     "di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(project) + ", '', '2026-11-26T00:00:00.000Z')",
-    context), /имя должно быть уникальным между типами/);
+    context), /дублирующееся имя файла между типами/);
 });
 
 test("install preview rejects existing cross-type duplicate project names", () => {
