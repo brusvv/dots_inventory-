@@ -41,6 +41,23 @@ test("compares strict updater semantic versions", () => {
   assert.equal(vm.runInContext("di3CompareUpdaterVersions_('0.1.9', '0.2.0')", context), -1);
   assert.throws(() => vm.runInContext("di3CompareUpdaterVersions_('0.2', '0.1.0')", context), /Некорректная версия updater/);
 });
+test("rejects noncanonical Stable tag suffixes", () => {
+  const m = validManifest(); m.git_tag = "dots-inventory-v4.0.0-beta.1";
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", " + JSON.stringify(m.git_tag) + ")", context), /стабильный тег|Некорректный GitHub release tag/);
+});
+test("rejects Preview from unsupported source branches and noncanonical tags", () => {
+  const oldChannel = context.DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL;
+  context.DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL = "preview";
+  try {
+    const m = validManifest(); m.release_channel = "preview"; m.source_branch = "bugfix/new-feature";
+    m.git_tag = "dots-inventory-v4.1.0-preview.1";
+    assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", " + JSON.stringify(m.git_tag) + ")", context), /feature\\/\\*.*release\\/\\*.*hotfix\\/\\*/);
+    m.source_branch = "feature/new-feature"; m.git_tag = "dots-inventory-v4.1.0-beta.1";
+    assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", " + JSON.stringify(m.git_tag) + ")", context), /Некорректный GitHub release tag|Preview должен/);
+  } finally {
+    context.DI3_APP_CONFIG.GITHUB_RELEASE.RELEASE_CHANNEL = oldChannel;
+  }
+});
 test("rejects a release requiring a newer updater", () => {
   const m = validManifest(); m.minimum_updater_version = "0.2.1";
   assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(m) + ", 'dots-inventory-v4.0.0')", context), /минимальную версию updater/);
