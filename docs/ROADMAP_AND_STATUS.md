@@ -1,3 +1,48 @@
+# Обновление аудита Release Pipeline — 28.11.2026
+
+> Эта запись новее предыдущего сводного статуса и отражает аудит после redirect hardening.
+
+## Изменения и CI
+
+- Текущий code/test commit: `1e5fa4181f106ba31560aa2578248599424abd4a`.
+- Последние source commits:
+  - `27303245f28af9e173dc76630b1b960f198cac9a` — отключены автоматические redirects для авторизованного `projects.getContent`.
+  - `fd2f04e858128d1e7cb2250b14199ff3ca061a14` — отключены автоматические redirects для авторизованного `projects.updateContent`.
+  - `1e5fa4181f106ba31560aa2578248599424abd4a` — добавлены два теста, подтверждающие fail-closed поведение обоих Apps Script API вызовов.
+- GitHub Actions для commit `1e5fa418...`:
+  - [Release pipeline checks #46082609384](https://github.com/brusvv/dots_inventory-/actions/runs/46082609384) — SUCCESS.
+  - [Apps Script quality gates #46082609396](https://github.com/brusvv/dots_inventory-/actions/runs/46082609396) — SUCCESS.
+  - [Package build #46082609330](https://github.com/brusvv/dots_inventory-/actions/runs/46082609330) — SUCCESS.
+  - GitHub Deployment Manager runner: **40/40 tests passed**.
+  - Syntax validation, release manifest contract, Stable/Preview tag policy, snapshot auditor and all existing regression suites passed.
+- Это source/Node CI. Он не подтверждает runtime acceptance Apps Script, Drive или Google Sheets.
+
+## Результат статического аудита installer / rollback
+
+Подтверждено чтением исходников и существующими regression tests:
+
+- Preview сохраняет фактический `appsscript.json`, non-`SERVER_JS` файлы и unmanaged local `SERVER_JS` модули; удалений не планирует.
+- API имена `SERVER_JS` нормализуются с учётом суффикса `.gs`; новые файлы проверяются на конфликт с файлами другого типа.
+- Источники проверяются по SHA-256 и размеру; дубликаты release names, неполные файлы, tampered source и лишние downloads блокируются.
+- Fingerprint включает имя, тип и source каждого файла и сортирует набор детерминированно.
+- Confirmed installer повторно сверяет fingerprint после preview, после создания backup и непосредственно перед записью.
+- NO/cancel не вызывает `projects.updateContent`; verified backup остаётся в Drive.
+- Неопределённый ответ update не вызывает автоматический retry; read-back unavailable и read-back mismatch имеют отдельные статусы.
+- Rollback проверяет backup envelope, file hashes, Script ID, Drive folder/metadata; сохраняет текущий target manifest и проверяет полный результат записи.
+
+## Оставшиеся пробелы аудита
+
+- Добавить fault-injection tests для UI cancel/YES, uncertain update response и post-write read-back unavailable/mismatch.
+- Проверить cross-type / case-normalized duplicate project identities во всех backup/preview/fingerprint путях.
+- Продолжить проверку rollback boundary и поведения при изменении Drive backup metadata между выбором и записью.
+- После закрытия source audit отдельно выполнить D-03–D-07 runtime acceptance на disposable Apps Script project; production и RC8 не использовать.
+
+**N-02 runtime fault-injection остаётся отложенным по просьбе владельца.** Не запускать без отдельного возобновления.
+
+Полный чек-лист и доказательства: [RC9_WORK_PLAN_CHECKLIST.md](./RC9_WORK_PLAN_CHECKLIST.md).
+
+---
+
 # Актуальное обновление плана — 28.11.2026
 
 > Этот блок — самая свежая запись и имеет приоритет над более ранними статусами ниже. Полный исполняемый чек-лист вынесен в [RC9_WORK_PLAN_CHECKLIST.md](./RC9_WORK_PLAN_CHECKLIST.md).
