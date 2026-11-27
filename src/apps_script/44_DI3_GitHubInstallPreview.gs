@@ -127,7 +127,7 @@ function di3PrepareGitHubInstallPreview() {
   }
   var project = di3GetAppsScriptProjectContent_();
   var compatibility = di3GetGitHubInstallCompatibilityReport_(releaseResult.manifest, project.content.files);
-  if (compatibility.status !== "READY") throw new Error("Установка GitHub-релиза заблокирована проверкой совместимости:\\n• " + compatibility.issues.join("\\n• "));
+  if (compatibility.status !== "READY") throw new Error("Установка GitHub-релиза заблокирована проверкой совместимости:\n• " + compatibility.issues.join("\n• "));
   var downloaded = [], totalBytes = 0;
   releaseResult.manifest.files.forEach(function (file) {
     var result = di3FetchPinnedGitHubSource_(file);
