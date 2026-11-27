@@ -328,7 +328,7 @@ test("fingerprint changes when any project source or manifest changes", () => {
 });
 test("refuses duplicate project files when fingerprinting", () => {
   const files = [installFile("Code", "SERVER_JS", "a"), installFile("Code", "SERVER_JS", "b")];
-  assert.throws(() => vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(files) + ")", context), /дублирующийся файл/);
+  assert.throws(() => vm.runInContext("di3AppsScriptFilesFingerprint_(" + JSON.stringify(files) + ")", context), /дублирующееся имя файла/);
 });
 test("requires the verified source backup to match the exact pre-install project", () => {
   const project = { script_id: "script-123", content: { files: [
