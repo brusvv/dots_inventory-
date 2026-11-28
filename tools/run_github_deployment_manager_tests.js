@@ -801,7 +801,7 @@ test("rejects branch source content that does not match its Git blob SHA", () =>
     "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;"
   };
   const tree = Object.entries(sources).map(([path, source]) => ({
-    path, type: "blob", size: Buffer.byteLength(source),
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
     sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
   }));
   tree[0].sha = "f".repeat(40);
