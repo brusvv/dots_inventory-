@@ -305,3 +305,21 @@ automated suites: snapshot auditor 8, FIFO 46, order domain 22, supply domain
 and lifecycle 113, catalog/order UX 14, system safety 39, warehouse dashboard
 11, finance schema 4. Total: **257 passed, 0 failed**. This does not replace
 Apps Script runtime acceptance against a restored/disposable workbook.
+
+
+### SC-03 foundation — read-only candidate FIFO preview
+
+Added a pure candidate replay helper and tests. It resolves the effective
+correction relation map, verifies referenced source/replacement movements and
+their original effective receipt timestamp, includes every affected product
+(including removed source products), filters superseded receipt events, and
+runs the existing full FIFO plan over the candidate snapshot. The helper
+returns a fingerprint and candidate allocations/costs/remaining lots without
+writing any sheet.
+
+The new tests cover REPLACE cost replay, stock deficit after REMOVE, cross-
+product REMOVE+ADD, correction chains, pending-operation visibility, invalid
+replacement movements and snapshot immutability.
+
+This helper is not yet wired into operation execution or the normal FIFO
+rebuild. No stock projection or live workbook data was changed.
