@@ -1,6 +1,6 @@
 # SUPPLY_CORRECTION implementation specification
 
-Status: SC-01, SC-02 and SC-03 (including normal FIFO integration and correction-aware read projections) are implemented and source-CI-covered. The correction operation handler, SC-04 commit/recovery and bound-workbook runtime acceptance remain pending.
+Status: SC-01, SC-02, SC-03 and the source implementation of SC-04 are implemented and source-CI-covered. Bound-workbook runtime acceptance remains pending; no received supply has been corrected.
 Branch: `feature/supply-correction-fifo-replay`
 Date: 2026-11-28
 
@@ -363,3 +363,40 @@ Latest quality-gate run at source commit `8ddf13e6021c7a8e091d246971d34fe000779b
 - [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46096260507).
 
 The correction operation handler and SC-04 are still not implemented. Runtime acceptance and any change to supply #17 remain explicitly deferred.
+
+
+## 14. SC-04 source implementation
+
+The explicit correction operation API is implemented on `feature/supply-correction-fifo-replay`:
+
+- `di3PreviewSupplyCorrection(supplyId, spec)` is read-only. It validates the source receipt, prepares the replacement document rows in memory, allocates no persistent sequence values, and runs the candidate FIFO replay before returning a preview. It does not register an operation or append rows.
+- `di3CorrectReceivedSupply(supplyId, spec)` is the explicit mutating command. It requires a stable `correction_id`, a reason, complete replacement lines, and financial inputs. It is not exposed as a menu item.
+- The idempotency key is `SUPPLY_CORRECTION:<supply_id>:<correction_id>`. Repeating the same request resumes the same immutable operation; changing the request under the same correction ID is rejected.
+- The operation payload stores source receipt identity/hash, source supply and item snapshots, source FIFO allocation fingerprint, replacement receipt lines, target document rows, relation plan, affected products and candidate FIFO fingerprint.
+- Replacement lines receive new movement/lot IDs, new ledger sequences reserved under ScriptLock, stable event keys and display codes. Their `effective_at` and `recorded_at` are copied from the original receipt, not from the correction execution time.
+- Relation planning prefers exact product+pack-variant identity. A unique same-product pair may be represented as REPLACE; ambiguous many-to-one changes become REMOVE + ADD rather than incorrectly sharing one replacement movement.
+- The handler appends replacement StockLedger/StockMovementDetails/StockLots rows idempotently, updates the mutable supply document projection with before/after conflict checks, runs the normal correction-aware full FIFO replay, verifies the F-06 source archive against the pre-correction allocation and lot-cache audit, appends ProductCostHistory versions, commits relation events and returns. The shared operation executor commits the Operations row last.
+- ProductCostHistory is appended only after the FIFO allocation projection is durably committed. Existing source history rows are not rewritten.
+- Recovery is wired into `di3RecoverAllPendingOperations()`. The operation handler resumes partial ledger, relation, document, cost-history and F-06 replay stages using the immutable payload.
+- A second correction for the same supply is currently blocked. The relation journal supports chains, but the document source hydration for an already-corrected supply is not yet implemented.
+
+### F-06 lot-cache handling
+
+The effective FIFO input excludes superseded source movements, details and lots. The F-06 source archive must nevertheless retain every original StockLots cache row. The full replay now passes all physical lot rows to F-06 while passing only effective lots to the FIFO planner. The target cache map preserves replay balances for effective lots and sets superseded lots to zero only after their pre-correction values have been archived. Physical row numbers survive filtering. The handler verifies that the F-06 archive contains the original source allocation fingerprint and each source lot's pre-correction remaining quantity.
+
+### Latest source verification
+
+At commit `a15c8ce7cf9d1700e9638558e8e4e37b4fe61789`:
+- Apps Script syntax: **66/66 files**.
+- Snapshot audit tests: **7/7**.
+- FIFO replay: **46/46**.
+- Order domain: **22/22**.
+- Supply/correction/lifecycle: **144/144**.
+- Catalog/order UX: **14/14**.
+- System safety/operation: **39/39**.
+- Warehouse dashboard: **11/11**.
+- Finance schema: **4/4**.
+- Total: **287 passed, 0 failed**.
+- [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46098738440).
+
+This remains source/Node CI evidence only. The Apps Script project has not been run against a bound workbook. Runtime acceptance on a restored copy, including partial-failure injection at every SC-04 boundary, remains required before using `di3CorrectReceivedSupply` on a real received supply.
