@@ -165,7 +165,7 @@ test("runtime source audit probe collects read-only metadata and disables OAuth 
     Date, JSON, String, Array, Object, RegExp, Error, Math, Number, encodeURIComponent
   };
   const report = vm.runInNewContext(
-    probeSource + "\\ndi3AuditExportRuntimeSourceSnapshot();",
+    probeSource + "\ndi3AuditExportRuntimeSourceSnapshot();",
     sandbox
   );
   assert.equal(calls.length, 2);
