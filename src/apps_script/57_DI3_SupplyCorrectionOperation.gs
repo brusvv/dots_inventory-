@@ -468,7 +468,8 @@ function di3AssertSupplyCorrectionImmutableSource_(operationId, payload) {
     if (!item || String(item[1]) !== String(payload.supply_id) ||
         String(item[3]) !== String(line.product_id) ||
         String(item[5]) !== String(line.pack_variant_id) ||
-        Number(item[6]) !== Number(line.quantity) / Number(line.quantity / Number(item[6])) ||
+        Number(item[6]) !== Number(receiptLineByMovement[String(line.movement_id)].units_per_pack) ||
+        Number(item[7]) * Number(item[6]) !== Number(line.quantity) ||
         Number(item[14]) !== Number(line.quantity) ||
         Number(item[13]) !== Number(line.cost_per_pack) ||
         Number(item[16]) !== Number(line.unit_cost) ||
