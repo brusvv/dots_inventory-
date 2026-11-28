@@ -677,7 +677,7 @@ function configureRollbackHarness(answer, outcome) {
   context.di3UpdateAppsScriptProjectContent_ = () => { updateCalls++; if (outcome === "update-uncertain") throw new Error("simulated rollback transport timeout"); return { updateTime: "2026-11-28T00:00:00Z" }; };
   context.PropertiesService = { getScriptProperties: () => ({ deleteProperty: () => {} }) };
   context.LockService = { getScriptLock: () => ({
-    tryLock: () => { lockAcquireCount++; return outcome !== "lock-busy"; },
+    tryLock: (waitMs) => { lockAcquireCount++; lockWaitMs = waitMs; return outcome !== "lock-busy"; },
     releaseLock: () => { lockReleaseCount++; }
   }) };
   return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; },
