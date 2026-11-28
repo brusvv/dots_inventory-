@@ -162,6 +162,24 @@ Regression tests were added for event-scoped status-history deduplication, recei
 
 A pre-existing CI blocker was also found and repaired while enabling this branch's quality gates: `tools/tests/audit_apps_script_snapshot.test.js` had an invalid regular-expression literal and lacked its `node:crypto` import. This issue was unrelated to the supply implementation but prevented every later regression suite from running.
 
+### CI verification result
+
+The GitHub Actions quality-gates run for source commit `e0b5ca66562b75e3717995e6ed012a738cc9cba6` completed successfully:
+
+- Apps Script syntax: **55/55** modules.
+- Snapshot auditor: **7/7**.
+- FIFO replay and sequence: **46/46**.
+- Order domain: **22/22**.
+- Supply domain and lifecycle: **85/85** across five suites.
+- Catalog/order UX: **14/14**.
+- System safety/operation: **39/39**.
+- Warehouse dashboard: **11/11**.
+- Finance schema: **4/4**.
+
+Total automated assertions/tests reported by these suites: **228 passed, 0 failed**. The successful run is [GitHub Actions #46086661404](https://github.com/brusvv/dots_inventory-/actions/runs/46086661404).
+
+The branch was also synchronized with the latest `feature/github-preview-releases` base. The merge commit `593ad71f6662521545fe93fdd45b0824b8b00cf5` has the latest preview branch as its second parent; the merge tree preserves the already-tested source state and includes the newer base documentation/source-audit tooling. The branch is now **0 commits behind** the preview base.
+
 ### Deferred pending measurements or design
 
 - S-11 (register refresh): defer structural formatting optimizations until Apps Script runtime measurements exist; avoid introducing stale presentation state.
