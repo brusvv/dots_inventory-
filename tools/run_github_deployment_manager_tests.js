@@ -866,6 +866,43 @@ test("branch-selector-capable source cannot replace only part of the updater mod
   ), /полный согласованный набор updater-модулей/);
 });
 
+test("branch selector persists the exact selected commit and reset restores configured channel", () => {
+  const stored = {};
+  const commit = "6".repeat(40);
+  const ui = {
+    ButtonSet: { OK_CANCEL: "OK_CANCEL", OK: "OK" },
+    prompt: () => ({ getSelectedButton: () => "OK", getResponseText: () => "main" }),
+    alert: () => {}
+  };
+  context.SpreadsheetApp = { getUi: () => ui };
+  context.PropertiesService = { getScriptProperties: () => ({
+    getProperty: key => stored[key] || null,
+    setProperties: values => Object.assign(stored, values),
+    deleteProperty: key => { delete stored[key]; }
+  }) };
+  context.di3FetchGitHubJson_ = () => ({ status: "OK", data: [{ name: "main" }, { name: "bugfix/test" }] });
+  context.di3GetGitHubBranchManifest_ = branch => ({
+    manifest: { git_commit: commit, target_schema_version: 4, application_time_zone: "Europe/Moscow" }
+  });
+  try {
+    const selected = vm.runInContext("di3SelectGitHubSourceBranch()", context);
+    assert.equal(selected.status, "SELECTED");
+    assert.equal(selected.branch, "main");
+    assert.equal(selected.commit, commit);
+    assert.equal(stored.DI3_GITHUB_SELECTED_BRANCH, "main");
+    assert.equal(stored.DI3_GITHUB_SELECTED_COMMIT, commit);
+    const cleared = vm.runInContext("di3ClearGitHubSourceBranchSelection()", context);
+    assert.equal(cleared.status, "CLEARED");
+    assert.equal(stored.DI3_GITHUB_SELECTED_BRANCH, undefined);
+    assert.equal(stored.DI3_GITHUB_SELECTED_COMMIT, undefined);
+  } finally {
+    delete context.SpreadsheetApp;
+    delete context.PropertiesService;
+    delete context.di3FetchGitHubJson_;
+    delete context.di3GetGitHubBranchManifest_;
+  }
+});
+
 test("resolves a branch to one pinned commit and preflights the Git tree before raw downloads", () => {
   const branch = "feature/api-test";
   const commit = "7".repeat(40);
