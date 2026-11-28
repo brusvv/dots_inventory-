@@ -714,6 +714,32 @@ test("rollback NO cancellation never calls updateContent", () => {
   finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
+test("rollback releases the shared script lock when update result is uncertain", () => {
+  const h = configureRollbackHarness("YES", "update-uncertain");
+  try {
+    const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
+    assert.equal(result.status, "ROLLBACK_RESULT_UNCERTAIN");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
+test("rollback releases the shared script lock when post-write read-back is unavailable", () => {
+  const h = configureRollbackHarness("YES", "readback-unavailable");
+  try {
+    const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
+    assert.equal(result.status, "ROLLBACK_VERIFICATION_UNAVAILABLE");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
 test("rollback classifies uncertain update and does not retry", () => {
   const h = configureRollbackHarness("YES", "update-uncertain");
   try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "ROLLBACK_RESULT_UNCERTAIN"); assert.equal(result.write_performed, "UNKNOWN"); assert.equal(h.updateCalls, 1); assert.equal(h.readCount, 2); }
