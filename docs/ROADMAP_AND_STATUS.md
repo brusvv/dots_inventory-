@@ -5,14 +5,15 @@
 ## GitHub / Release Pipeline
 
 - Ветка: `feature/github-preview-releases`.
-- Текущий HEAD: `05d0fafe634f7bb7086faa2c46df0082468bf085`.
+- Последний проверенный branch HEAD (документационная сборка): `e75ecf814aff7cbc07c08b9462e47c5f948c7a06`.
 - Последний проверенный source/test commit: `05d0fafe634f7bb7086faa2c46df0082468bf085`.
-- На текущем source/test HEAD `05d0fafe` все три проверки прошли:
+- На source/test commit `05d0fafe` все три проверки прошли:
   - [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46086131557) — PASS; GitHub Deployment Manager **57/57**.
   - [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46086131571) — PASS; snapshot auditor **8/8**.
   - [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46086131632) — PASS.
 - Последний source/test diff включает повторную проверку выбранного rollback backup после YES и fail-closed тест при исчезновении backup до записи.
 - R0 probe теперь включает manifest/scopes, полный fingerprint, trigger/deployment inventory, Script Properties key names only, и проверку backup metadata/folder membership. OAuth API redirects отключены; probe tests 8/8.
+- Документационный HEAD `e75ecf81` также прошёл все три workflow: [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46086182306), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46086182316), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46086182302) — PASS.
 - D-03–D-06: source review/regression coverage выполнены; live Apps Script / Drive runtime acceptance не выполнена и остаётся отдельным этапом.
 - PR #7 остаётся Draft; merge, tags, Preview/Stable publication и production update не выполнялись.
 
