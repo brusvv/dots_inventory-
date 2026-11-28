@@ -400,3 +400,23 @@ At commit `a15c8ce7cf9d1700e9638558e8e4e37b4fe61789`:
 - [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46098738440).
 
 This remains source/Node CI evidence only. The Apps Script project has not been run against a bound workbook. Runtime acceptance on a restored copy, including partial-failure injection at every SC-04 boundary, remains required before using `di3CorrectReceivedSupply` on a real received supply.
+
+
+### SC-04 follow-up — current pack variants
+
+After FIFO replay and relation activation, the operation now reconciles `PackVariants.is_current` for every affected product using the newest still-received supply document. It does not blindly mark the corrected receipt's variant current when a later supply exists. If the correction removes the only received line for a product, stale current flags are cleared. The operation remains idempotent on recovery.
+
+Latest source verification at commit `76440457589cd3577913f517921d98ec36231520`:
+- Apps Script syntax: **68/68 files**.
+- Snapshot audit: **7/7**.
+- FIFO replay: **46/46**.
+- Order domain: **22/22**.
+- Supply/correction/lifecycle: **149/149**.
+- Catalog/order UX: **14/14**.
+- System safety/operation: **39/39**.
+- Warehouse dashboard: **11/11**.
+- Finance schema: **4/4**.
+- Total: **292 passed, 0 failed**.
+- [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46099249735).
+
+The handler still supports only the first correction per supply. Runtime acceptance on a restored workbook and failure-injection at each write boundary remain mandatory before using the mutating command.
