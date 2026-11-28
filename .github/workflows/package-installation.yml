@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/github-preview-releases
+      - feature/order-product-lifecycle-audit
     paths:
       - "src/apps_script/**"
       - "runtime/probes/**"
