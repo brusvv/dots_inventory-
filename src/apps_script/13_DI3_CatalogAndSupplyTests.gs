@@ -28,6 +28,53 @@ function di3RunCatalogAndSupplyUnitTests() {
     try { di3AllocateSupplyAmount_(1, []); } catch (e) { thrown = true; }
     equal(thrown, true);
   });
+  test("batch pack variant resolver appends missing variants in one write and reuses IDs", function () {
+    var originalAppend = di3AppendTableRows_;
+    var writes = [];
+    try {
+      di3AppendTableRows_ = function (sheetName, rows) { writes.push({ sheet: sheetName, rows: rows }); };
+      var products = {
+        P1: { product_id: "P1", active: true },
+        P2: { product_id: "P2", active: true }
+      };
+      var variants = { byProductAndUnits: Object.create(null), byId: Object.create(null) };
+      var result = di3GetOrCreatePackVariants_([
+        { product_id: "P1", units_per_pack: 20 },
+        { product_id: "P2", units_per_pack: 40 },
+        { product_id: "P1", units_per_pack: 20 }
+      ], "SUPPLY_DRAFT", products, variants);
+      equal(writes.length, 1);
+      equal(writes[0].sheet, "PackVariants");
+      equal(writes[0].rows.length, 2);
+      equal(result.length, 3);
+      equal(result[0].created, true);
+      equal(result[1].created, true);
+      equal(result[2].created, false);
+      equal(result[0].pack_variant_id, result[2].pack_variant_id);
+    } finally {
+      di3AppendTableRows_ = originalAppend;
+    }
+  });
+  test("batch pack variant resolver rejects inactive products and variants", function () {
+    var products = {
+      P1: { product_id: "P1", active: false },
+      P2: { product_id: "P2", active: true }
+    };
+    var variants = {
+      byProductAndUnits: {
+        "P2\\u001f40": { pack_variant_id: "V2", product_id: "P2", units_per_pack: 40, active: false }
+      },
+      byId: Object.create(null)
+    };
+    var inactiveProductRejected = false, inactiveVariantRejected = false;
+    try { di3GetOrCreatePackVariants_([{ product_id: "P1", units_per_pack: 20 }], "SUPPLY_DRAFT", products, variants); }
+    catch (error) { inactiveProductRejected = /товар отключён/.test(error.message); }
+    try { di3GetOrCreatePackVariants_([{ product_id: "P2", units_per_pack: 40 }], "SUPPLY_DRAFT", products, variants); }
+    catch (error) { inactiveVariantRejected = /вариант упаковки 40 шт. отключён/.test(error.message); }
+    equal(inactiveProductRejected, true);
+    equal(inactiveVariantRejected, true);
+  });
+
   test("two pack variants for one product are allowed", function () {
     var plan = di3BuildSupplyFinancialPlan_({ lines: [
       { product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 2, purchase_price_per_pack: 100 },
