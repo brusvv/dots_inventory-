@@ -33,6 +33,30 @@ function di3RunSupplyReceivingUnitTests() {
       DI3_SUPPLY_STATUS.SENT, retryAt, "different-operation"), false);
   });
 
+  test("receipt boundary revalidates unique product/pack pairs and integer pack counts", function () {
+    equal(di3ValidateSupplyReceiptLineIdentities_([
+      { supply_item_id: "I1", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 3 },
+      { supply_item_id: "I2", product_id: "P1", pack_variant_id: "V40", units_per_pack: 40, packs: 2 }
+    ]), true);
+    throws(function () {
+      di3ValidateSupplyReceiptLineIdentities_([
+        { supply_item_id: "I1", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 3 },
+        { supply_item_id: "I2", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 2 }
+      ]);
+    }, /повторяют товар и фасовку/);
+    throws(function () {
+      di3ValidateSupplyReceiptLineIdentities_([
+        { supply_item_id: "I1", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 1.5 }
+      ]);
+    }, /количество упаковок должно быть положительным целым числом/);
+    throws(function () {
+      di3ValidateSupplyReceiptLineIdentities_([
+        { supply_item_id: "I1", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 1 },
+        { supply_item_id: "I1", product_id: "P2", pack_variant_id: "V20", units_per_pack: 20, packs: 1 }
+      ]);
+    }, /supply_item_id/);
+  });
+
   test("supply state machine only permits the next transition", function () {
     equal(DI3_SUPPLY_STATUS_TRANSITIONS[DI3_SUPPLY_STATUS.CREATED], DI3_SUPPLY_STATUS.SENT);
     equal(DI3_SUPPLY_STATUS_TRANSITIONS[DI3_SUPPLY_STATUS.SENT], DI3_SUPPLY_STATUS.AWAITING);
