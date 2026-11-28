@@ -1238,3 +1238,10 @@ Tested source commit: `7ea2989bb6f06a81ab5424594e9f869fdefa3773`.
 - PR #11 head after plan documentation commits: `352c04436798a0da69bca83e8319d60728a5780a`.
 - GitHub reports the PR clean/mergeable and all current checks passed: [quality gates 46100927016](https://github.com/brusvv/dots_inventory-/actions/runs/46100927016), [release pipeline 46100927023](https://github.com/brusvv/dots_inventory-/actions/runs/46100927023), [package build 46100926970](https://github.com/brusvv/dots_inventory-/actions/runs/46100926970).
 - The source-fix commit remains `7ea2989bb6f06a81ab5424594e9f869fdefa3773`; later changes in this PR are documentation-only.
+
+
+### PR #11 final review snapshot — 2026-11-28
+
+- PR #11 head at this snapshot: `fec19b0f4ab79a6a6c89524492dbc774a3e2a2e8`; 205 commits ahead of its stacked base, 37 changed files; GitHub mergeability is `clean`.
+- Exact-head checks: [quality gates 46101031880](https://github.com/brusvv/dots_inventory-/actions/runs/46101031880), [release pipeline 46101031846](https://github.com/brusvv/dots_inventory-/actions/runs/46101031846), [package build 46101031804](https://github.com/brusvv/dots_inventory-/actions/runs/46101031804) — all PASS. The additional push-triggered package run [46101029572](https://github.com/brusvv/dots_inventory-/actions/runs/46101029572) also passed.
+- PR remains Draft and has no submitted reviews. Source code review is still required; runtime acceptance remains pending.
