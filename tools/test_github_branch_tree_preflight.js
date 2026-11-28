@@ -121,4 +121,30 @@ test("valid complete Git tree proceeds to download exactly its three source file
   assert.equal(run.rawFetchCount, 3);
 });
 
+
+test("downloaded source with a byte-size mismatch is rejected", () => {
+  const tree = validTree();
+  tree[0] = { ...tree[0], size: tree[0].size + 1 };
+  const run = runManifest(tree);
+  assert.match(run.error && run.error.message, /Размер исходника не совпадает с Git tree/);
+  assert.equal(run.rawFetchCount, 3);
+});
+
+test("downloaded source with a Git blob SHA-1 mismatch is rejected", () => {
+  const tree = validTree();
+  tree[0] = { ...tree[0], sha: "f".repeat(40) };
+  const run = runManifest(tree);
+  assert.match(run.error && run.error.message, /Git blob SHA-1 исходника не совпадает/);
+  assert.equal(run.rawFetchCount, 3);
+});
+
+test("branch manifest records SHA-256 calculated from the verified downloaded source", () => {
+  const run = runManifest(validTree(), false);
+  assert.equal(run.error, undefined);
+  const file = run.result.manifest.files.find((item) => item.name === "00_DI3_AppConfig.gs");
+  const expected = crypto.createHash("sha256")
+    .update(baseSources["src/apps_script/00_DI3_AppConfig.gs"], "utf8").digest("hex");
+  assert.equal(file.sha256, expected);
+});
+
 process.stdout.write("\n" + passed + " Git tree preflight fixture tests passed.\n");
