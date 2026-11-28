@@ -1218,3 +1218,23 @@ Tested source commit: `7ea2989bb6f06a81ab5424594e9f869fdefa3773`.
 - [Quality gates 46100854031](https://github.com/brusvv/dots_inventory-/actions/runs/46100854031), [Release pipeline 46100854106](https://github.com/brusvv/dots_inventory-/actions/runs/46100854106), and [package build 46100854083](https://github.com/brusvv/dots_inventory-/actions/runs/46100854083): **PASS** on the exact PR head.
 - These remain source/Node CI results. No Apps Script/Sheets/Drive runtime operation was performed.
 - PR #11 remains Draft, open and mergeable, with no review submissions or inline review threads. It is not approved for merge until source review and disposable-workbook acceptance are complete.
+
+
+### PR #10 latest review snapshot
+
+- Current PR head: `758305d3e0816fb8a3faf7986b989ddb55e1722a`.
+- Focused branch-selector CI [46100554436](https://github.com/brusvv/dots_inventory-/actions/runs/46100554436): **55/55 syntax, 71/71 deployment-manager tests PASS**.
+- The PR also has a successful release-contract check. It does not yet show the full quality-gates and package checks on the current head.
+- Runtime acceptance remains NOT RUN; PR #10 stays Draft.
+
+### PR #8 and PR #2 mergeability
+
+- PR #2 currently reports `mergeable_state=dirty`; resolve its branch conflict after the N-03 base is finalized.
+- PR #8 currently reports `mergeable_state=dirty`; its head is based on an older preview branch snapshot and pins source commit `39ae1b1...`. Rebase/update its base and review the pinned bootstrap source before merge.
+
+
+### PR #11 latest branch state
+
+- PR #11 head after plan documentation commits: `352c04436798a0da69bca83e8319d60728a5780a`.
+- GitHub reports the PR clean/mergeable and all current checks passed: [quality gates 46100927016](https://github.com/brusvv/dots_inventory-/actions/runs/46100927016), [release pipeline 46100927023](https://github.com/brusvv/dots_inventory-/actions/runs/46100927023), [package build 46100926970](https://github.com/brusvv/dots_inventory-/actions/runs/46100926970).
+- The source-fix commit remains `7ea2989bb6f06a81ab5424594e9f869fdefa3773`; later changes in this PR are documentation-only.
