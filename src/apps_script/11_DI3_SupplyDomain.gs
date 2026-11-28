@@ -1289,7 +1289,9 @@ function di3NewSupplyForm(options) {
   sheet.getRange("M9").clearContent();
   sheet.getRange("M2").setValue("Новая поставка");
   sheet.getRange("G2").setValue(di3ParseSupplyCalendarDate_(new Date(), "Дата создания заказа в магазине"));
-  di3RefreshSupplyFormValidations();
+  // Clearing values does not remove existing data validations. Keep the
+  // installed product/money/selector rules instead of rebuilding catalogue
+  // indexes and both supply summaries on every "New supply" action.
   di3RefreshSupplyDatePanel_(null);
   di3SetSupplyFormStateBaseline_(sheet);
   return { status: "READY", cleared: true };
@@ -1366,7 +1368,7 @@ function di3LoadSelectedSupplyDraft(options) {
     partner_discount_amount: Number(supply.partner_discount_amount), shipping_amount: Number(supply.shipping_amount),
     final_amount: Number(supply.final_amount)
   });
-  di3RefreshSupplyFormValidations();
+  if (options.skipValidationRefresh !== true) di3RefreshSupplyFormValidations();
   di3SetSupplyFormStateBaseline_(sheet);
   return { loaded: true, supply_number: supply.supply_number, items: items.length };
 }
