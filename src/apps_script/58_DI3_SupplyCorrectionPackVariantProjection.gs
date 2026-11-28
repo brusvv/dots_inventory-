@@ -60,21 +60,20 @@ function di3ReconcileCurrentPackVariantsForProducts_(productIds) {
   Object.keys(variants.byId).forEach(function (variantId) {
     var record = variants.byId[variantId];
     var productId = String(record.product_id);
-    var target = latest[productId];
-    if (!target) return;
-    if (!variants.byId[target.pack_variant_id] ||
-        String(variants.byId[target.pack_variant_id].product_id) !== productId) {
+    var target = latest[productId] || null;
+    if (target && (!variants.byId[target.pack_variant_id] ||
+        String(variants.byId[target.pack_variant_id].product_id) !== productId)) {
       throw new Error("Последняя полученная поставка указывает на отсутствующую/чужую фасовку " + target.pack_variant_id + ".");
     }
-    var shouldBeCurrent = String(variantId) === String(target.pack_variant_id);
+    var shouldBeCurrent = !!target && String(variantId) === String(target.pack_variant_id);
     var isCurrent = record.is_current === true || String(record.is_current).toLowerCase() === "true";
     var currentUpdatedAt = record.updated_at instanceof Date
       ? record.updated_at.getTime() : new Date(record.updated_at || 0).getTime();
-    var targetUpdatedAt = new Date(target.received_at).getTime();
-    if (shouldBeCurrent === isCurrent && currentUpdatedAt === targetUpdatedAt) return;
+    var targetUpdatedAt = target ? new Date(target.received_at).getTime() : null;
+    if (shouldBeCurrent === isCurrent && (!target || currentUpdatedAt === targetUpdatedAt)) return;
     var row = DI3_TABLE_SCHEMAS.PackVariants.map(function (header) { return record[header]; });
     row[4] = shouldBeCurrent;
-    row[8] = new Date(target.received_at);
+    row[8] = target ? new Date(target.received_at) : new Date();
     updates.push({ row_number: record.row_number, values: row });
   });
   if (updates.length) di3ApplyContiguousRowUpdates_("PackVariants", updates);
