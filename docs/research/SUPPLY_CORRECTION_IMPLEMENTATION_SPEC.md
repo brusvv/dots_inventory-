@@ -257,3 +257,34 @@ The latest source CI run for commit
 - Finance schema: **4/4**.
 
 All reported assertions passed. This is source/Node CI evidence, not a bound-workbook runtime acceptance.
+
+
+## 12. SC-03 foundation — read-only candidate FIFO preview
+
+Added \`51_DI3_SupplyCorrectionFifoPreview.gs\`:
+
+- Accepts a consistent snapshot of StockLedger, StockMovementDetails,
+  StockLots, SupplyCorrectionEvents and Operations. Replacement inbound rows
+  must already be present in the supplied candidate snapshot.
+- Resolves committed relations for normal candidate state, or PREPARED
+  relations only for the exact \`include_operation_id\`.
+- Verifies each referenced source/replacement movement exists, is an inbound
+  movement for the declared product, and preserves the original effective
+  receipt timestamp.
+- Builds the complete affected-product scope from both source and replacement
+  product IDs. This deliberately includes products removed from the corrected
+  document, so their historical sales and stock are still replayed.
+- Excludes superseded source movement IDs and their details/lots, then runs the
+  existing full FIFO replay plan against the remaining candidate events.
+- Returns affected products, relation/input fingerprints, replay allocations,
+  movement costs and remaining lots. It does not write to Sheets.
+
+Regression tests in \`52_DI3_SupplyCorrectionFifoPreviewTests.gs\` cover
+replacement cost replay, negative stock after REMOVE, cross-product REMOVE+ADD,
+multi-step correction chains, exact pending-operation visibility, invalid
+replacement movement type/date and input immutability.
+
+**Scope boundary:** this is a pure preview/preflight primitive. It is not yet
+called by the operation executor or normal FIFO rebuild; no live correction
+can be committed and no active FIFO projection is changed. SC-03 integration
+and SC-04 commit/recovery remain pending.
