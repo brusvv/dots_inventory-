@@ -1,0 +1,129 @@
+/** Unit tests for correction-aware FIFO source snapshot construction. */
+function di3RunSupplyCorrectionFifoIntegrationTests() {
+  var passed = 0, failed = [];
+  function test(name, callback) {
+    try { callback(); passed++; }
+    catch (error) { failed.push({ name: name, error: error.message || String(error) }); }
+  }
+  function equal(actual, expected, message) {
+    if (actual !== expected) throw new Error((message || "Values differ") + ": expected " + JSON.stringify(expected) + ", got " + JSON.stringify(actual));
+  }
+  function throws(callback, pattern) {
+    var error = null;
+    try { callback(); } catch (caught) { error = caught; }
+    if (!error) throw new Error("Expected error matching " + pattern + ", but no error was thrown");
+    if (pattern && !pattern.test(String(error.message || error))) throw new Error("Expected error matching " + pattern + ", got: " + String(error.message || error));
+  }
+  function ledger(id, productId, delta, effectiveAt, recordedAt) {
+    return [id, "OP-" + id, "EV-" + id, productId, "SUPPLY", "S1", delta,
+      new Date(effectiveAt), new Date(recordedAt || effectiveAt), "", "", "", 1];
+  }
+  function detail(id, type) { return [id, "MOV-" + id, type, "SUPPLY_RECEIVE", "", "", "KNOWN", "", "test", ""]; }
+  function lot(id, productId, movementId, quantity) {
+    return [id, productId, movementId, "SUPPLY", "S1", "PV-" + productId,
+      new Date("2026-01-02T09:00:00Z"), new Date("2026-01-02T09:00:00Z"),
+      quantity, 10, "KNOWN", "RUB", "", quantity, quantity * 1000];
+  }
+  function operation(id) {
+    return [id, "SUPPLY_CORRECTION:" + id, "SUPPLY_CORRECTION", "SUPPLY", "S1",
+      "COMMITTED", "HASH-" + id, new Date(), "", "", "test"];
+  }
+  function relation(seq, relationId, type, source, replacement, sourceProduct, replacementProduct, operationId) {
+    return ["EVT-" + seq, relationId, "CORR-" + operationId, operationId, "S1", seq,
+      "COMMITTED", type, source || "", replacement || "", sourceProduct || "",
+      replacementProduct || "", source ? "ITEM-" + source : "",
+      replacement ? "ITEM-" + replacement : "",
+      new Date("2026-01-02T09:00:00Z"), new Date(), "{}"];
+  }
+  function snapshot(ledgerRows, details, lots, relations, operations) {
+    var map = di3BuildSupplyCorrectionEffectiveMovementMap_(relations, operations, {});
+    return di3BuildSupplyCorrectionEffectiveFifoSnapshot_(ledgerRows, details, lots, map);
+  }
+
+  test("REPLACE excludes source ledger, detail and lot while retaining replacement", function () {
+    var date = "2026-01-02T09:00:00Z";
+    var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date, "2026-01-04T09:00:00Z")];
+    var details = [detail("SRC", "IN"), detail("REPL", "IN")];
+    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10)];
+    var result = snapshot(rows, details, lots,
+      [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")], [operation("OP-1")]);
+    equal(result.ledger_rows.length, 1);
+    equal(result.ledger_rows[0][0], "REPL");
+    equal(result.detail_rows.length, 1);
+    equal(result.detail_rows[0][0], "REPL");
+    equal(result.lot_rows.length, 1);
+    equal(result.lot_rows[0][0], "LOT-REPL");
+    equal(result.affected_product_ids.join(","), "P1");
+  });
+
+  test("REMOVE keeps no superseded receipt and still exposes affected product scope", function () {
+    var date = "2026-01-02T09:00:00Z";
+    var result = snapshot([ledger("SRC", "P1", 10, date)], [detail("SRC", "IN")],
+      [lot("LOT-SRC", "P1", "SRC", 10)],
+      [relation(1, "REL-R", "REMOVE", "SRC", "", "P1", "", "OP-1")], [operation("OP-1")]);
+    equal(result.ledger_rows.length, 0);
+    equal(result.lot_rows.length, 0);
+    equal(result.affected_product_ids.join(","), "P1");
+  });
+
+  test("ADD retains the replacement movement and scopes its product", function () {
+    var date = "2026-01-02T09:00:00Z";
+    var result = snapshot([ledger("NEW", "P2", 12, date)], [detail("NEW", "IN")],
+      [lot("LOT-NEW", "P2", "NEW", 12)],
+      [relation(1, "REL-A", "ADD", "", "NEW", "", "P2", "OP-1")], [operation("OP-1")]);
+    equal(result.ledger_rows.length, 1);
+    equal(result.ledger_rows[0][0], "NEW");
+    equal(result.affected_product_ids.join(","), "P2");
+  });
+
+  test("correction chain removes every superseded movement and keeps final replacement", function () {
+    var date = "2026-01-02T09:00:00Z";
+    var rows = ["A", "B", "C"].map(function (id, index) {
+      return ledger(id, "P1", 10, date, index ? "2026-01-0" + (index + 3) + "T09:00:00Z" : date);
+    });
+    var details = ["A", "B", "C"].map(function (id) { return detail(id, "IN"); });
+    var lots = ["A", "B", "C"].map(function (id) { return lot("LOT-" + id, "P1", id, 10); });
+    var result = snapshot(rows, details, lots, [
+      relation(1, "REL-1", "REPLACE", "A", "B", "P1", "P1", "OP-1"),
+      relation(2, "REL-2", "REPLACE", "B", "C", "P1", "P1", "OP-2")
+    ], [operation("OP-1"), operation("OP-2")]);
+    equal(result.ledger_rows.length, 1);
+    equal(result.ledger_rows[0][0], "C");
+    equal(result.lot_rows[0][0], "LOT-C");
+  });
+
+  test("source snapshots are not mutated", function () {
+    var date = "2026-01-02T09:00:00Z";
+    var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date)];
+    var details = [detail("SRC", "IN"), detail("REPL", "IN")];
+    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10)];
+    var relations = [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")];
+    var before = JSON.stringify({ rows: rows, details: details, lots: lots, relations: relations });
+    snapshot(rows, details, lots, relations, [operation("OP-1")]);
+    equal(JSON.stringify({ rows: rows, details: details, lots: lots, relations: relations }), before);
+  });
+
+  test("rejects a relation whose replacement is not an inbound movement", function () {
+    var date = "2026-01-02T09:00:00Z";
+    throws(function () {
+      snapshot([ledger("SRC", "P1", 10, date), ledger("REPL", "P1", -10, date)],
+        [detail("SRC", "IN"), detail("REPL", "OUT")],
+        [lot("LOT-SRC", "P1", "SRC", 10)],
+        [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")], [operation("OP-1")]);
+    }, /должен быть положительным приходом IN/);
+  });
+
+  test("rejects a replacement with a different effective receipt date", function () {
+    var date = "2026-01-02T09:00:00Z";
+    throws(function () {
+      snapshot([ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, "2026-01-03T09:00:00Z")],
+        [detail("SRC", "IN"), detail("REPL", "IN")],
+        [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10)],
+        [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")], [operation("OP-1")]);
+    }, /не совпадает с исходной датой приёмки/);
+  });
+
+  var report = { passed: passed, failed: failed.length, failures: failed };
+  if (failed.length) throw new Error("Supply correction FIFO integration tests failed: " + JSON.stringify(failed));
+  return report;
+}
