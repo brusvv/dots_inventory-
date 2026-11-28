@@ -90,6 +90,24 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     includes(source, "CANCELLED_BY_USER");
   });
 
+  test("new supply form clears values without rebuilding catalogue and status validations", function () {
+    var source = di3NewSupplyForm.toString();
+    includes(source, 'sheet.getRange("B2:B8").clearContent()');
+    includes(source, 'sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent()');
+    includes(source, "di3RefreshSupplyDatePanel_(null)");
+    equal(source.indexOf("di3RefreshSupplyFormValidations()") === -1, true,
+      "clearing form values must not reload product indexes and supply summaries");
+    equal(source.indexOf("clearDataValidations()") === -1, true,
+      "existing data validations should remain installed");
+  });
+
+  test("full-edit reload can skip validation rebuild while explicit load keeps the repair path", function () {
+    var loadSource = di3LoadSelectedSupplyDraft.toString();
+    includes(loadSource, "options.skipValidationRefresh !== true");
+    includes(di3RefreshSupplyFormValidations.toString(), "di3GetProductFormOptionIndex_");
+    includes(di3RefreshSupplyFormValidations.toString(), "di3GetSupplyFormLoadSummary_");
+  });
+
   test("switching B2 with unsaved data stores the requested document and restores the previous selector", function () {
     var source = di3SupplyFormOnEdit.toString();
     includes(source, "DI3_SUPPLY_FORM.pendingSelector");
