@@ -46,7 +46,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     var date = "2026-01-02T09:00:00Z";
     var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date, date)];
     var details = [detail("SRC", "IN"), detail("REPL", "IN")];
-    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 10, date, changedRecordedAt)];
+    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 10, date, date)];
     var result = snapshot(rows, details, lots,
       [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")], [operation("OP-1")]);
     equal(result.ledger_rows.length, 1);
@@ -103,7 +103,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
   test("correction chain removes every superseded movement and keeps final replacement", function () {
     var date = "2026-01-02T09:00:00Z";
     var rows = ["A", "B", "C"].map(function (id, index) {
-      return ledger(id, "P1", 10, date, index ? "2026-01-0" + (index + 3) + "T09:00:00Z" : date);
+      return ledger(id, "P1", 10, date, date);
     });
     var details = ["A", "B", "C"].map(function (id) { return detail(id, "IN"); });
     var lots = ["A", "B", "C"].map(function (id) { return lot("LOT-" + id, "P1", id, 10); });
@@ -134,7 +134,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     var date = "2026-01-02T09:00:00Z";
     var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date)];
     var details = [detail("SRC", "IN"), detail("REPL", "IN")];
-    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 10, "2026-01-03T09:00:00Z", "2026-01-03T09:00:00Z")];
+    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 10, "2026-01-03T09:00:00Z", date)];
     var relations = [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")];
     var before = JSON.stringify({ rows: rows, details: details, lots: lots, relations: relations });
     snapshot(rows, details, lots, relations, [operation("OP-1")]);
@@ -169,7 +169,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
   test("rejects a replacement with a different effective receipt date", function () {
     var date = "2026-01-02T09:00:00Z";
     throws(function () {
-      snapshot([ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, "2026-01-03T09:00:00Z")],
+      snapshot([ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, "2026-01-03T09:00:00Z", date)],
         [detail("SRC", "IN"), detail("REPL", "IN")],
         [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10)],
         [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")], [operation("OP-1")]);
