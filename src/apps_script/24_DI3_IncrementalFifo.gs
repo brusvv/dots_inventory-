@@ -1457,21 +1457,9 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
     replayedMovements += Number(recoveredReplay.movements_replayed || 0);
     if (isFullReplay) {
       var fullRows = di3BuildFifoAllocationRows_(run.run_id, candidateReplay.allocations, run.replay_id);
-      var remaining = {};
-      candidateReplay.remaining_lots.forEach(function (lot) { remaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
-      var supersededLotMovements = Object.create(null);
-      (effectiveSnapshot.superseded_movement_ids || []).forEach(function (id) { supersededLotMovements[String(id)] = true; });
-      (allLotRows || []).forEach(function (row) {
-        var lotId = String(row[0]), movementId = String(row[2] || "");
-        if (Object.prototype.hasOwnProperty.call(remaining, lotId)) return;
-        if (supersededLotMovements[movementId]) {
-          // Superseded source lots remain immutable records, but their active
-          // remaining cache is zeroed only after F-06 archives the source value.
-          remaining[lotId] = 0;
-          return;
-        }
-        throw new Error("StockLots: эффективная партия " + lotId + " отсутствует в candidate FIFO replay.");
-      });
+      var remaining = di3BuildSupplyCorrectionTargetLotRemainingMap_(
+        candidateReplay.remaining_lots, allLotRows, effectiveSnapshot.superseded_movement_ids
+      );
       var fullReplayContext = {
         replay_id: run.replay_id,
         fifo_run_id: String(run.run_id),
