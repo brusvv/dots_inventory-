@@ -804,7 +804,14 @@ function di3ApplySupplyDocumentEditOperation_(operationRecord, payload) {
   if (storedStatus === DI3_SUPPLY_STATUS.CANCELLED) throw new Error("Отменённую поставку нельзя корректировать без отдельного восстановления.");
   if (storedStatus === DI3_SUPPLY_STATUS.RECEIVED) {
     if (!receipt || String(receipt.values[5]) !== "COMMITTED") throw new Error("Полученная поставка не имеет подтверждённой операции приёмки.");
-    var receiptAudit = di3BuildSupplyFullEditSnapshot_(String(payload.supply_id)).receipt_operation;
+    // This handler only needs to verify the immutable receipt payload. The
+    // full stock/FIFO audit remains available through the explicit audit entrypoint.
+    var receiptAudit = di3BuildSupplyFullEditSnapshot_(String(payload.supply_id), {
+      includeStockAudit: false,
+      includeReceiptPayload: true,
+      supply: supply,
+      receiptOperation: receipt
+    }).receipt_operation;
     if (!receiptAudit || receiptAudit.payload_integrity !== "VALID") {
       throw new Error("Не удалось подтвердить целостность исходного payload SUPPLY_RECEIVE. Документная корректировка остановлена без изменений.");
     }
@@ -869,7 +876,7 @@ function di3ApplySupplyDocumentEditOperation_(operationRecord, payload) {
     old_status: String(payload.old_status),
     new_status: String(payload.new_status),
     item_rows: targetRows.length,
-    removed_item_rows: removeRows.length,
+    removed_item_rows: itemPlan.remove_row_numbers.length,
     stock_movements_created: 0,
     audit_payload: "OperationPayloads"
   };
