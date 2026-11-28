@@ -452,7 +452,7 @@ function di3IsSupplyFullEditFinancialInputRange_(row, column, numRows, numColumn
 function di3RefreshSupplyFullEditFinancialPreview_(sheet) {
   sheet = sheet || di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
   try {
-    var lines = di3ResolveSupplyFormLines_(false);
+    var lines = di3ResolveSupplyFormLines_(false, true);
     var financialInputs = sheet.getRange("B5:B7").getValues().map(function (row) {
       return row[0] === "" || row[0] == null ? 0 : row[0];
     });
