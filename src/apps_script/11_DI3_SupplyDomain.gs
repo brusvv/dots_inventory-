@@ -858,16 +858,14 @@ function di3GetSupplyFormLoadSummary_() {
     DI3_SUPPLY_STATUS.RECEIVED, "Доставлена", "Получена",
     DI3_SUPPLY_STATUS.CANCELLED, "Отменена"];
   var byId = Object.create(null);
-  statuses.forEach(function (status) {
-    di3ReadRowsByColumnValue_("V3_Supplies", 3, status).forEach(function (match) {
-      var row = match.values;
-      var supplyId = String(row[0] || "");
-      if (!supplyId || byId[supplyId]) return;
-      byId[supplyId] = {
-        supply_id: supplyId, supply_number: String(row[1] || ""), supplier: String(row[2] || ""),
-        status: String(row[3] || ""), created_at: row[4] || "", supplier_order_date: row[17] || ""
-      };
-    });
+  di3ReadRowsByColumnValues_("V3_Supplies", 3, statuses).forEach(function (match) {
+    var row = match.values;
+    var supplyId = String(row[0] || "");
+    if (!supplyId || byId[supplyId]) return;
+    byId[supplyId] = {
+      supply_id: supplyId, supply_number: String(row[1] || ""), supplier: String(row[2] || ""),
+      status: String(row[3] || ""), created_at: row[4] || "", supplier_order_date: row[17] || ""
+    };
   });
   return Object.keys(byId).map(function (id) { return byId[id]; }).sort(function (a, b) {
     return di3CompareSupplyOrderChronology_(a.supplier_order_date, a.created_at, a.supply_number,
@@ -876,10 +874,8 @@ function di3GetSupplyFormLoadSummary_() {
 }
 
 function di3GetSupplyDraftSummary() {
-  var rows = [];
-  [DI3_SUPPLY_STATUS.CREATED, "Создана", "Оформлена"].forEach(function (status) {
-    rows = rows.concat(di3ReadRowsByColumnValue_("V3_Supplies", 3, status));
-  });
+  var rows = di3ReadRowsByColumnValues_("V3_Supplies", 3,
+    [DI3_SUPPLY_STATUS.CREATED, "Создана", "Оформлена"]);
   var seenSupplyIds = Object.create(null);
   var result = [];
   rows.forEach(function (match) {
