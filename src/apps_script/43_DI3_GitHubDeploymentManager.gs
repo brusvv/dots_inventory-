@@ -311,7 +311,9 @@ function di3GetSelectedGitHubBranchSelection_() {
     if (!branch) return null;
     branch = di3ValidateGitHubBranchName_(branch);
     var commit = String(properties.getProperty("DI3_GITHUB_SELECTED_COMMIT") || "").trim().toLowerCase();
-    if (commit && !/^[0-9a-f]{40}$/.test(commit)) throw new Error("Сохранённый commit выбранной ветки повреждён; сбрось выбор ветки и выбери её заново.");
+    if (!/^[0-9a-f]{40}$/.test(commit)) {
+      throw new Error("Для выбранной ветки не сохранён полный commit SHA. Сбрось выбор ветки и выбери её заново.");
+    }
     return { branch: branch, commit: commit };
   } catch (error) {
     if (String(error && error.message || "").indexOf("Разрешены только ветки") === 0 ||
@@ -418,7 +420,30 @@ function di3GetGitHubBranchManifest_(branch, pinnedCommit) {
     throw new Error("Git tree выбранной ветки неполон или превышает лимит GitHub API; установка заблокирована.");
   }
   var entries = treeResult.data.tree.filter(function (entry) {
-    return entry && entry.type === "blob" && /^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""));
+    return entry && /^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""));
+  });
+  if (!entries.length || entries.length > 200) {
+    throw new Error("В Git tree должно быть от 1 до 200 корневых Apps Script .gs файлов; загрузка остановлена до скачивания исходников.");
+  }
+  var seenNames = {};
+  var totalSourceBytes = 0;
+  entries.forEach(function (entry) {
+    var name = String(entry.path).slice("src/apps_script/".length);
+    if (entry.type !== "blob" || (entry.mode !== "100644" && entry.mode !== "100755")) {
+      throw new Error("Недопустимый тип Git tree entry для Apps Script файла " + name + "; разрешены только обычные файлы.");
+    }
+    if (!/^[A-Za-z0-9_.-]+\.gs$/.test(name) || name.indexOf("..") !== -1) {
+      throw new Error("Недопустимый путь Apps Script файла в Git tree: " + name);
+    }
+    var key = name.toLowerCase();
+    if (seenNames[key]) throw new Error("Повторяющееся имя Apps Script файла в Git tree: " + name);
+    seenNames[key] = true;
+    if (!/^[0-9a-f]{40}$/i.test(String(entry.sha || "")) ||
+        !Number.isSafeInteger(Number(entry.size)) || Number(entry.size) < 0) {
+      throw new Error("Git tree не содержит достоверные SHA/size для " + name);
+    }
+    totalSourceBytes += Number(entry.size);
+    if (totalSourceBytes > 10000000) throw new Error("Общий размер исходников ветки превышает 10 MB; загрузка остановлена.");
   });
   var sourceTexts = {};
   entries.forEach(function (entry) {
@@ -454,8 +479,10 @@ function di3SelectGitHubSourceBranch() {
   var selected = di3ValidateGitHubBranchName_(prompt.getResponseText());
   if (allowed.indexOf(selected) === -1) throw new Error("Ветка отсутствует в полученном списке GitHub. Обнови список и повтори выбор.");
   var result = di3GetGitHubBranchManifest_(selected);
-  PropertiesService.getScriptProperties().setProperty("DI3_GITHUB_SELECTED_BRANCH", selected);
-  PropertiesService.getScriptProperties().setProperty("DI3_GITHUB_SELECTED_COMMIT", result.manifest.git_commit);
+  PropertiesService.getScriptProperties().setProperties({
+    DI3_GITHUB_SELECTED_BRANCH: selected,
+    DI3_GITHUB_SELECTED_COMMIT: result.manifest.git_commit
+  });
   ui.alert("GitHub · источник выбран", "Ветка: " + selected + "\nCommit: " + result.manifest.git_commit +
     "\nСхема: v" + result.manifest.target_schema_version + "\nЧасовой пояс: " + result.manifest.application_time_zone +
     "\n\nПроверка, preview и установка будут использовать этот commit ветки. Это не опубликованный Stable/Preview релиз.",
