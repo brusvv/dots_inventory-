@@ -294,3 +294,14 @@ This does not yet modify the FIFO event stream or execute corrections. No
 handler is registered and no live workbook/schema, stock ledger, lot, allocation,
 cost history, order snapshot or document was changed. The fail-closed guard for
 received-supply stock edits remains in place.
+
+
+SC-02 relation-journal quality gates passed for source commit
+\`4364355461999ef2e4c25fe8678a17d6e22673b0\`:
+[GitHub Actions #46095111648](https://github.com/brusvv/dots_inventory-/actions/runs/46095111648).
+
+The run checked JavaScript syntax for 59 Apps Script modules and passed all
+automated suites: snapshot auditor 8, FIFO 46, order domain 22, supply domain
+and lifecycle 113, catalog/order UX 14, system safety 39, warehouse dashboard
+11, finance schema 4. Total: **257 passed, 0 failed**. This does not replace
+Apps Script runtime acceptance against a restored/disposable workbook.
