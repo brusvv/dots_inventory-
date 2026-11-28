@@ -31,7 +31,7 @@ function di3SupplyCorrectionNearlyEqual_(left, right, fieldName) {
  * Inputs are arrays of {row_number, values} returned by read-only repository
  * helpers. Ledger rows must already be scoped to the original receipt operation.
  */
-function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, ledgerMatches, detailMatches, lotMatches, currentItems) {
+function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, ledgerMatches, detailMatches, lotMatches, currentItems, allocationMatches) {
   if (!receiptOperation || !receiptOperation.values) throw new Error("Не найдена исходная операция приёмки.");
   var operation = receiptOperation.values;
   var operationId = String(operation[0] || "");
@@ -216,6 +216,8 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
       product_id: String(line.product_id),
       pack_variant_id: String(line.pack_variant_id),
       quantity: quantity,
+      initial_quantity: Number(lot[8]),
+      remaining_quantity: lot[13],
       unit_cost: Number(line.unit_cost),
       total_cost_minor: Number(line.total_cost_minor),
       effective_at: new Date(line.effective_at).toISOString(),
@@ -231,11 +233,13 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
     set[line.product_id] = true;
     return set;
   }, Object.create(null))).sort();
+  var allocationAudit = di3BuildSupplyCorrectionAllocationAudit_(sourceLines, allocationMatches || []);
   var fingerprint = di3SupplyFullEditHash_({
     operation_id: operationId,
     operation_payload_hash: String(operation[6] || ""),
     supply_id: supplyId,
-    lines: sourceLines
+    lines: sourceLines,
+    fifo_allocations: allocationAudit.allocations
   });
   return {
     status: "VALID",
@@ -244,7 +248,90 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
     receipt_payload_hash: String(operation[6] || ""),
     source_lines: sourceLines,
     affected_product_ids: affectedProducts,
+    fifo_allocation_count: allocationAudit.allocation_count,
+    fifo_allocation_fingerprint: allocationAudit.fingerprint,
     fingerprint: fingerprint
+  };
+}
+
+/**
+ * Validate the active allocation projection for the original receipt lots.
+ * StockAllocations is a current projection: its per-lot CONSUME total must
+ * reconcile exactly to StockLots.remaining_quantity.
+ */
+function di3BuildSupplyCorrectionAllocationAudit_(sourceLines, allocationMatches) {
+  var lotsById = Object.create(null);
+  var allocationIds = Object.create(null);
+  var consumedByLot = Object.create(null);
+  var costMinorByLot = Object.create(null);
+  (sourceLines || []).forEach(function (line) {
+    lotsById[String(line.lot_id)] = line;
+    consumedByLot[String(line.lot_id)] = 0;
+    costMinorByLot[String(line.lot_id)] = 0;
+    if (!Number.isSafeInteger(Number(line.initial_quantity)) ||
+        !Number.isSafeInteger(Number(line.remaining_quantity)) ||
+        Number(line.remaining_quantity) < 0 ||
+        Number(line.remaining_quantity) > Number(line.initial_quantity)) {
+      throw new Error("FIFO-партия " + line.lot_id + ": отсутствует или некорректен remaining_quantity.");
+    }
+  });
+  (allocationMatches || []).forEach(function (match) {
+    var row = match && match.values;
+    if (!row) throw new Error("StockAllocations: некорректная запись репозитория.");
+    var allocationId = String(row[0] || "");
+    var lotId = String(row[3] || "");
+    var line = lotsById[lotId];
+    if (!allocationId || allocationIds[allocationId]) {
+      throw new Error("StockAllocations: отсутствует или повторяется allocation_id " + allocationId + ".");
+    }
+    allocationIds[allocationId] = true;
+    if (!line) throw new Error("StockAllocations содержит распределение по неизвестной партии " + lotId + ".");
+    var quantity = Number(row[6]);
+    if (String(row[4]) !== String(line.product_id) ||
+        String(row[5]) !== "CONSUME" ||
+        !Number.isSafeInteger(quantity) || quantity <= 0 ||
+        String(row[8]) !== String(line.cost_status)) {
+      throw new Error("StockAllocations " + allocationId + ": товар, тип, количество или cost_status не согласованы с партией.");
+    }
+    if (line.cost_status === "UNKNOWN") {
+      if (row[13] !== "" && row[13] != null) throw new Error("StockAllocations " + allocationId + ": у UNKNOWN не должно быть allocated_cost_minor.");
+    } else {
+      di3SupplyCorrectionNearlyEqual_(row[7], line.unit_cost, "StockAllocations " + allocationId + ".unit_cost");
+      var allocatedMinor = Number(row[13]);
+      if (!Number.isSafeInteger(allocatedMinor) || allocatedMinor < 0) {
+        throw new Error("StockAllocations " + allocationId + ": некорректный allocated_cost_minor.");
+      }
+      costMinorByLot[lotId] += allocatedMinor;
+    }
+    consumedByLot[lotId] += quantity;
+  });
+
+  Object.keys(lotsById).forEach(function (lotId) {
+    var line = lotsById[lotId];
+    var consumed = consumedByLot[lotId];
+    var remaining = Number(line.remaining_quantity);
+    if (consumed + remaining !== Number(line.initial_quantity)) {
+      throw new Error("FIFO-партия " + lotId + ": сумма CONSUME и remaining_quantity не совпадает с initial_quantity.");
+    }
+    if (line.cost_status !== "UNKNOWN") {
+      var expectedAllocatedMinor = di3MoneyAllocateLotCostMinor_(
+        Number(line.total_cost_minor), Number(line.initial_quantity), 0, consumed);
+      if (costMinorByLot[lotId] !== expectedAllocatedMinor) {
+        throw new Error("FIFO-партия " + lotId + ": сумма allocated_cost_minor не совпадает с накопленной себестоимостью.");
+      }
+    }
+    line.consumed_quantity = consumed;
+    line.allocation_count = (allocationMatches || []).filter(function (match) {
+      return String(match.values[3]) === lotId;
+    }).length;
+  });
+  var stableAllocationRows = (allocationMatches || []).map(function (match) {
+    return match.values.slice(0, 14);
+  }).sort(function (a, b) { return String(a[0]).localeCompare(String(b[0])); });
+  return {
+    allocation_count: stableAllocationRows.length,
+    allocations: stableAllocationRows,
+    fingerprint: di3SupplyFullEditHash_(stableAllocationRows)
   };
 }
 
@@ -282,7 +369,9 @@ function di3AuditSupplyCorrectionSource(supplyId) {
     });
     var detailMatches = movementIds.length ? di3ReadRowsByColumnValues_("StockMovementDetails", 0, movementIds) : [];
     var lotMatches = movementIds.length ? di3ReadRowsByColumnValues_("StockLots", 2, movementIds) : [];
-    var source = di3BuildSupplyCorrectionSourceMap_(operationMatch, payload, ledgerMatches, detailMatches, lotMatches, currentItems);
+    var lotIds = (payload.lines || []).map(function (line) { return String(line && line.lot_id || ""); }).filter(Boolean);
+    var allocationMatches = lotIds.length ? di3ReadRowsByColumnValues_("StockAllocations", 3, lotIds) : [];
+    var source = di3BuildSupplyCorrectionSourceMap_(operationMatch, payload, ledgerMatches, detailMatches, lotMatches, currentItems, allocationMatches);
     return {
       status: "READY",
       read_only: true,
@@ -295,7 +384,8 @@ function di3AuditSupplyCorrectionSource(supplyId) {
         receipt_lines: source.source_lines.length,
         ledger_movements: ledgerMatches.length,
         movement_details: detailMatches.length,
-        fifo_lots: lotMatches.length
+        fifo_lots: lotMatches.length,
+        fifo_allocations: allocationMatches.length
       }
     };
   } catch (error) {
