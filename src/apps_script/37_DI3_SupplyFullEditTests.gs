@@ -135,6 +135,32 @@ function di3RunSupplyFullEditUnitTests() {
     equal(handlerSource.indexOf("receiptAudit.payload_integrity !== \"VALID\"") !== -1, true);
   });
 
+  test("interactive full-edit snapshots skip unrelated stock audit tables but retain receipt verification", function () {
+    var snapshotSource = di3BuildSupplyFullEditSnapshot_.toString();
+    var enableSource = di3EnableFullSupplyEditMode.toString();
+    var saveSource = di3SaveFullSupplyEdit.toString();
+    includes(snapshotSource, "options.includeStockAudit !== false");
+    includes(snapshotSource, "if (includeStockAudit)");
+    includes(snapshotSource, "options.includeReceiptPayload !== false");
+    includes(snapshotSource, "options.supply || di3GetSupplyById_(id)");
+    includes(snapshotSource, "options.receiptOperation");
+    includes(enableSource, "includeStockAudit: false");
+    includes(enableSource, "includeReceiptPayload: status === DI3_SUPPLY_STATUS.RECEIVED");
+    includes(enableSource, "receiptOperation: receipt");
+    includes(saveSource, "includeStockAudit: false");
+    includes(saveSource, "includeReceiptPayload: false");
+    // The public audit entry point deliberately keeps the default, complete snapshot.
+    includes(di3AuditSupplyForFullEdit.toString(), "di3BuildSupplyFullEditSnapshot_(id)");
+  });
+
+  test("full-edit cancel and successful reload can reuse existing form validations", function () {
+    var endSource = di3EndFullSupplyEditMode.toString();
+    var loadSource = di3LoadSelectedSupplyDraft.toString();
+    includes(endSource, "skipValidationRefresh: true");
+    includes(endSource, "di3SetSupplySelectorValidation_(sheet, current.supply_number)");
+    includes(loadSource, "options.skipValidationRefresh !== true");
+  });
+
   test("full edit auto-preview reacts to quantity, pack size, price and financial inputs", function () {
     equal(di3IsSupplyFullEditFinancialInputRange_(12, 2, 1, 1), true, "units per pack");
     equal(di3IsSupplyFullEditFinancialInputRange_(12, 3, 1, 1), true, "pack count");
