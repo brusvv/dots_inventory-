@@ -78,16 +78,16 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
     index[key] = true;
     return key;
   }
-  function indexMatches(matches, index, label) {
+  function indexMatches(matches, columnIndex, expectedIndex, label) {
     (matches || []).forEach(function (match) {
       var row = match && match.values;
       if (!row) throw new Error(label + ": некорректная запись репозитория.");
-      var key = String(row[index] || "");
+      var key = String(row[columnIndex] || "");
       if (!key) throw new Error(label + ": найдено пустое значение ключа.");
-      if (!index[key]) return;
-      if (!index._matches) index._matches = Object.create(null);
-      if (!index._matches[key]) index._matches[key] = [];
-      index._matches[key].push(match);
+      if (!expectedIndex[key]) return;
+      if (!expectedIndex._matches) expectedIndex._matches = Object.create(null);
+      if (!expectedIndex._matches[key]) expectedIndex._matches[key] = [];
+      expectedIndex._matches[key].push(match);
     });
   }
 
