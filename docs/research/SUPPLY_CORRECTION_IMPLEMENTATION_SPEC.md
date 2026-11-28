@@ -443,3 +443,9 @@ The all-sheet snapshot hardening passed the quality gates at source commit `ae96
 - [GitHub Actions run 46100406477](https://github.com/brusvv/dots_inventory-/actions/runs/46100406477).
 
 This still verifies source/Node CI only. It does not replace the required read-only probe against a restored bound workbook.
+
+### Pack-variant audit timestamp correction
+
+A source review found that current-variant reconciliation rewrote `PackVariants.updated_at` to the supply's `received_at` for every variant belonging to an affected product, even when its `is_current` flag did not change. Reconciliation now writes only rows whose current flag actually changes and sets `updated_at` to the reconciliation timestamp. Four regression cases cover unchanged current rows, unchanged non-target rows, flag activation and flag clearing.
+
+Exact source commit `1bb835bfcc636dffc41007171052d6adbd230bf1` passed: 69/69 Apps Script syntax files; snapshot audit 8/8; FIFO 46/46; order 22/22; supply/correction/lifecycle 157/157; catalog/order UX 14/14; system safety 39/39; warehouse 11/11; finance 4/4. [Quality gates 46101680208](https://github.com/brusvv/dots_inventory-/actions/runs/46101680208), [release pipeline 46101680200](https://github.com/brusvv/dots_inventory-/actions/runs/46101680200), and [package 46101680278](https://github.com/brusvv/dots_inventory-/actions/runs/46101680278) passed on the exact source commit.
