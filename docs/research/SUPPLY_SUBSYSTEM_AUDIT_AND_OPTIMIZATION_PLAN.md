@@ -383,3 +383,8 @@ The correction handler now recalculates current pack-variant flags for affected 
 Latest source CI at `76440457589cd3577913f517921d98ec36231520`: syntax 68/68; snapshot 7; FIFO 46; order 22; supply/correction/lifecycle 149; catalog/order UX 14; system safety/operation 39; warehouse dashboard 11; finance schema 4. **292 passed, 0 failed.** [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46099249735).
 
 No live workbook was changed. The correction API remains out of the menu, and the received-supply edit guard remains enabled until restored-copy runtime acceptance is completed.
+
+
+A read-only runtime probe `di3RunSupplyCorrectionPreviewRuntimeProbe(supplyId, spec)` is now available. It compares values and formulas across the relevant workbook tables before and after candidate preview and reports any side effect. It never invokes the mutating correction command.
+
+Latest source CI at `29b8f777035e017d9916bb545ae35d9f4f0d8264`: syntax 69/69; snapshot 7; FIFO 46; order 22; supply/correction/lifecycle 149; catalog/order UX 14; system safety/operation 39; warehouse dashboard 11; finance schema 4. **292 passed, 0 failed.** [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46099338029).
