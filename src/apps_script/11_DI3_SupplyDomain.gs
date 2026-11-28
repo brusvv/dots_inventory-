@@ -955,18 +955,21 @@ function di3ResolveSupplyFormLines_(createVariants) {
     if (!Number.isInteger(units) || units <= 0) throw new Error("Строка " + (DI3_SUPPLY_FORM.firstLine + offset) + ": укажи фасовку в штуках.");
     var key = di3BuildPackVariantKey_(String(product.product_id), units);
     var existingVariant = variants.byProductAndUnits[key];
-    var variantId;
-    if (createVariants) {
-      variantId = di3GetOrCreatePackVariant_(String(product.product_id), units, "SUPPLY_DRAFT").pack_variant_id;
-    } else {
-      variantId = existingVariant ? String(existingVariant.pack_variant_id) : "PREVIEW:" + key;
-    }
     lines.push({
-      product_id: String(product.product_id), pack_variant_id: variantId,
+      product_id: String(product.product_id),
+      pack_variant_id: existingVariant ? String(existingVariant.pack_variant_id) : "PREVIEW:" + key,
       product_label_snapshot: di3GetProductLabel_(product), units_per_pack: units,
       packs: row[2], purchase_price_per_pack: row[3]
     });
   });
+  if (createVariants && lines.length) {
+    // All product and variant reads are reused; missing variants are appended
+    // in one batch instead of reloading both repositories for every form line.
+    var resolved = di3GetOrCreatePackVariants_(lines, "SUPPLY_DRAFT", products.byId, variants);
+    lines.forEach(function (line, index) {
+      line.pack_variant_id = resolved[index].pack_variant_id;
+    });
+  }
   return lines;
 }
 
