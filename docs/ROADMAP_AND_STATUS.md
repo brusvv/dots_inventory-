@@ -1121,7 +1121,7 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 ## 28.11.2026 — direct GitHub branch selection
 
 - Added operator-selected source branch mode to the in-project GitHub updater.
-- The menu lists supported `feature/*`, `release/*`, and `hotfix/*` branches; the chosen branch is resolved to a full immutable commit SHA.
+- The menu lists all safe branch names returned by GitHub (including `main`, `develop`, `feature/*`, `release/*` and `bugfix/*`); the chosen branch is resolved to a full immutable commit SHA.
 - The updater builds an in-memory manifest from the commit's Git tree and pinned source files, deriving schema/timezone metadata from the selected source.
 - The existing compatibility gate, checksum verification, read-only preview, verified source backup, explicit YES/NO confirmation, concurrency recheck and exact post-write verification remain in force.
 - Branch snapshots are visibly labeled BRANCH and are not treated as published Stable/Preview releases. A reset command returns to the configured release channel.
