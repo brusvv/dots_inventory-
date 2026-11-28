@@ -509,6 +509,9 @@ function di3AssertSupplyCorrectionImmutableSource_(operationId, payload) {
     if (!itemId || beforeItemById[itemId]) throw new Error("before_item_rows содержит пустой или повторный supply_item_id.");
     beforeItemById[itemId] = row;
   });
+  if (Object.keys(beforeItemById).length !== sourceLines.length) {
+    throw new Error("before_item_rows содержит лишние или отсутствующие строки относительно исходной приёмки.");
+  }
   sourceLines.forEach(function (line) {
     var item = beforeItemById[String(line.supply_item_id)];
     if (!item || String(item[1]) !== String(payload.supply_id) ||
@@ -538,7 +541,10 @@ function di3AssertSupplyCorrectionImmutableSource_(operationId, payload) {
   var allSupplyLedger = di3ReadRowsByColumnValue_("StockLedger", 5, String(payload.supply_id)).filter(function (match) {
     return String(match.values[1]) === String(payload.source_receipt_operation_id);
   });
-  if (allSupplyLedger.length !== sourceLines.length) throw new Error("Исходная операция содержит лишние или отсутствующие StockLedger движения.");
+  var allSupplyLots = di3ReadRowsByColumnValue_("StockLots", 4, String(payload.supply_id));
+  if (allSupplyLedger.length !== sourceLines.length || allSupplyLots.length !== sourceLines.length) {
+    throw new Error("Исходная поставка содержит лишние или отсутствующие StockLedger/StockLots строки.");
+  }
   if (ledgerMatches.length !== sourceLines.length || detailMatches.length !== sourceLines.length || lotMatches.length !== sourceLines.length) {
     throw new Error("Исходные StockLedger/StockMovementDetails/StockLots строки неполны.");
   }
