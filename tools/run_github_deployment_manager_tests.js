@@ -15,9 +15,9 @@ const runtimeState = {
 const context = vm.createContext({
   console, Date, JSON, Math, Number, String, Object, Array, RegExp, Error, isNaN,
   parseInt, parseFloat, Utilities: {
-    DigestAlgorithm: { SHA_256: "SHA-256" },
+    DigestAlgorithm: { SHA_256: "SHA-256", SHA_1: "SHA-1" },
     Charset: { UTF_8: "UTF-8" },
-    computeDigest: (_algorithm, value) => Array.from(crypto.createHash("sha256").update(String(value), "utf8").digest()).map((b) => b > 127 ? b - 256 : b),
+    computeDigest: (algorithm, value) => Array.from(crypto.createHash(algorithm === "SHA-1" ? "sha1" : "sha256").update(String(value), "utf8").digest()).map((b) => b > 127 ? b - 256 : b),
     newBlob: (value) => ({ getBytes: () => Array.from(Buffer.from(String(value), "utf8")).map((b) => b > 127 ? b - 256 : b) })
   },
   DI3_APP_CONFIG: { TIME_ZONE: "Europe/Moscow", GITHUB_RELEASE: { REPOSITORY: "brusvv/dots_inventory-" } },
@@ -705,7 +705,8 @@ test("builds a branch manifest pinned to one immutable commit and validates it",
     "src/apps_script/01_Module.gs": "function alpha() { return 1; }\\n"
   };
   const tree = Object.entries(sources).map(([path, source]) => ({
-    path, type: "blob", size: Buffer.byteLength(source)
+    path, type: "blob", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
   }));
   const manifest = vm.runInContext(
     "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
@@ -754,6 +755,25 @@ test("selected branch overrides Stable/Preview release discovery", () => {
     delete context.PropertiesService;
     delete context.di3GetGitHubBranchManifest_;
   }
+});
+
+test("rejects branch source content that does not match its Git blob SHA", () => {
+  const branch = "feature/blob-integrity";
+  const commit = "e".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": "var DI3_APP_CONFIG = { TIME_ZONE: \"Europe/Moscow\" };",
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;"
+  };
+  const tree = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  tree[0].sha = "f".repeat(40);
+  assert.throws(() => vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  ), /Git blob SHA-1/);
 });
 
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
