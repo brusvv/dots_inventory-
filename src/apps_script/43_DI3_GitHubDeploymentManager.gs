@@ -304,14 +304,25 @@ function di3ValidateGitHubBranchName_(branch) {
   return value;
 }
 
-function di3GetSelectedGitHubBranch_() {
+function di3GetSelectedGitHubBranchSelection_() {
   try {
-    var selected = String(PropertiesService.getScriptProperties().getProperty("DI3_GITHUB_SELECTED_BRANCH") || "").trim();
-    return selected ? di3ValidateGitHubBranchName_(selected) : "";
+    var properties = PropertiesService.getScriptProperties();
+    var branch = String(properties.getProperty("DI3_GITHUB_SELECTED_BRANCH") || "").trim();
+    if (!branch) return null;
+    branch = di3ValidateGitHubBranchName_(branch);
+    var commit = String(properties.getProperty("DI3_GITHUB_SELECTED_COMMIT") || "").trim().toLowerCase();
+    if (commit && !/^[0-9a-f]{40}$/.test(commit)) throw new Error("Сохранённый commit выбранной ветки повреждён; сбрось выбор ветки и выбери её заново.");
+    return { branch: branch, commit: commit };
   } catch (error) {
-    if (String(error && error.message || "").indexOf("Разрешены только ветки") === 0) throw error;
-    return "";
+    if (String(error && error.message || "").indexOf("Разрешены только ветки") === 0 ||
+        String(error && error.message || "").indexOf("Сохранённый commit") === 0) throw error;
+    throw new Error("Не удалось прочитать сохранённый источник GitHub: " + (error.message || String(error)));
   }
+}
+
+function di3GetSelectedGitHubBranch_() {
+  var selection = di3GetSelectedGitHubBranchSelection_();
+  return selection ? selection.branch : "";
 }
 
 function di3GetGitHubSourceLabel_(channel) {
@@ -323,8 +334,15 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
   commit = String(commit || "").toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error("GitHub branch не вернул полный commit SHA.");
   if (!Array.isArray(treeEntries) || !sourceTexts || typeof sourceTexts !== "object") throw new Error("Git tree или исходники ветки неполны.");
+  var updaterSource = sourceTexts["src/apps_script/43_DI3_GitHubDeploymentManager.gs"];
+  var branchSelectorCapable = typeof updaterSource === "string" && /function\s+di3SelectGitHubSourceBranch\s*\(/.test(updaterSource);
   var sourceFiles = treeEntries.filter(function (entry) {
-    return entry && entry.type === "blob" && /^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""));
+    if (!entry || entry.type !== "blob" || !/^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""))) return false;
+    // Older feature branches may contain an older updater. Preserve the installed
+    // updater modules as local extras unless the branch explicitly carries this
+    // branch-selector-aware manager and can safely replace the whole manager set.
+    if (!branchSelectorCapable && /^src\/apps_script\/(4[3-6]_DI3_GitHub.*)\.gs$/.test(String(entry.path || ""))) return false;
+    return true;
   });
   if (!sourceFiles.length || sourceFiles.length > 200) throw new Error("В выбранной ветке нет допустимого набора Apps Script .gs файлов (1–200).");
   sourceFiles.sort(function (a, b) { return a.path < b.path ? -1 : (a.path > b.path ? 1 : 0); });
@@ -348,8 +366,7 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
   var timezoneMatch = configSource.match(/TIME_ZONE\s*:\s*["']([^"']+)["']/);
   var schemaMatch = schemaSource.match(/var\s+DI3_SCHEMA_VERSION\s*=\s*([0-9]+)\s*;/);
   if (!timezoneMatch || !schemaMatch) throw new Error("Ветка не содержит достоверные DI3_APP_CONFIG.TIME_ZONE и DI3_SCHEMA_VERSION; установка заблокирована.");
-  var updaterSource = sourceTexts["src/apps_script/43_DI3_GitHubDeploymentManager.gs"];
-  if (typeof updaterSource === "string") {
+  if (branchSelectorCapable) {
     var updaterMatch = updaterSource.match(/var\s+DI3_GITHUB_UPDATER_VERSION\s*=\s*["']([^"']+)["']/);
     if (!updaterMatch || di3CompareUpdaterVersions_(updaterMatch[1], DI3_GITHUB_UPDATER_VERSION) < 0) {
       throw new Error("Выбранная ветка содержит более старый или неизвестный GitHub updater; возможен downgrade механизма обновления.");
@@ -362,16 +379,19 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
     manifest_policy: "PRESERVE_TARGET_PROJECT_MANIFEST", source_policy: "PINNED_COMMIT_RAW_FILES", files: files };
 }
 
-function di3GetGitHubBranchManifest_(branch) {
+function di3GetGitHubBranchManifest_(branch, pinnedCommit) {
   var config = di3GetGitHubDeploymentConfig_();
   branch = di3ValidateGitHubBranchName_(branch);
   var apiBase = "https://api.github.com/repos/" + config.repository;
-  var branchPath = branch.split("/").map(function (part) { return encodeURIComponent(part); }).join("/");
-  var branchResult = di3FetchGitHubJson_(apiBase + "/branches/" + branchPath);
-  if (branchResult.status !== "OK" || !branchResult.data || String(branchResult.data.name || "") !== branch) {
-    throw new Error("Ветка " + branch + " не найдена в GitHub или недоступна.");
+  var commit = String(pinnedCommit || "").trim().toLowerCase();
+  if (!commit) {
+    var branchPath = branch.split("/").map(function (part) { return encodeURIComponent(part); }).join("/");
+    var branchResult = di3FetchGitHubJson_(apiBase + "/branches/" + branchPath);
+    if (branchResult.status !== "OK" || !branchResult.data || String(branchResult.data.name || "") !== branch) {
+      throw new Error("Ветка " + branch + " не найдена в GitHub или недоступна.");
+    }
+    commit = String(branchResult.data.commit && branchResult.data.commit.sha || "").toLowerCase();
   }
-  var commit = String(branchResult.data.commit && branchResult.data.commit.sha || "").toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error("GitHub вернул некорректный commit SHA для ветки " + branch + ".");
   var commitResult = di3FetchGitHubJson_(apiBase + "/git/commits/" + commit);
   if (commitResult.status !== "OK" || !commitResult.data || String(commitResult.data.sha || "").toLowerCase() !== commit) {
@@ -421,6 +441,7 @@ function di3SelectGitHubSourceBranch() {
   if (allowed.indexOf(selected) === -1) throw new Error("Ветка отсутствует в полученном списке GitHub. Обнови список и повтори выбор.");
   var result = di3GetGitHubBranchManifest_(selected);
   PropertiesService.getScriptProperties().setProperty("DI3_GITHUB_SELECTED_BRANCH", selected);
+  PropertiesService.getScriptProperties().setProperty("DI3_GITHUB_SELECTED_COMMIT", result.manifest.git_commit);
   ui.alert("GitHub · источник выбран", "Ветка: " + selected + "\nCommit: " + result.manifest.git_commit +
     "\nСхема: v" + result.manifest.target_schema_version + "\nЧасовой пояс: " + result.manifest.application_time_zone +
     "\n\nПроверка, preview и установка будут использовать этот commit ветки. Это не опубликованный Stable/Preview релиз.",
@@ -430,6 +451,7 @@ function di3SelectGitHubSourceBranch() {
 
 function di3ClearGitHubSourceBranchSelection() {
   PropertiesService.getScriptProperties().deleteProperty("DI3_GITHUB_SELECTED_BRANCH");
+  PropertiesService.getScriptProperties().deleteProperty("DI3_GITHUB_SELECTED_COMMIT");
   var channel = di3GetGitHubDeploymentConfig_().release_channel.toUpperCase();
   try { SpreadsheetApp.getUi().alert("GitHub · источник сброшен",
     "Выбор ветки удалён. Теперь используется настроенный канал " + channel + ".", SpreadsheetApp.getUi().ButtonSet.OK); }
@@ -440,8 +462,8 @@ function di3ClearGitHubSourceBranchSelection() {
 function di3GetLatestGitHubReleaseManifest_() {
   var config = di3GetGitHubDeploymentConfig_();
   if (config.repository.split("/").length !== 2 || !/^[A-Za-z0-9_.-]+$/.test(config.repository.split("/")[0]) || !/^[A-Za-z0-9_.-]+$/.test(config.repository.split("/")[1])) throw new Error("Некорректный DI3_APP_CONFIG.GITHUB_RELEASE.REPOSITORY.");
-  var selectedBranch = di3GetSelectedGitHubBranch_();
-  if (selectedBranch) return di3GetGitHubBranchManifest_(selectedBranch);
+  var selectedBranch = di3GetSelectedGitHubBranchSelection_();
+  if (selectedBranch) return di3GetGitHubBranchManifest_(selectedBranch.branch, selectedBranch.commit);
   if (config.release_channel !== "stable" && config.release_channel !== "preview") throw new Error("GITHUB_RELEASE.RELEASE_CHANNEL должен быть stable или preview.");
   var apiBase = "https://api.github.com/repos/" + config.repository;
   var release;
