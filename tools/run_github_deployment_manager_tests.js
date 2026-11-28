@@ -687,4 +687,73 @@ test("rollback fails closed if selected backup becomes unavailable after YES", (
   }
 });
 
+
+test("validates supported GitHub branch names and rejects unsafe refs", () => {
+  assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('feature/my-change')", context), "feature/my-change");
+  assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('release/v4.1')", context), "release/v4.1");
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('main')", context), /Разрешены только ветки/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature/../main')", context), /Разрешены только ветки/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature//nested')", context), /Разрешены только ветки/);
+});
+
+test("builds a branch manifest pinned to one immutable commit and validates it", () => {
+  const branch = "feature/branch-test";
+  const commit = "b".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = { TIME_ZONE: "Europe/Moscow" };\\n',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;\\n",
+    "src/apps_script/01_Module.gs": "function alpha() { return 1; }\\n"
+  };
+  const tree = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", size: Buffer.byteLength(source)
+  }));
+  const manifest = vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  );
+  assert.equal(manifest.release_channel, "branch");
+  assert.equal(manifest.source_branch, branch);
+  assert.equal(manifest.git_commit, commit);
+  assert.equal(manifest.git_tag, "branch:" + branch + "@" + commit.slice(0, 12));
+  assert.equal(manifest.target_schema_version, 4);
+  assert.equal(manifest.application_time_zone, "Europe/Moscow");
+  assert.ok(manifest.files.every(file => file.raw_url.includes("/" + commit + "/src/apps_script/")));
+  const checked = vm.runInContext(
+    "di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")",
+    context
+  );
+  assert.equal(checked.status, "VALID");
+  assert.equal(checked.file_count, 3);
+});
+
+test("branch manifest rejects unsafe branch metadata and a mismatched commit tag", () => {
+  const manifest = {
+    format: "dots-inventory-release/v1", git_tag: "branch:feature/work@cccccccccccc",
+    release_channel: "branch", source_branch: "feature/../work", git_commit: "c".repeat(40),
+    target_schema_version: 4, application_time_zone: "Europe/Moscow", minimum_updater_version: "0.2.0",
+    manifest_policy: "PRESERVE_TARGET_PROJECT_MANIFEST", source_policy: "PINNED_COMMIT_RAW_FILES",
+    files: [{ name: "01_Module.gs", type: "SERVER_JS", source_path: "src/apps_script/01_Module.gs",
+      raw_url: "https://raw.githubusercontent.com/brusvv/dots_inventory-/" + "c".repeat(40) + "/src/apps_script/01_Module.gs",
+      size_bytes: 1, sha256: "d".repeat(64) }]
+  };
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")", context), /Разрешены только ветки/);
+  manifest.source_branch = "feature/work";
+  manifest.git_tag = "branch:feature/work@000000000000";
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")", context), /привязан к точному commit SHA/);
+});
+
+test("selected branch overrides Stable/Preview release discovery", () => {
+  context.PropertiesService = { getScriptProperties: () => ({ getProperty: key => key === "DI3_GITHUB_SELECTED_BRANCH" ? "feature/branch-test" : null }) };
+  context.di3GetGitHubBranchManifest_ = branch => ({ status: "READY", selected: branch });
+  try {
+    const result = vm.runInContext("di3GetLatestGitHubReleaseManifest_()", context);
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected, "feature/branch-test");
+  } finally {
+    delete context.PropertiesService;
+    delete context.di3GetGitHubBranchManifest_;
+  }
+});
+
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
