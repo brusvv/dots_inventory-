@@ -5,24 +5,22 @@
 ## GitHub / Release Pipeline
 
 - Ветка: `feature/github-preview-releases`.
-- Текущий HEAD: `2a33c5532e8bffcf7bef1a0458f8064f390111fd` (документационные коммиты).
-- Последний проверенный source/test commit: `f818dc2dc72663f32579f3aee534abc8c2af294e`.
-- На source/test commit `f818dc2` все три проверки прошли:
-  - [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084544027) — PASS; GitHub Deployment Manager **57/57**.
-  - [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084543985) — PASS.
-  - [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084544017) — PASS.
-- На текущем документационном HEAD `2a33c5532e8bffcf7bef1a0458f8064f390111fd` также прошли:
-  - [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084559513) — PASS.
-  - [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084559564) — PASS.
-  - [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084559558) — PASS.
+- Текущий branch HEAD может продвигаться документационными коммитами; проверяй его по [ветке GitHub](https://github.com/brusvv/dots_inventory-/tree/feature/github-preview-releases). Последний проверенный source/test commit указан ниже.
+- Последний проверенный source/test commit: `05d0fafe634f7bb7086faa2c46df0082468bf085`.
+- На source/test commit `05d0fafe` все три проверки прошли:
+  - [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46086131557) — PASS; GitHub Deployment Manager **57/57**.
+  - [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46086131571) — PASS; snapshot auditor **8/8**.
+  - [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46086131632) — PASS.
 - Последний source/test diff включает повторную проверку выбранного rollback backup после YES и fail-closed тест при исчезновении backup до записи.
+- R0 probe теперь включает manifest/scopes, полный fingerprint, trigger/deployment inventory, Script Properties key names only, и проверку backup metadata/folder membership. OAuth API redirects отключены; probe tests 8/8.
+- Документационный HEAD `e75ecf81` прошёл все три workflow: [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46086182306), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46086182316), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46086182302) — PASS. Следующий roadmap-only commit `bf25734` также прошёл [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46086216437) и [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46086216446). Последний проверенный HEAD `4aae90b` прошёл все три workflow: [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46086254111), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46086254057), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46086254100) — PASS; snapshot auditor 8/8.
 - D-03–D-06: source review/regression coverage выполнены; live Apps Script / Drive runtime acceptance не выполнена и остаётся отдельным этапом.
 - PR #7 остаётся Draft; merge, tags, Preview/Stable publication и production update не выполнялись.
 
 ## Приоритеты и ограничения
 
 1. Завершать безопасный source-side аудит и поддерживать CI/docs в согласованном состоянии.
-2. Подготовить read-only R0 evidence: точные расхождения source snapshot, manifest/scopes, deployments, trigger handlers, Script Properties key names/presence, project fingerprint и backup metadata. Секретные значения Script Properties не извлекать.
+2. Получить read-only R0 evidence: точные расхождения source snapshot, manifest/scopes, deployments, trigger handlers, Script Properties key names/presence, project fingerprint и backup metadata. Секретные значения Script Properties не извлекать. Вставка/удаление временного probe-файла — отдельная запись исходников и требует отдельного подтверждения.
 3. Затем — согласованная runtime-приёмка D-03–D-07 и функциональных направлений только на disposable project/workbook.
 4. Supply Workspace, Dashboard, FIFO/returns и Finance остаются source-ready/partially accepted в соответствии с исполняемым чек-листом; runtime evidence не подменять CI.
 
@@ -1109,3 +1107,13 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - Final GitHub Actions on the checked source/test commit `57327687990979594ed69aa7ee88cb7f6b132738`: Release Pipeline PASS, Apps Script quality gates PASS, package build PASS. Release Pipeline includes the GitHub Deployment Manager runner and the new rollback revalidation cases.
 - CI evidence: [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084515885), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084515883), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084515887).
 - Source/Node CI only. No live Drive/Apps Script/Sheets acceptance, production update, schema migration, stock operation, release publication, PR merge or N-02 runtime fault-injection was performed.
+
+
+## 2026-11-28 — R0 read-only probe hardening
+
+- Extended `runtime/probes/DI3_APPS_SCRIPT_SOURCE_AUDIT_PROBE.gs` to report the actual manifest timezone/OAuth scopes, all project-file hashes/sizes and full-project fingerprint, trigger handler/event/source metadata, Apps Script deployment IDs/version metadata, Script Properties key names only (never values), and Bootstrap backup payload/file hashes, Drive description metadata and configured-folder membership.
+- Added `followRedirects: false` to the OAuth-authenticated Apps Script API requests in the probe (both `projects.getContent` and `projects.deployments.list`). A 3xx response is fail-closed; the bearer token is never automatically forwarded.
+- Strengthened the local snapshot auditor so a backup is accepted only when its Drive metadata marker/status and configured folder membership also validate.
+- Added a runtime-probe regression test and a backup metadata/folder negative test. Snapshot auditor: 8/8 PASS; Release Pipeline: 57/57 Deployment Manager tests PASS. CI on HEAD `4aae90b` is green for Release Pipeline, Apps Script quality gates and package build.
+- Safety clarification: executing the probe function is read-only, but adding/removing the temporary probe file is a project-code write. Do not insert it into Dots beta 4 or any live project without separate explicit approval. No live Apps Script, Drive, Sheets, Script Properties, deployments or triggers were changed.
+- N-02 remains deferred and was not run.
