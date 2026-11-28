@@ -85,7 +85,7 @@ function di3RunSupplyCorrectionExecutionCoreTests() {
   test("duplicate movement IDs and empty correction metadata are rejected", function () {
     throws(function () {
       build([source("OLD", "P1", "V1")], [replacement("OLD", "P1", "V1")]);
-    }, /повторяется movement_id/);
+    }, /must be new and distinct/);
     throws(function () {
       di3BuildSupplyCorrectionRelationPlan_([source("OLD", "P1", "V1")], [],
         { supply_id: "SUP-1", correction_id: "", operation_id: "OP-1" }, function () { return "REL"; });
