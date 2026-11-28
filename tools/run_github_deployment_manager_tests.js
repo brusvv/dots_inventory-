@@ -580,6 +580,19 @@ test("installer releases script lock when update result is uncertain", () => {
   }
 });
 
+test("installer releases script lock when post-write read-back is unavailable", () => {
+  const h = configureInstallerHarness("YES", "readback-unavailable");
+  try {
+    const result = vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context);
+    assert.equal(result.status, "POST_WRITE_VERIFICATION_UNAVAILABLE");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
 test("installer classifies uncertain update result and does not retry", () => {
   const h = configureInstallerHarness("YES", "update-uncertain");
   try {
