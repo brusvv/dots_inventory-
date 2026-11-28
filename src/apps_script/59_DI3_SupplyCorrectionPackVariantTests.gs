@@ -9,9 +9,12 @@ function di3RunSupplyCorrectionPackVariantTests() {
     if (actual !== expected) throw new Error((message || "Values differ") + ": expected " + JSON.stringify(expected) + ", got " + JSON.stringify(actual));
   }
   function supply(id, receivedAt, createdAt, status) {
-    var row = [];
-    row[0] = id; row[15] = status || DI3_SUPPLY_STATUS.RECEIVED;
-    row[16] = new Date(createdAt || receivedAt); row[18] = new Date(receivedAt);
+    var headers = DI3_TABLE_SCHEMAS.V3_Supplies;
+    var row = new Array(headers.length).fill("");
+    row[headers.indexOf("supply_id")] = id;
+    row[headers.indexOf("status")] = status || DI3_SUPPLY_STATUS.RECEIVED;
+    row[headers.indexOf("created_at")] = new Date(createdAt || receivedAt);
+    row[headers.indexOf("received_at")] = new Date(receivedAt);
     return row;
   }
   function item(supplyId, line, productId, variantId) {
@@ -19,6 +22,21 @@ function di3RunSupplyCorrectionPackVariantTests() {
     row[1] = supplyId; row[2] = line; row[3] = productId; row[5] = variantId;
     return row;
   }
+
+  test("selection uses the live v4 V3_Supplies schema columns, not legacy offsets", function () {
+    var headers = DI3_TABLE_SCHEMAS.V3_Supplies;
+    equal(headers.indexOf("status"), 3);
+    equal(headers.indexOf("created_at"), 4);
+    equal(headers.indexOf("received_at"), 7);
+    var liveRow = supply("LIVE", "2026-11-20T10:00:00Z");
+    liveRow[15] = "RUB";
+    liveRow[16] = new Date("2026-11-01T10:00:00Z");
+    liveRow[18] = new Date("2027-01-01T00:00:00Z");
+    var result = di3BuildLatestReceivedPackVariantMap_([liveRow], [
+      item("LIVE", 1, "P1", "V-LIVE")
+    ], ["P1"]);
+    equal(result.P1.pack_variant_id, "V-LIVE");
+  });
 
   test("latest received supply wins over corrected older receipt", function () {
     var result = di3BuildLatestReceivedPackVariantMap_([
@@ -117,7 +135,7 @@ function di3RunSupplyCorrectionPackVariantTests() {
 
   test("invalid received_at on a received supply for an affected product fails closed", function () {
     var bad = supply("BAD", "2026-11-20T10:00:00Z");
-    bad[18] = "not-a-date";
+    bad[DI3_TABLE_SCHEMAS.V3_Supplies.indexOf("received_at")] = "not-a-date";
     var error = null;
     try {
       di3BuildLatestReceivedPackVariantMap_([bad], [item("BAD", 1, "P1", "V-20")], ["P1"]);
