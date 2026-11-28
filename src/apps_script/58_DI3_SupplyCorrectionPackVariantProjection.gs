@@ -178,7 +178,6 @@ function di3ReconcileCurrentPackVariantsForProducts_(productIds) {
   var reconciliationRows = di3ReadPackVariantReconciliationRows_(affected);
   var latest = di3BuildLatestReceivedPackVariantMap_(
     reconciliationRows.supplyRows, reconciliationRows.itemRows, affected);
-  var latest = di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affected);
   var variants = di3LoadPackVariantIndex_();
   var updates = [];
   var updatedAt = new Date();
