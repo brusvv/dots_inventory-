@@ -55,12 +55,12 @@ function di3RunSupplyCorrectionFifoPreviewTests() {
     var rows = [
       ledger("SRC", "P1", 10, date, date),
       ledger("SALE", "P1", -5, "2026-01-03T09:00:00Z"),
-      ledger("REPL", "P1", 10, date, "2026-01-04T09:00:00Z")
+      ledger("REPL", "P1", 10, date, date)
     ];
     var details = [detail("SRC", "IN"), detail("SALE", "OUT"), detail("REPL", "IN")];
     var lots = [
       lot("LOT-SRC", "P1", "SRC", 10, 10, date, date),
-      lot("LOT-REPL", "P1", "REPL", 10, 5, date, "2026-01-04T09:00:00Z")
+      lot("LOT-REPL", "P1", "REPL", 10, 5, date, date)
     ];
     var relations = [relationEvent(1, "REL-1", "PREPARED", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")];
     var result = preview(rows, details, lots, relations, [operation("OP-1", "PREPARED")], "OP-1");
@@ -101,12 +101,12 @@ function di3RunSupplyCorrectionFifoPreviewTests() {
     var date = "2026-01-02T09:00:00Z";
     var rows = [
       ledger("A", "P1", 10, date),
-      ledger("B", "P1", 10, date, "2026-01-04T09:00:00Z"),
-      ledger("C", "P1", 10, date, "2026-01-05T09:00:00Z")
+      ledger("B", "P1", 10, date, date),
+      ledger("C", "P1", 10, date, date)
     ];
     var details = [detail("A", "IN"), detail("B", "IN"), detail("C", "IN")];
-    var lots = [lot("LA", "P1", "A", 10, 10, date), lot("LB", "P1", "B", 10, 8, date, "2026-01-04T09:00:00Z"),
-      lot("LC", "P1", "C", 10, 5, date, "2026-01-05T09:00:00Z")];
+    var lots = [lot("LA", "P1", "A", 10, 10, date), lot("LB", "P1", "B", 10, 8, date, date),
+      lot("LC", "P1", "C", 10, 5, date, date)];
     var relations = [
       relationEvent(1, "REL-1", "COMMITTED", "REPLACE", "A", "B", "P1", "P1", "OP-1"),
       relationEvent(2, "REL-2", "COMMITTED", "REPLACE", "B", "C", "P1", "P1", "OP-2")
