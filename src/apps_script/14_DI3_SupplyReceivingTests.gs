@@ -97,6 +97,11 @@ function di3RunSupplyReceivingUnitTests() {
     equal(source.indexOf("selected.row_number, 13"), -1);
     equal(source.indexOf('if (String(result.status) === "ALREADY_RECEIVED") di3RefreshSupplyRegister()') >= 0, true);
   });
+  test("form stage action does not refresh the date panel a second time after a successful transition", function () {
+    var source = di3ApplyNextSupplyStageFromForm.toString();
+    equal(source.indexOf('["ALREADY_IN_STATUS", "ALREADY_RECEIVED"]') >= 0, true);
+    equal(source.indexOf("di3RefreshSupplyDatePanel_(updatedSupply);") > source.indexOf("ALREADY_IN_STATUS"), true);
+  });
   test("receipt date parser accepts Russian date and time", function () {
     var date = di3ParseSupplyEffectiveDate_("20.11.2026 14:35", null);
     equal(date.getFullYear(), 2026);
