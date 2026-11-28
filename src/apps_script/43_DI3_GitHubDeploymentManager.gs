@@ -382,8 +382,8 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
   });
   var configSource = sourceTexts["src/apps_script/00_DI3_AppConfig.gs"] || "";
   var schemaSource = sourceTexts["src/apps_script/33_DI3_SchemaVersioning.gs"] || "";
-  var timezoneMatch = configSource.match(/TIME_ZONE\s*:\s*["']([^"']+)["']/);
-  var schemaMatch = schemaSource.match(/var\s+DI3_SCHEMA_VERSION\s*=\s*([0-9]+)\s*;/);
+  var timezoneMatch = configSource.match(/^\s*var\s+DI3_APP_CONFIG\s*=\s*Object\.freeze\s*\(\s*\{\s*TIME_ZONE\s*:\s*["']([^"']+)["']/m);
+  var schemaMatch = schemaSource.match(/^\s*var\s+DI3_SCHEMA_VERSION\s*=\s*([0-9]+)\s*;/m);
   if (!timezoneMatch || !schemaMatch) throw new Error("Ветка не содержит достоверные DI3_APP_CONFIG.TIME_ZONE и DI3_SCHEMA_VERSION; установка заблокирована.");
   if (branchSelectorCapable) {
     var updaterMatch = updaterSource.match(/var\s+DI3_GITHUB_UPDATER_VERSION\s*=\s*["']([^"']+)["']/);
