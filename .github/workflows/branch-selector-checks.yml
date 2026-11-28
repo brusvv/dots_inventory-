@@ -1,0 +1,38 @@
+name: GitHub branch selector checks
+
+on:
+  push:
+    branches:
+      - feature/github-branch-selector
+    paths:
+      - "src/apps_script/43_DI3_GitHubDeploymentManager.gs"
+      - "src/apps_script/44_DI3_GitHubInstallPreview.gs"
+      - "src/apps_script/45_DI3_GitHubConfirmedInstaller.gs"
+      - "tools/run_github_deployment_manager_tests.js"
+      - ".github/workflows/branch-selector-checks.yml"
+  pull_request:
+    branches:
+      - feature/github-preview-releases
+    paths:
+      - "src/apps_script/43_DI3_GitHubDeploymentManager.gs"
+      - "src/apps_script/44_DI3_GitHubInstallPreview.gs"
+      - "src/apps_script/45_DI3_GitHubConfirmedInstaller.gs"
+      - "tools/run_github_deployment_manager_tests.js"
+      - ".github/workflows/branch-selector-checks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  branch-selector:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Check Apps Script syntax
+        run: bash tools/check_syntax.sh
+      - name: Run GitHub deployment-manager regression tests
+        run: node tools/run_github_deployment_manager_tests.js
