@@ -34,6 +34,7 @@ function di3BuildSupplyCorrectionPreviewRuntimeSnapshot_() {
     });
   });
   return snapshot;
+}
 
 function di3RunSupplyCorrectionPreviewRuntimeProbe(supplyId, correctionSpec) {
   return di3WithLock_(function () {
