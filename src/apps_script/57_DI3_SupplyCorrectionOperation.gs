@@ -211,6 +211,8 @@ function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, 
     received_at: effectiveAt.toISOString(),
     source_recorded_at: originalRecordedAt.toISOString(),
     created_at: now.toISOString(),
+    created_by: di3GetActorEmail_(),
+    currency: String(supply.currency || di3GetBaseCurrency_()),
     request_fingerprint: di3BuildSupplyCorrectionRequestFingerprint_(supplyId, spec)
   };
 
