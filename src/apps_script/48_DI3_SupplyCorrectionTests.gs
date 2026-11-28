@@ -174,6 +174,60 @@ function di3RunSupplyCorrectionUnitTests() {
     equal(/\.appendRow\s*\(/.test(source), false);
   });
 
+
+  test("SC-04 prerequisite audit accepts exact v4 schemas and a current FIFO cursor", function () {
+    var names = DI3_CORE_TABLE_NAMES.slice();
+    var headers = Object.create(null);
+    names.forEach(function (name) { headers[name] = DI3_TABLE_SCHEMAS[name].slice(); });
+    var result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, {
+      fifo_state_version: DI3_FIFO_STATE_VERSION,
+      fifo_ledger_sequence_cursor: 101
+    }, { max_sequence: 101, movement_count: 3 });
+    equal(result.status, "READY");
+    equal(result.required_table_count, names.length);
+  });
+
+  test("SC-04 prerequisite audit blocks missing tables and non-v4 headers", function () {
+    var names = DI3_CORE_TABLE_NAMES.slice();
+    var headers = Object.create(null);
+    names.forEach(function (name) { headers[name] = DI3_TABLE_SCHEMAS[name].slice(); });
+    names = names.filter(function (name) { return name !== "SupplyCorrectionEvents"; });
+    var result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, {
+      fifo_state_version: DI3_FIFO_STATE_VERSION,
+      fifo_ledger_sequence_cursor: 101
+    }, { max_sequence: 101 });
+    equal(result.status, "BLOCKED");
+    equal(result.issues.some(function (issue) { return issue.indexOf("SupplyCorrectionEvents") !== -1; }), true);
+
+    names = DI3_CORE_TABLE_NAMES.slice();
+    headers.StockLedger[12] = "row_number";
+    result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, {
+      fifo_state_version: DI3_FIFO_STATE_VERSION,
+      fifo_ledger_sequence_cursor: 101
+    }, { max_sequence: 101 });
+    equal(result.status, "BLOCKED");
+    equal(result.issues.some(function (issue) { return issue.indexOf("StockLedger") !== -1; }), true);
+  });
+
+  test("SC-04 prerequisite audit blocks an uninitialized or lagging FIFO projection", function () {
+    var names = DI3_CORE_TABLE_NAMES.slice();
+    var headers = Object.create(null);
+    names.forEach(function (name) { headers[name] = DI3_TABLE_SCHEMAS[name].slice(); });
+    var meta = { fifo_state_version: "", fifo_ledger_sequence_cursor: "" };
+    var result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, meta, { max_sequence: 101 });
+    equal(result.status, "BLOCKED");
+    meta = { fifo_state_version: DI3_FIFO_STATE_VERSION, fifo_ledger_sequence_cursor: 99 };
+    result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, meta, { max_sequence: 101 });
+    equal(result.status, "BLOCKED");
+  });
+
+  test("SC-04 mutating entrypoint fails closed instead of bootstrapping schemas or FIFO", function () {
+    var source = di3CorrectReceivedSupply.toString();
+    equal(source.indexOf("di3AssertSupplyCorrectionRuntimeReady_") !== -1, true);
+    equal(source.indexOf("di3EnsureStockCoreSchemas_"), -1);
+    equal(source.indexOf("di3EnsureCoreFoundationSchemas_"), -1);
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply correction source audit tests failed: " + JSON.stringify(failed));
   return report;
