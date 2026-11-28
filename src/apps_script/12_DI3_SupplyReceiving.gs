@@ -277,9 +277,34 @@ function di3AdvanceSupplyStatus(supplyNumber, nextStatus, effectiveAt) {
   });
 }
 
+function di3ValidateSupplyReceiptLineIdentities_(items) {
+  if (!Array.isArray(items) || !items.length) throw new Error("Нельзя принять поставку без товарных позиций.");
+  var seenItemIds = Object.create(null);
+  var seenProductVariants = Object.create(null);
+  items.forEach(function (item, index) {
+    var itemId = String(item && item.supply_item_id || "");
+    var productId = String(item && item.product_id || "");
+    var variantId = String(item && item.pack_variant_id || "");
+    var units = Number(item && item.units_per_pack);
+    var packs = Number(item && item.packs);
+    if (!itemId || seenItemIds[itemId]) throw new Error("В позициях поставки отсутствует или повторяется supply_item_id.");
+    seenItemIds[itemId] = true;
+    if (!productId || !variantId) throw new Error("Позиция " + (index + 1) + ": не указан товар или вариант упаковки.");
+    if (!Number.isInteger(units) || units <= 0) throw new Error("Позиция " + (index + 1) + ": фасовка должна быть положительным целым числом.");
+    if (!Number.isInteger(packs) || packs <= 0) throw new Error("Позиция " + (index + 1) + ": количество упаковок должно быть положительным целым числом.");
+    var pairKey = productId + "\\u001f" + variantId;
+    if (seenProductVariants[pairKey]) {
+      throw new Error("Позиции поставки повторяют товар и фасовку: " + productId + " / " + variantId + ".");
+    }
+    seenProductVariants[pairKey] = true;
+  });
+  return true;
+}
+
 function di3BuildSupplyReceiptPayload_(supply, items, effectiveAt, recordedAt) {
   if (!supply || !supply.supply_id) throw new Error("Не передана поставка для приёмки.");
   if (!Array.isArray(items) || !items.length) throw new Error("Нельзя принять поставку без товарных позиций.");
+  di3ValidateSupplyReceiptLineIdentities_(items);
   var seenItems = {};
   // Validate all cost inputs before touching the spreadsheet for display-code allocation.
   items.forEach(function (item, index) {
