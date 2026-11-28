@@ -130,6 +130,24 @@ function di3BuildSupplyCorrectionEffectiveMovementMap_(relationRows, operationRo
   Object.keys(groups).forEach(function (relationId) {
     var group = groups[relationId];
     group.events.sort(function (a, b) { return a.event_sequence - b.event_sequence; });
+    var hasCommitted = false, hasAborted = false, hasQuarantined = false;
+    group.events.forEach(function (event) {
+      if (hasQuarantined) {
+        throw new Error("SupplyCorrectionEvents: relation_id " + relationId + " имеет событие после QUARANTINED; автоматическая активация запрещена.");
+      }
+      if (hasAborted && event.event_type !== "ABORTED") {
+        throw new Error("SupplyCorrectionEvents: ABORTED relation_id " + relationId + " нельзя повторно активировать.");
+      }
+      if (hasCommitted && event.event_type === "ABORTED") {
+        throw new Error("SupplyCorrectionEvents: COMMITTED relation_id " + relationId + " нельзя отменить задним числом.");
+      }
+      if (hasCommitted && event.event_type === "PREPARED") {
+        throw new Error("SupplyCorrectionEvents: COMMITTED relation_id " + relationId + " не может вернуться в PREPARED.");
+      }
+      if (event.event_type === "COMMITTED") hasCommitted = true;
+      if (event.event_type === "ABORTED") hasAborted = true;
+      if (event.event_type === "QUARANTINED") hasQuarantined = true;
+    });
     var latest = group.events[group.events.length - 1];
     var metadata = group.metadata;
     var operation = operationById[metadata.operation_id];
