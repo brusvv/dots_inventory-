@@ -1125,7 +1125,7 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 
 - Working branch: `feature/supply-correction-fifo-replay`.
 - Branch HEAD at this update: `a763a36cbe714a4f0cd9849d50152b2a649c8e16`.
-- At the final review snapshot it is 197 commits ahead of `feature/github-preview-releases`, with no commits behind; PR #11 contains 37 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
+- At the source-fix review snapshot it is 201 commits ahead of `feature/github-preview-releases`, with no commits behind; PR #11 contains 37 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
 - SC-01 through SC-04 are implemented in source: immutable receipt/source audit; append-only correction relation journal; candidate/effective FIFO preview and normal replay integration; explicit correction operation with recovery and a read-only all-sheet preview probe.
 - SC-04 remains source-ready only. The mutating API `di3CorrectReceivedSupply()` is not exposed in the menu. It must not be used on a live/production supply until runtime acceptance on a restored disposable workbook.
 - Known SC limitation: a second correction of the same supply is blocked; correction-chain document hydration is not implemented.
@@ -1190,3 +1190,31 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 | Installation package | [46100646814](https://github.com/brusvv/dots_inventory-/actions/runs/46100646814) | PASS |
 
 All three ran against `1df024ab46b22c2eb28ded02dc5fdf5292442e86`. PR #11 remains Draft, open, mergeable, and has no reviews yet. Mergeability does not waive its runtime acceptance gates.
+
+
+## 2026-11-28 — SC-04 prerequisite guard and exact-head CI
+
+### Source review finding and correction
+
+- Review found that `di3CorrectReceivedSupply()` called `di3EnsureStockCoreSchemas_()` before registering the correction operation. That helper can create/upgrade core sheets, initialize money/product-code metadata and bootstrap FIFO; this would allow a business operation to trigger schema/FIFO setup before its immutable operation journal existed.
+- Replaced that call with `di3AssertSupplyCorrectionRuntimeReady_()`, a read-only preflight. It requires all current core v4 sheets and exact headers, a valid FIFO state version, and a ledger cursor equal to the current maximum `ledger_sequence`. Missing tables, legacy/mismatched headers, uninitialized FIFO or an unapplied ledger tail now fail closed before correction writes.
+- Added four regression cases for the ready state, missing tables/schema mismatch, missing/lagging FIFO state, and the mutating entrypoint's no-bootstrap contract.
+- This closes the identified source-level safety gap. It does not replace disposable-workbook runtime acceptance.
+
+### Exact PR #11 source verification
+
+Tested source commit: `7ea2989bb6f06a81ab5424594e9f869fdefa3773`.
+
+- Apps Script syntax: **69/69**.
+- Snapshot auditor: **8/8**.
+- FIFO replay: **46/46**.
+- Order domain: **22/22**.
+- Supply domain/lifecycle/correction: **153/153**.
+- Catalog/order UX: **14/14**.
+- System safety/operation: **39/39**.
+- Warehouse Dashboard: **11/11**.
+- Finance schema: **4/4**.
+- Release pipeline Deployment Manager: **57/57**.
+- [Quality gates 46100854031](https://github.com/brusvv/dots_inventory-/actions/runs/46100854031), [Release pipeline 46100854106](https://github.com/brusvv/dots_inventory-/actions/runs/46100854106), and [package build 46100854083](https://github.com/brusvv/dots_inventory-/actions/runs/46100854083): **PASS** on the exact PR head.
+- These remain source/Node CI results. No Apps Script/Sheets/Drive runtime operation was performed.
+- PR #11 remains Draft, open and mergeable, with no review submissions or inline review threads. It is not approved for merge until source review and disposable-workbook acceptance are complete.
