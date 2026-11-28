@@ -140,7 +140,7 @@ function di3PrepareGitHubInstallPreview() {
   preview.compatibility = compatibility;
   preview.source_project_fingerprint = di3AppsScriptFilesFingerprint_(project.content.files);
   var lines = [
-    "Канал: " + (preview.release_channel === "preview" ? "PREVIEW" : "STABLE") + (preview.source_branch ? " · ветка: " + preview.source_branch : ""),
+    "Источник: " + di3GetGitHubSourceLabel_(preview.release_channel) + (preview.source_branch ? " · ветка: " + preview.source_branch : ""),
     "Релиз: " + preview.release_tag, "Commit: " + preview.commit,
     "Целевая схема релиза: v" + preview.target_schema_version, "Часовой пояс релиза: " + preview.target_time_zone,
     "Файлов в полном наборе: " + preview.summary.target_file_count,
