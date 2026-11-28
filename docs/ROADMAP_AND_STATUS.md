@@ -1109,3 +1109,13 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - Final GitHub Actions on the checked source/test commit `57327687990979594ed69aa7ee88cb7f6b132738`: Release Pipeline PASS, Apps Script quality gates PASS, package build PASS. Release Pipeline includes the GitHub Deployment Manager runner and the new rollback revalidation cases.
 - CI evidence: [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084515885), [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084515883), [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084515887).
 - Source/Node CI only. No live Drive/Apps Script/Sheets acceptance, production update, schema migration, stock operation, release publication, PR merge or N-02 runtime fault-injection was performed.
+
+
+## 2026-11-28 — R0 read-only probe hardening
+
+- Extended `runtime/probes/DI3_APPS_SCRIPT_SOURCE_AUDIT_PROBE.gs` to report the actual manifest timezone/OAuth scopes, all project-file hashes/sizes and full-project fingerprint, trigger handler/event/source metadata, Apps Script deployment IDs/version metadata, Script Properties key names only (never values), and Bootstrap backup payload/file hashes, Drive description metadata and configured-folder membership.
+- Added `followRedirects: false` to the OAuth-authenticated Apps Script API requests in the probe (both `projects.getContent` and `projects.deployments.list`). A 3xx response is fail-closed; the bearer token is never automatically forwarded.
+- Strengthened the local snapshot auditor so a backup is accepted only when its Drive metadata marker/status and configured folder membership also validate.
+- Added a runtime-probe regression test and a backup metadata/folder negative test. Current snapshot auditor test file contains 8 tests; CI is pending for the current source/test commit until workflow completion.
+- Safety clarification: executing the probe function is read-only, but adding/removing the temporary probe file is a project-code write. Do not insert it into Dots beta 4 or any live project without separate explicit approval. No live Apps Script, Drive, Sheets, Script Properties, deployments or triggers were changed.
+- N-02 remains deferred and was not run.
