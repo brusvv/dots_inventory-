@@ -1282,11 +1282,9 @@ function di3NewSupplyForm(options) {
   sheet.getRange("G2:G7").clearContent();
   sheet.getRange("H5:H7").clearContent();
   sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent();
-  sheet.getRange("M4:M8").clearContent();
-  sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).clearContent();
-  sheet.getRange(DI3_SUPPLY_FORM.historicalMode).clearContent();
-  sheet.getRange("N4:N7").clearContent();
-  sheet.getRange("M9").clearContent();
+  // Adjacent transient form fields are cleared in one range call each.
+  sheet.getRange("M4:M9").clearContent();
+  sheet.getRange("N2:N7").clearContent();
   sheet.getRange("M2").setValue("Новая поставка");
   sheet.getRange("G2").setValue(di3ParseSupplyCalendarDate_(new Date(), "Дата создания заказа в магазине"));
   // Clearing values does not remove existing data validations. Keep the
