@@ -146,6 +146,9 @@ function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, 
   setSupplyField("discount_total", plan.discount_total);
   setSupplyField("shipping_amount", plan.shipping_amount);
   setSupplyField("final_amount", plan.final_amount);
+  var priorNotes = String(supply.notes || "").trim();
+  var correctionNote = "Исправление " + correctionId + " (" + now.toISOString() + "): " + reason;
+  setSupplyField("notes", priorNotes ? priorNotes + "\n" + correctionNote : correctionNote);
   setSupplyField("updated_at", now);
 
   var beforeItemRows = oldItems.map(function (item) {
