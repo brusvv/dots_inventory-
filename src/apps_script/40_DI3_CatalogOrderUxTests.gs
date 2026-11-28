@@ -57,8 +57,6 @@ function di3RunCatalogOrderUxUnitTests() {
     includes(save, "di3RefreshDependentCatalogViews_()");
     var refresh = di3RefreshProductsSheet.toString();
     includes(refresh, "options.skipProductFormValidations !== true");
-    includes(save, "di3RefreshDependentCatalogViews_()");
-  });
   });
   test("product selector defers replacement while the current card is dirty", function () {
     var source = di3ProductCatalogOnEdit.toString();
