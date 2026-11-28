@@ -409,6 +409,54 @@ function di3RunOrderDomainUnitTests() {
     }
   });
 
+
+  test("stored unit price and line revenue use the same cent-rounded unit price", function () {
+    var plan = di3BuildOrderFinancialPlan_({
+      commission_paid_by_buyer: true,
+      commission_rate: 0,
+      lines: [{ product_id: "ROUND-UNIT", quantity: 3, sale_unit_price: 0.005 }]
+    });
+    equal(plan.lines[0].sale_unit_price, 0.01);
+    equal(plan.lines[0].line_revenue, 0.03);
+    equal(plan.goods_amount, 0.03);
+  });
+
+  test("order FIFO snapshot remains pending when only part of the order has dispatch links", function () {
+    equal(di3ResolveOrderFifoSnapshotStatus_({
+      count: 2, dispatched: 1, complete: 1, partial: false, unknown: false
+    }), "PENDING");
+    equal(di3ResolveOrderFifoSnapshotStatus_({
+      count: 2, dispatched: 2, complete: 2, partial: false, unknown: false
+    }), "COMPLETE");
+    equal(di3ResolveOrderFifoSnapshotStatus_({
+      count: 2, dispatched: 2, complete: 1, partial: false, unknown: true
+    }), "PARTIAL");
+    equal(di3ResolveOrderFifoSnapshotStatus_({
+      count: 2, dispatched: 0, complete: 0, partial: false, unknown: false
+    }), "NOT_DISPATCHED");
+  });
+
+  test("order create recovery compares immutable fields and tolerates mutable lifecycle fields", function () {
+    var expected = ["I1", "O1", 1, "P1", "Label", 2, 10, 20, 4, 8, "COMPLETE", "", "", "NOT_DISPATCHED"];
+    var actual = expected.slice();
+    actual[11] = "DISPATCH-MOVEMENT";
+    actual[13] = "DISPATCHED";
+    equal(di3OrderCreateCellEquals_(100, 100), true);
+    equal(di3OrderCreateCellEquals_(new Date("2026-01-01T00:00:00.000Z"), new Date("2026-01-01T00:00:00.000Z")), true);
+    di3AssertOrderCreateImmutableRow_(actual, expected, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "позиции заказа");
+    actual[5] = 3;
+    throws(function () {
+      di3AssertOrderCreateImmutableRow_(actual, expected, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "позиции заказа");
+    }, /не совпадает с неизменяемым payload/);
+  });
+
+  test("order draft payload caches FIFO valuation by product", function () {
+    var source = di3BuildOrderDraftPayload_.toString();
+    equal(source.indexOf("var valuationByProductId = Object.create(null)") >= 0, true);
+    equal(source.indexOf("var valuation = valuationByProductId[productId]") >= 0, true);
+    equal(source.indexOf("var valuation = di3GetProductFifoValuation(productId)", source.indexOf("Object.keys(quantitiesByProduct)")) === -1, true);
+  });
+
   var report = { passed: passed, failed: failures.length, failures: failures };
   if (failures.length) throw new Error("Order-domain tests failed: " + JSON.stringify(failures));
   return report;
