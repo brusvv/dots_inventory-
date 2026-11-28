@@ -163,3 +163,33 @@ function di3AssertSupplyCorrectionFifoProjectionCurrent_(effectiveMap) {
   }
   return true;
 }
+
+/** Build the F-06 target cache: effective lots use replay balances; superseded lots become zero. */
+function di3BuildSupplyCorrectionTargetLotRemainingMap_(candidateRemainingLots, allLotRows, supersededMovementIds) {
+  var remaining = Object.create(null);
+  (candidateRemainingLots || []).forEach(function (lot) {
+    var id = String(lot.lot_id || "");
+    var quantity = Number(lot.remaining_quantity);
+    if (!id || !Number.isSafeInteger(quantity) || quantity < 0) {
+      throw new Error("Candidate FIFO contains an invalid remaining lot.");
+    }
+    if (Object.prototype.hasOwnProperty.call(remaining, id)) {
+      throw new Error("Candidate FIFO repeats lot_id " + id + ".");
+    }
+    remaining[id] = quantity;
+  });
+  var superseded = Object.create(null);
+  (supersededMovementIds || []).forEach(function (id) { superseded[String(id)] = true; });
+  (allLotRows || []).forEach(function (row) {
+    var lotId = String(row[0] || ""), movementId = String(row[2] || "");
+    if (!lotId || !movementId) throw new Error("StockLots contains an empty lot_id/source_movement_id.");
+    if (Object.prototype.hasOwnProperty.call(remaining, lotId)) return;
+    if (superseded[movementId]) {
+      // F-06 archives the pre-correction cache before this target is written.
+      remaining[lotId] = 0;
+      return;
+    }
+    throw new Error("Effective StockLots row " + lotId + " is missing from candidate FIFO replay.");
+  });
+  return remaining;
+}
