@@ -143,8 +143,12 @@ function di3BuildSupplyCorrectionEffectiveMovementMap_(relationRows, operationRo
       activeRelations.push(metadata);
       return;
     }
-    if (latest.event_type === "PREPARED" && includeOperationId === metadata.operation_id &&
+    if ((latest.event_type === "PREPARED" || latest.event_type === "COMMITTED") &&
+        includeOperationId === metadata.operation_id &&
         (operation.status === "PREPARED" || operation.status === "RETRYABLE")) {
+      // Recovery may have durably appended COMMITTED relation events before the
+      // enclosing operation status write. Only that operation may see them
+      // until Operations itself is COMMITTED.
       activeRelations.push(metadata);
     }
   });
