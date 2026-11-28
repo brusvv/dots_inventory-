@@ -52,10 +52,12 @@ Use a dedicated append-only `SupplyCorrectionEvents` log rather than mutating th
 
 Proposed columns:
 
-- `event_id`
+- `event_id` — unique append-only journal event ID
+- `relation_id` — stable ID grouping lifecycle events for one source/replacement relation
 - `correction_id`
 - `operation_id`
 - `supply_id`
+- `event_sequence` — monotonically increasing journal sequence, unique across all events
 - `event_type` (`PREPARED`, `COMMITTED`, `QUARANTINED`, `ABORTED`) — relation lifecycle
 - `relation_type` (`REPLACE`, `REMOVE`, `ADD`) — business relation
 - `source_movement_id` (required for `REPLACE`/`REMOVE`; blank for `ADD`)
@@ -207,3 +209,32 @@ auditor tests (8/8).
 
 SC-02 through SC-04 remain unimplemented. No live Apps Script project, Google
 Sheet, Drive file, stock record or FIFO projection was changed.
+
+
+## 11. SC-02 foundation — append-only relation journal
+
+Implemented on \`feature/supply-correction-fifo-replay\`:
+
+- Added \`SupplyCorrectionEvents\` to \`DI3_TABLE_SCHEMAS\`; it is an additive
+  system table with the relation lifecycle fields, stable \`relation_id\`, and
+  monotonic \`event_sequence\`. The normal schema initializer will create the
+  missing table without rewriting existing tables.
+- Added \`49_DI3_SupplyCorrectionRelations.gs\` with strict relation metadata
+  validation, an idempotent append helper, and a pure effective-relation
+  resolver.
+- The resolver activates a relation for ordinary replay only when the latest
+  relation event is COMMITTED and its linked Operations row is COMMITTED.
+  PREPARED relations can be included only for the exact pending operation ID
+  explicitly supplied by a candidate-replay caller.
+- The resolver validates REPLACE/REMOVE/ADD field semantics, operation ownership,
+  unique event sequence, stable relation metadata, one supersession per source,
+  unique replacement ownership, and acyclic correction chains. QUARANTINED
+  relations fail closed; ABORTED relations remain inactive.
+- Added \`50_DI3_SupplyCorrectionRelationTests.gs\` and included it in the
+  consolidated supply-domain runner.
+
+This is only the relation-journal foundation. The normal FIFO event builder
+does **not** yet consume the resolved map; no \`SUPPLY_CORRECTION\` operation
+handler is registered; no replacement movements/lots are created; no order
+snapshots or product cost-history projections are changed. SC-03/SC-04 remain
+disabled. The received-supply stock-affecting edit guard remains mandatory.
