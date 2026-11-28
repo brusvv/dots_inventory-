@@ -89,7 +89,7 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
       }
     });
     var rows = supply.relevant_rows.filter(function (row) {
-      return !latest[String(row[3] || "")];
+      return !latest[String(row[itemIndex.product_id] || "")];
     });
     rows.forEach(function (row) {
       var lineNo = Number(row[itemIndex.line_no]);
@@ -97,7 +97,7 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
         throw new Error("Поставка " + supply.supply_id + " содержит некорректный line_no для затронутого товара.");
       }
     });
-    rows.sort(function (a, b) { return Number(b[2]) - Number(a[2]); });
+    rows.sort(function (a, b) { return Number(b[itemIndex.line_no]) - Number(a[itemIndex.line_no]); });
     var seenLineByProduct = Object.create(null);
     rows.forEach(function (row) {
       var productId = String(row[itemIndex.product_id] || "");
