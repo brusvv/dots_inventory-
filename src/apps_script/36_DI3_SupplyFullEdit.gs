@@ -687,6 +687,64 @@ function di3BuildSupplyFullEditStatusHistoryTransitions_(oldStatus, newStatus) {
 }
 
 /** Idempotent document-only operation handler. Never writes StockLedger/FIFO. */
+/**
+ * Build a complete item-row projection plan before the first document write.
+ * Existing identities are resolved in one repository read by the caller.
+ */
+function di3BuildSupplyFullEditItemProjectionPlan_(targetRows, removedItemIds, existingMatches, supplyId) {
+  var id = String(supplyId || "");
+  var seenTargetIds = Object.create(null);
+  (targetRows || []).forEach(function (row) {
+    var itemId = String(row && row[0] || "");
+    if (!itemId || seenTargetIds[itemId] || String(row[1]) !== id) {
+      throw new Error("В payload повторяется или не согласован supply_item_id.");
+    }
+    seenTargetIds[itemId] = true;
+  });
+
+  var removeIds = (removedItemIds || []).map(function (value) { return String(value || ""); });
+  var seenRemoveIds = Object.create(null);
+  removeIds.forEach(function (itemId) {
+    if (!itemId || seenRemoveIds[itemId]) throw new Error("В payload повторяется или не согласован удаляемый supply_item_id.");
+    if (seenTargetIds[itemId]) throw new Error("Одна товарная строка одновременно добавлена и помечена к удалению: " + itemId);
+    seenRemoveIds[itemId] = true;
+  });
+
+  var existingById = Object.create(null);
+  (existingMatches || []).forEach(function (match) {
+    var itemId = String(match && match.values && match.values[0] || "");
+    if (!itemId || existingById[itemId]) throw new Error("В V3_SupplyItems найден повторяющийся supply_item_id: " + itemId);
+    existingById[itemId] = match;
+  });
+
+  var itemUpdates = [];
+  var itemAppends = [];
+  (targetRows || []).forEach(function (row) {
+    var itemId = String(row[0]);
+    var existing = existingById[itemId];
+    if (existing) {
+      if (String(existing.values[1]) !== id) throw new Error("supply_item_id уже принадлежит другой поставке: " + itemId);
+      itemUpdates.push({ row_number: Number(existing.row_number), values: row });
+    } else {
+      itemAppends.push(row);
+    }
+  });
+
+  var removeRowNumbers = [];
+  removeIds.forEach(function (itemId) {
+    var match = existingById[itemId];
+    if (!match) return;
+    if (String(match.values[1]) !== id) throw new Error("Нельзя удалить товарную строку другой поставки.");
+    removeRowNumbers.push(Number(match.row_number));
+  });
+
+  return {
+    item_updates: itemUpdates,
+    item_appends: itemAppends,
+    remove_row_numbers: removeRowNumbers
+  };
+}
+
 function di3ApplySupplyDocumentEditOperation_(operationRecord, payload) {
   if (!payload || Number(payload.schema_version) !== 1 || !payload.supply_id || !Array.isArray(payload.supply_row) || !Array.isArray(payload.item_rows)) {
     throw new Error("Некорректный immutable payload SUPPLY_DOCUMENT_EDIT.");
@@ -723,45 +781,29 @@ function di3ApplySupplyDocumentEditOperation_(operationRecord, payload) {
   targetParent[0] = String(payload.supply_id);
   targetParent[4] = supply.created_at;
   if (String(targetParent[1]) !== String(payload.supply_number_after)) throw new Error("Номер поставки в payload не согласован.");
+  var itemsSheet = di3GetSheetOrThrow_("V3_SupplyItems");
+  var targetRows = payload.item_rows.map(function (row) { return di3HydrateSupplyFullEditRow_(row, "ITEM"); });
+  var removeIds = (payload.removed_item_ids || []).map(String);
+  var lookupIds = targetRows.map(function (row) { return String(row[0] || ""); }).concat(removeIds);
+  var existingMatches = lookupIds.length
+    ? di3ReadRowsByColumnValues_("V3_SupplyItems", 0, lookupIds)
+    : [];
+  // Validate every target/removal identity and ownership before writing the parent
+  // document or any item projection. This also makes retries deterministic.
+  var itemPlan = di3BuildSupplyFullEditItemProjectionPlan_(
+    targetRows, removeIds, existingMatches, String(payload.supply_id)
+  );
+
   if (Number(supply.row_number) !== Number(payload.supply_row_number)) {
     // The document row may move only through controlled sheet maintenance. Find it again by ID.
     payload.supply_row_number = Number(supply.row_number);
   }
   di3ApplyContiguousRowUpdates_("V3_Supplies", [{ row_number: supply.row_number, values: targetParent }]);
 
-  var itemsSheet = di3GetSheetOrThrow_("V3_SupplyItems");
-  var targetRows = payload.item_rows.map(function (row) { return di3HydrateSupplyFullEditRow_(row, "ITEM"); });
-  var seenTargetIds = Object.create(null);
-  targetRows.forEach(function (row) {
-    var id = String(row[0] || "");
-    if (!id || seenTargetIds[id] || String(row[1]) !== String(payload.supply_id)) throw new Error("В payload повторяется или не согласован supply_item_id.");
-    seenTargetIds[id] = true;
-  });
-  var itemUpdates = [];
-  var itemAppends = [];
-  targetRows.forEach(function (row) {
-    var existing = di3FindRowByFirstColumn_("V3_SupplyItems", String(row[0]));
-    if (existing) {
-      if (String(existing.values[1]) !== String(payload.supply_id)) throw new Error("supply_item_id уже принадлежит другой поставке: " + row[0]);
-      itemUpdates.push({ row_number: existing.row_number, values: row });
-    } else {
-      itemAppends.push(row);
-    }
-  });
-  if (itemUpdates.length) di3ApplyContiguousRowUpdates_("V3_SupplyItems", itemUpdates);
-  if (itemAppends.length) di3AppendTableRows_("V3_SupplyItems", itemAppends);
-
-  var removeIds = (payload.removed_item_ids || []).map(String);
-  var removeRows = [];
-  removeIds.forEach(function (id) {
-    if (seenTargetIds[id]) throw new Error("Одна товарная строка одновременно добавлена и помечена к удалению: " + id);
-    var match = di3FindRowByFirstColumn_("V3_SupplyItems", id);
-    if (match) {
-      if (String(match.values[1]) !== String(payload.supply_id)) throw new Error("Нельзя удалить товарную строку другой поставки.");
-      removeRows.push(Number(match.row_number));
-    }
-  });
-  removeRows.sort(function (a, b) { return b - a; }).forEach(function (rowNumber) { itemsSheet.deleteRow(rowNumber); });
+  if (itemPlan.item_updates.length) di3ApplyContiguousRowUpdates_("V3_SupplyItems", itemPlan.item_updates);
+  if (itemPlan.item_appends.length) di3AppendTableRows_("V3_SupplyItems", itemPlan.item_appends);
+  itemPlan.remove_row_numbers.sort(function (a, b) { return b - a; })
+    .forEach(function (rowNumber) { itemsSheet.deleteRow(rowNumber); });
 
   var operationId = String(operationRecord.values[0]);
   var statusTransitions = di3BuildSupplyFullEditStatusHistoryTransitions_(payload.old_status, payload.new_status);
