@@ -13,6 +13,29 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     equal(String(source).indexOf(fragment) !== -1, true, message || ("Expected source to contain: " + fragment));
   }
 
+  test("supply form load resolves item labels from one preloaded product index", function () {
+    var items = [
+      { product_id: "P1", product_label_snapshot: "Old label", units_per_pack: 20, packs: 3, purchase_price_per_pack: 229 },
+      { product_id: "P2", product_label_snapshot: "Historical product", units_per_pack: 40, packs: 2, purchase_price_per_pack: 100 }
+    ];
+    var index = {
+      byId: {
+        P1: { product_id: "P1", brand: "Acme", model: "Alpha", diameter: "6.5" }
+      },
+      codes: { P1: "D001" }
+    };
+    var rows = di3BuildSupplyLoadedLineRows_(items, index);
+    equal(rows[0][0], "D001 | Acme Alpha, 6,5 мм");
+    equal(rows[1][0], "Historical product");
+    equal(rows[0][1], 20);
+    equal(rows[0][2], 3);
+    equal(rows[0][3], 229);
+    var loaderSource = di3LoadSelectedSupplyDraft.toString();
+    includes(loaderSource, "di3BuildSupplyLoadedLineRows_");
+    equal(loaderSource.indexOf("di3LoadProductById_") === -1, true,
+      "supply loading must not perform one product repository read per item");
+  });
+
   test("form-state fingerprint payload tracks only editable business inputs", function () {
     var date = new Date("2026-11-25T10:30:00.000Z");
     var payload = di3BuildSupplyFormStatePayload_({
