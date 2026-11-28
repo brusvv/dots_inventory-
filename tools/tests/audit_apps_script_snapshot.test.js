@@ -109,3 +109,40 @@ test("snapshot audit rejects unsupported report formats", () => {
     /Unsupported snapshot format/
   );
 });
+
+
+test("runtime source audit probe disables redirects for its OAuth-authenticated Apps Script API request", () => {
+  const vm = require("node:vm");
+  const probePath = path.join(__dirname, "../../runtime/probes/DI3_APPS_SCRIPT_SOURCE_AUDIT_PROBE.gs");
+  const probeSource = fs.readFileSync(probePath, "utf8");
+  let capturedUrl = "";
+  let capturedOptions = null;
+  const responseBody = JSON.stringify({
+    scriptId: "script-test",
+    files: [{ name: "Code", type: "SERVER_JS", source: "function test() {}\\n" }]
+  });
+  const sandbox = {
+    ScriptApp: { getScriptId: () => "script-test", getOAuthToken: () => "oauth-test" },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getId: () => "sheet-test" }) },
+    UrlFetchApp: { fetch: (url, options) => {
+      capturedUrl = url;
+      capturedOptions = options;
+      return { getResponseCode: () => 200, getContentText: () => responseBody };
+    } },
+    DriveApp: { getFilesByName: () => ({ hasNext: () => false }) },
+    Utilities: {
+      DigestAlgorithm: { SHA_1: "sha1", SHA_256: "sha256" },
+      Charset: { UTF_8: "UTF-8" },
+      newBlob: (value) => ({ getBytes: () => Array.from(Buffer.from(String(value), "utf8")) }),
+      computeDigest: (algorithm, value) => Array.from(
+        crypto.createHash(algorithm).update(String(value), "utf8").digest()
+      ).map((byte) => byte > 127 ? byte - 256 : byte)
+    },
+    Logger: { log: () => {} },
+    Date, JSON, String, Array, Object, RegExp, Error, Math, Number
+  };
+  vm.runInNewContext(probeSource + "\\ndi3AuditExportRuntimeSourceSnapshot();", sandbox);
+  assert.match(capturedUrl, /script\\.googleapis\\.com\\/v1\\/projects\\/script-test\\/content$/);
+  assert.equal(capturedOptions.followRedirects, false);
+  assert.equal(capturedOptions.headers.Authorization, "Bearer oauth-test");
+});
