@@ -96,6 +96,28 @@
 | D09-N09 | Выбранная ветка продвинулась после выбора | Сохранённый snapshot остаётся на старом commit до повторного выбора |
 | D09-N10 | Пользователь отменяет выбор или выбирает NO при установке | Project content не меняется |
 
+
+## 7A. D-09-N04 — Git tree preflight fixture / CI evidence
+
+Статус: **UNIT/CI PASS; APPS SCRIPT RUNTIME NOT RUN**.
+
+Изолированный набор `tools/test_github_branch_tree_preflight.js` запускает реальные функции из `43_DI3_GitHubDeploymentManager.gs` в Node VM с подменёнными GitHub API и raw-fetch адаптерами. Он не обращается к настоящему GitHub API, Apps Script API, Drive, Properties или Sheets.
+
+Проверки на commit `5a25f8c41d4623e8023d19b8f4128ed7885fc14e`:
+- truncated recursive tree — отказ до raw download, `rawFetchCount = 0`;
+- дублирующиеся имена без учёта регистра — отказ до raw download, `rawFetchCount = 0`;
+- symlink mode `120000` — отказ до raw download, `rawFetchCount = 0`;
+- 201 Apps Script .gs файла — отказ до raw download, `rawFetchCount = 0`;
+- корректное дерево из трёх файлов — `READY`, ровно три raw download.
+
+GitHub Actions run #67: **success**.
+- Syntax check: 56 .gs files — PASS.
+- Existing GitHub deployment-manager regression suite: 72 tests — PASS.
+- New Git tree preflight fixtures: 5 tests — PASS.
+- Run: https://github.com/brusvv/dots_inventory-/actions/runs/46177293879
+
+Этот результат подтверждает unit/CI-поведение preflight, но не заменяет runtime-проверку N04 в disposable Apps Script project и не меняет общий статус D-09 runtime acceptance.
+
 ## 8. Критерии завершения
 
 D-09 runtime acceptance = PASS только после фактического выполнения на disposable project:
