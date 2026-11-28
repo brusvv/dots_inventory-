@@ -535,6 +535,8 @@ test("installer NO cancellation preserves verified backup and never calls update
     assert.equal(result.backup.file_id, h.backup.file_id);
     assert.equal(h.updateCalls, 0);
     assert.equal(h.readCount, 1);
+    assert.equal(h.lockAcquireCount, 0);
+    assert.equal(h.lockReleaseCount, 0);
   } finally {
     for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
   }
@@ -710,7 +712,7 @@ test("rollback releases the shared script lock after verified restore", () => {
 
 test("rollback NO cancellation never calls updateContent", () => {
   const h = configureRollbackHarness("NO", "normal");
-  try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "CANCELLED"); assert.equal(result.write_performed, false); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 1); }
+  try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "CANCELLED"); assert.equal(result.write_performed, false); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 1); assert.equal(h.lockAcquireCount, 0); assert.equal(h.lockReleaseCount, 0); }
   finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
