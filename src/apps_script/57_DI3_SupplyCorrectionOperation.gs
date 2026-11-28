@@ -601,6 +601,47 @@ function di3AssertSupplyCorrectionImmutableSource_(operationId, payload) {
   return true;
 }
 
+function di3AssertSupplyCorrectionFifoSourceArchive_(fifoRunId, payload) {
+  var run = di3FindRowByFirstColumn_("FifoAllocationRuns", String(fifoRunId || ""));
+  if (!run || String(run.values[2]) !== "COMMITTED" || !String(run.values[11] || "")) {
+    throw new Error("FifoAllocationRuns: correction replay has no committed F-06 archive reference.");
+  }
+  var archive = di3ReadFifoReplayArchiveSnapshots_(String(run.values[11]));
+  var sourceLotIds = Object.create(null);
+  (payload.source_lot_ids || []).forEach(function (id) { sourceLotIds[String(id)] = true; });
+  var archivedAllocations = (archive.allocation_rows || []).filter(function (row) {
+    return !!sourceLotIds[String(row[3] || "")];
+  }).map(function (row) { return { values: row }; });
+  var allocationAudit = di3BuildSupplyCorrectionAllocationAudit_(payload.source_lines, archivedAllocations);
+  if (allocationAudit.allocation_count !== Number(payload.source_fifo_allocation_count) ||
+      allocationAudit.fingerprint !== String(payload.source_fifo_allocation_fingerprint)) {
+    throw new Error("F-06 source allocation archive не совпадает с read-only аудитом исходной приёмки.");
+  }
+  var archivedLots = Object.create(null);
+  (archive.lot_archive_rows || []).forEach(function (row) {
+    var lotId = String(row[2] || "");
+    if (sourceLotIds[lotId]) {
+      if (Object.prototype.hasOwnProperty.call(archivedLots, lotId)) {
+        throw new Error("F-06 содержит повторный source lot cache archive " + lotId + ".");
+      }
+      archivedLots[lotId] = row[4];
+    }
+  });
+  if (Object.keys(archivedLots).length !== Object.keys(sourceLotIds).length) {
+    throw new Error("F-06 lot cache archive не содержит все исходные партии поставки.");
+  }
+  (payload.source_lines || []).forEach(function (line) {
+    if (Number(archivedLots[String(line.lot_id)]) !== Number(line.remaining_quantity)) {
+      throw new Error("F-06 source remaining_quantity партии " + line.lot_id + " не совпадает с read-only аудитом.");
+    }
+  });
+  return {
+    source_allocation_count: allocationAudit.allocation_count,
+    source_lot_count: Object.keys(archivedLots).length,
+    replay_id: String(run.values[11])
+  };
+}
+
 function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
   var operationId = String(operationRecord.values[0] || "");
   if (!payload || Number(payload.schema_version) !== 1 ||
@@ -635,6 +676,7 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
     operation_id: operationId
   });
   if (!fifo || !fifo.run_id || !fifo.mode) throw new Error("Не подтверждён результат candidate FIFO replay.");
+  var sourceArchive = di3AssertSupplyCorrectionFifoSourceArchive_(fifo.run_id, payload);
   // Cost history becomes visible only after the new FIFO allocation projection
   // has been durably committed; stable source keys make this retry-safe.
   var costHistoryAdded = di3EnsureSupplyCorrectionCostHistory_(payload);
@@ -661,6 +703,7 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
     cost_history_added: costHistoryAdded,
     fifo_run_id: fifo.run_id,
     fifo_mode: fifo.mode,
+    source_archive: sourceArchive,
     affected_product_ids: payload.affected_product_ids.slice()
   };
 }
