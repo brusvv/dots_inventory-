@@ -68,10 +68,10 @@ function di3ReconcileCurrentPackVariantsForProducts_(productIds) {
     }
     var shouldBeCurrent = String(variantId) === String(target.pack_variant_id);
     var isCurrent = record.is_current === true || String(record.is_current).toLowerCase() === "true";
-    var currentLastUsed = record.last_used_at instanceof Date
-      ? record.last_used_at.getTime() : new Date(record.last_used_at || 0).getTime();
-    var targetLastUsed = new Date(target.received_at).getTime();
-    if (shouldBeCurrent === isCurrent && currentLastUsed === targetLastUsed) return;
+    var currentUpdatedAt = record.updated_at instanceof Date
+      ? record.updated_at.getTime() : new Date(record.updated_at || 0).getTime();
+    var targetUpdatedAt = new Date(target.received_at).getTime();
+    if (shouldBeCurrent === isCurrent && currentUpdatedAt === targetUpdatedAt) return;
     var row = DI3_TABLE_SCHEMAS.PackVariants.map(function (header) { return record[header]; });
     row[4] = shouldBeCurrent;
     row[8] = new Date(target.received_at);
