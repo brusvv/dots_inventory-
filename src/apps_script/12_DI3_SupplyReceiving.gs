@@ -125,7 +125,11 @@ function di3ApplyNextSupplyStageFromForm() {
 
   var result = di3AdvanceSupplyStatus(supply.supply_number, config.next_status, effectiveAt);
   var updatedSupply = di3GetSupplyById_(supplyId);
-  di3RefreshSupplyDatePanel_(updatedSupply);
+  // Successful transitions refresh the date panel inside the domain/receipt
+  // handler. Only idempotent fast paths need the caller to restore the panel.
+  if (result && ["ALREADY_IN_STATUS", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1) {
+    di3RefreshSupplyDatePanel_(updatedSupply);
+  }
   if (config.requires_receipt_confirmation && result &&
       ["COMMITTED", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1 &&
       typeof di3RefreshWarehouseViewsAfterCommit_ === "function") {
@@ -176,11 +180,20 @@ function di3GetSupplyPreviousDate_(supply, nextStatus) {
   return null;
 }
 
+function di3SupplyStatusHistoryEventMatches_(row, supplyId, oldStatus, newStatus, effectiveAt, operationId) {
+  if (!row || String(row[1]) !== "SUPPLY" || String(row[2]) !== String(supplyId)) return false;
+  if (String(row[3] || "") !== String(oldStatus || "") || String(row[4]) !== String(newStatus)) return false;
+  if (String(row[7] || "") !== String(operationId || "")) return false;
+  if (!row[5] || !effectiveAt) return false;
+  return di3ToMillis_(row[5]) === di3ToMillis_(effectiveAt);
+}
+
 function di3EnsureSupplyStatusHistory_(supplyId, oldStatus, newStatus, effectiveAt, operationId, comment) {
   var matches = di3ReadRowsByColumnValue_("DocumentStatusHistory", 2, supplyId);
   var exists = matches.some(function (match) {
-    var row = match.values;
-    return String(row[1]) === "SUPPLY" && String(row[4]) === String(newStatus);
+    return di3SupplyStatusHistoryEventMatches_(
+      match.values, supplyId, oldStatus, newStatus, effectiveAt, operationId
+    );
   });
   if (exists) return false;
   di3AppendTableRows_("DocumentStatusHistory", [[
@@ -257,7 +270,6 @@ function di3AdvanceSupplyStatus(supplyNumber, nextStatus, effectiveAt) {
     di3SetSupplyStatusCell_(supply, nextStatus, date);
     di3EnsureSupplyStatusHistory_(supply.supply_id, oldStatus, nextStatus, date, "", "Изменение статуса поставки");
     di3RefreshSupplyRegister();
-    di3RefreshSupplyFormValidations();
     var updatedSupply = di3GetSupplyById_(supply.supply_id);
     var formSheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
     if (formSheet && String(formSheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "") === String(supply.supply_id)) {
@@ -268,9 +280,34 @@ function di3AdvanceSupplyStatus(supplyNumber, nextStatus, effectiveAt) {
   });
 }
 
+function di3ValidateSupplyReceiptLineIdentities_(items) {
+  if (!Array.isArray(items) || !items.length) throw new Error("Нельзя принять поставку без товарных позиций.");
+  var seenItemIds = Object.create(null);
+  var seenProductVariants = Object.create(null);
+  items.forEach(function (item, index) {
+    var itemId = String(item && item.supply_item_id || "");
+    var productId = String(item && item.product_id || "");
+    var variantId = String(item && item.pack_variant_id || "");
+    var units = Number(item && item.units_per_pack);
+    var packs = Number(item && item.packs);
+    if (!itemId || seenItemIds[itemId]) throw new Error("В позициях поставки отсутствует или повторяется supply_item_id.");
+    seenItemIds[itemId] = true;
+    if (!productId || !variantId) throw new Error("Позиция " + (index + 1) + ": не указан товар или вариант упаковки.");
+    if (!Number.isInteger(units) || units <= 0) throw new Error("Позиция " + (index + 1) + ": фасовка должна быть положительным целым числом.");
+    if (!Number.isInteger(packs) || packs <= 0) throw new Error("Позиция " + (index + 1) + ": количество упаковок должно быть положительным целым числом.");
+    var pairKey = productId + "\u001f" + variantId;
+    if (seenProductVariants[pairKey]) {
+      throw new Error("Позиции поставки повторяют товар и фасовку: " + productId + " / " + variantId + ".");
+    }
+    seenProductVariants[pairKey] = true;
+  });
+  return true;
+}
+
 function di3BuildSupplyReceiptPayload_(supply, items, effectiveAt, recordedAt) {
   if (!supply || !supply.supply_id) throw new Error("Не передана поставка для приёмки.");
   if (!Array.isArray(items) || !items.length) throw new Error("Нельзя принять поставку без товарных позиций.");
+  di3ValidateSupplyReceiptLineIdentities_(items);
   var seenItems = {};
   // Validate all cost inputs before touching the spreadsheet for display-code allocation.
   items.forEach(function (item, index) {
@@ -393,22 +430,28 @@ function di3CreateSupplyReceiptOperation_(supply, effectiveAt) {
 }
 
 function di3EnsureSupplyCostHistory_(supply, payload) {
-  var existingSourceKeys = di3ReadTableColumnValues_("ProductCostHistory", 7);
-  var sourceKeys = {};
-  existingSourceKeys.forEach(function (value) { sourceKeys[String(value || "")] = true; });
+  var sourceKeys = payload.lines.map(function (line) {
+    return "SUPPLY_RECEIPT:" + payload.supply_id + ":" + line.supply_item_id;
+  });
+  var existingMatches = sourceKeys.length
+    ? di3ReadRowsByColumnValues_("ProductCostHistory", 7, sourceKeys) : [];
+  var existingSourceKeys = Object.create(null);
+  existingMatches.forEach(function (match) {
+    existingSourceKeys[String(match.values[7] || "")] = true;
+  });
   var rows = [];
   payload.lines.forEach(function (line) {
     var sourceKey = "SUPPLY_RECEIPT:" + payload.supply_id + ":" + line.supply_item_id;
-    if (sourceKeys[sourceKey]) return;
+    if (existingSourceKeys[sourceKey]) return;
     rows.push([
       di3MakeUuid_(), line.product_id, line.pack_variant_id, line.cost_per_pack,
       line.unit_cost, di3GetBaseCurrency_(), "SUPPLY_RECEIPT", sourceKey,
       new Date(payload.received_at), new Date(payload.recorded_at),
       "Фактическая приёмка поставки " + payload.supply_number
     ]);
-    sourceKeys[sourceKey] = true;
+    existingSourceKeys[sourceKey] = true;
   });
-  di3AppendTableRows_("ProductCostHistory", rows);
+  if (rows.length) di3AppendTableRows_("ProductCostHistory", rows);
   return rows.length;
 }
 
@@ -420,11 +463,17 @@ function di3SetCurrentPackVariantsFromReceipt_(payload) {
     latestByProduct[line.product_id] = { pack_variant_id: line.pack_variant_id, index: index };
   });
   var variants = di3LoadPackVariantIndex_();
+  var variantsByProduct = Object.create(null);
+  Object.keys(variants.byId).forEach(function (variantId) {
+    var record = variants.byId[variantId];
+    var productId = String(record.product_id);
+    if (!variantsByProduct[productId]) variantsByProduct[productId] = [];
+    variantsByProduct[productId].push(record);
+  });
   var updates = [];
   Object.keys(latestByProduct).forEach(function (productId) {
-    Object.keys(variants.byId).forEach(function (variantId) {
-      var record = variants.byId[variantId];
-      if (String(record.product_id) !== String(productId)) return;
+    (variantsByProduct[String(productId)] || []).forEach(function (record) {
+      var variantId = String(record.pack_variant_id);
       var shouldBeCurrent = variantId === String(latestByProduct[productId].pack_variant_id);
       var current = record.is_current === true || String(record.is_current).toLowerCase() === "true";
       if (shouldBeCurrent === current) return;
@@ -491,7 +540,6 @@ function di3CompleteSupplyReceipt_(supply, operationId, operationRowNumber, payl
     DI3_SUPPLY_STATUS.RECEIVED, new Date(payload.received_at), operationId,
     "Фактическая приёмка; созданы FIFO-партии");
   di3RefreshSupplyRegister();
-  di3RefreshSupplyFormValidations();
   var formSheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
   if (formSheet && String(formSheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "") === String(supply.supply_id)) {
     di3RefreshSupplyDatePanel_(di3GetSupplyById_(supply.supply_id));
@@ -581,22 +629,39 @@ function di3GetSelectedSupplyRegisterRow_() {
   var rowNumber = activeRange.getRow();
   if (rowNumber < 4 || rowNumber > sheet.getLastRow()) throw new Error("Выбери строку поставки начиная с 4-й строки.");
   var supplyNumber = String(sheet.getRange(rowNumber, 2).getValue() || "").trim();
+  var supplyId = String(sheet.getRange(rowNumber, 12).getValue() || "").trim();
   if (!supplyNumber) throw new Error("В выбранной строке нет номера поставки.");
   var effectiveAt = di3BuildEffectiveDateTime_(
     sheet.getRange(rowNumber, 13).getValue(),
     sheet.getRange(rowNumber, 14).getDisplayValue(),
     "Следующий этап поставки"
   );
-  return { supply_number: supplyNumber, row_number: rowNumber, effective_at: effectiveAt };
+  return { supply_number: supplyNumber, supply_id: supplyId, row_number: rowNumber, effective_at: effectiveAt };
 }
 
 function di3TransitionSelectedSupply_(nextStatus) {
   var selected = di3GetSelectedSupplyRegisterRow_();
   var result = di3AdvanceSupplyStatus(selected.supply_number, nextStatus, selected.effective_at);
-  if (["UPDATED", "COMMITTED", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1) {
+  var committedStatuses = ["UPDATED", "COMMITTED", "ALREADY_RECEIVED", "ALREADY_IN_STATUS"];
+  if (committedStatuses.indexOf(String(result.status)) !== -1) {
     var register = di3GetSheetOrThrow_(DI3_SUPPLY_REGISTER_SHEET);
-    register.getRange(selected.row_number, 13, 1, 2).clearContent();
-    di3RefreshSupplyRegister();
+    // The status/receipt handler already rebuilds the register except for the
+    // ALREADY_RECEIVED fast path. Re-find by immutable ID because a refresh can
+    // reorder rows and make the originally selected row number stale.
+    var lastRow = register.getLastRow();
+    var idValues = lastRow >= 4 ? register.getRange(4, 12, lastRow - 3, 1).getValues() : [];
+    var targetRow = -1;
+    for (var i = 0; i < idValues.length; i++) {
+      if (String(idValues[i][0] || "") === String(selected.supply_id || "")) { targetRow = i + 4; break; }
+    }
+    if (targetRow < 0 && !selected.supply_id) {
+      var numberValues = lastRow >= 4 ? register.getRange(4, 2, lastRow - 3, 1).getValues() : [];
+      for (var j = 0; j < numberValues.length; j++) {
+        if (String(numberValues[j][0] || "") === String(selected.supply_number)) { targetRow = j + 4; break; }
+      }
+    }
+    if (targetRow >= 4) register.getRange(targetRow, 13, 1, 2).clearContent();
+    if (String(result.status) === "ALREADY_RECEIVED") di3RefreshSupplyRegister();
   }
   if (nextStatus === DI3_SUPPLY_STATUS.RECEIVED && ["UPDATED", "COMMITTED", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1 && typeof di3RefreshWarehouseViewsAfterCommit_ === "function") {
     di3RefreshWarehouseViewsAfterCommit_("Поставка " + selected.supply_number);
@@ -683,7 +748,6 @@ function di3CancelSupplyByNumber_(supplyNumber, reason) {
     di3EnsureSupplyStatusHistory_(supply.supply_id, oldStatus, DI3_SUPPLY_STATUS.CANCELLED,
       cancelledAt, "", eligibility.already_cancelled ? "Восстановление истории отмены поставки" : (reason || "Отмена поставки пользователем"));
     di3RefreshSupplyRegister();
-    di3RefreshSupplyFormValidations();
 
     var formSheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
     if (formSheet && String(formSheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "") === String(supply.supply_id)) {
@@ -895,7 +959,7 @@ function di3BuildRecoverPendingOperationsConfirmationText_(report) {
     "",
     typeLines.length ? "Типы операций к восстановлению:\n" + typeLines.join("\n") : "Подходящих операций сейчас не обнаружено.",
     "",
-    "Восстановление может завершить ранее подготовленные движения склада, приёмки поставок, отправки/возвраты заказов или создание документов. Новые операции по уже завершённым записям не создаются; payload и idempotency проверяются.",
+    "Восстановление может завершить ранее подготовленные движения склада, приёмки и исправления поставок, отправки/возвраты заказов или создание документов. Новые операции по уже завершённым записям не создаются; payload и idempotency проверяются.",
     "Операции в карантине и записи без обработчика эта команда не запускает.",
     "",
     "Продолжить?"
@@ -915,6 +979,7 @@ function di3RecoverAllPendingOperations() {
     di3EnsureStockCoreSchemas_();
     var manual = di3RecoverPreparedOperations_(["MANUAL_STOCK_MOVEMENT"]);
     var supply = di3RecoverPreparedOperations_(["SUPPLY_RECEIVE"]);
+    var supplyCorrections = di3RecoverPreparedOperations_(["SUPPLY_CORRECTION"]);
     var supplyEdits = di3RecoverPreparedOperations_(["SUPPLY_DOCUMENT_EDIT"]);
     var orders = di3RecoverPreparedOperations_(["ORDER_CREATE", "ORDER_DISPATCH", "ORDER_RETURN"]);
     // If a pending full-edit operation was completed for the document currently
@@ -932,6 +997,7 @@ function di3RecoverAllPendingOperations() {
     return {
       manual_stock: manual,
       supply_receipts: supply,
+      supply_corrections: supplyCorrections,
       supply_document_edits: supplyEdits,
       orders: orders,
       unsupported: report.unsupported,

@@ -322,15 +322,14 @@ function di3NewOrderForm(options) {
   if (di3HasUnsavedOrderFormChanges_(sheet) && options.skipUnsavedConfirmation !== true && !di3ConfirmOrderFormDiscard_()) {
     return { status: "CANCELLED_BY_USER", cleared: false };
   }
-  sheet.getRange("B3:B8").clearContent();
-  sheet.getRange("B3").insertCheckboxes().setValue(true);
-  sheet.getRange("B4").setValue(0);
-  sheet.getRange("B5").insertCheckboxes().setValue(false);
-  sheet.getRange("B6").setValue(0);
+  // Existing checkbox and numeric validations survive setValues(); reset all
+  // six settings in one write instead of rebuilding validation rules cell by cell.
+  sheet.getRange("B3:B8").setValues([[true], [0], [false], [0], [""], [""]]);
   sheet.getRange(DI3_ORDER_FORM.firstLine, 1, DI3_ORDER_FORM.lineCount, 3).clearContent();
   sheet.getRange("G4:G11").clearContent();
   di3RotateFormRequestToken_("ORDER");
-  di3RefreshOrderFormValidations();
+  // clearContent() preserves existing data validations. Product and delivery
+  // list refreshes are handled by their explicit refresh workflow, not by reset.
   di3SetOrderFormStateBaseline_(sheet);
   return { status: "READY", cleared: true };
 }

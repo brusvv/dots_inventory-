@@ -1,15 +1,15 @@
 # Dots Inventory v4 — RC9 work plan and acceptance checklist
 
 Last updated: 2026-11-28  
-Working branch: `feature/github-preview-releases`  
-Branch HEAD at update: `e75ecf814aff7cbc07c08b9462e47c5f948c7a06`
+Working branch: `feature/supply-correction-fifo-replay`  
+Branch HEAD at update: `a763a36cbe714a4f0cd9849d50152b2a649c8e16`
 
 > This is the execution checklist. Mark an item `[x]` only when the stated evidence exists. `[ ]` means not done or not evidenced; `[~]` means partially completed; `[!]` means blocked/deferred. Source implementation, CI, and live Google Apps Script acceptance are separate evidence classes.
 
 ## 0. Safety and scope gates
 
 - [x] Keep production RC8 and its workbook untouched.
-- [x] Keep PR #7 Draft; no merge, tag, GitHub Release, Preview/Stable publication, or production update.
+- [x] Keep all existing PRs Draft; no merge, tag, GitHub Release, Preview/Stable publication, or production update.
 - [x] Keep N-02 runtime fault-injection deferred at the user's request.
 - [ ] Confirm the exact disposable Apps Script project and workbook before any write/runtime acceptance.
 - [ ] Obtain explicit approval immediately before each destructive or business-data write operation.
@@ -291,3 +291,139 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 | Date | Target | Source/test state | Result | Evidence |
 |---|---|---|---|---|
 | 2026-11-28 | GitHub source branch | `57327687990979594ed69aa7ee88cb7f6b132738` | PASS — Release Pipeline, Apps Script quality gates, package build; includes rollback backup reread after YES and unavailable-backup fail-closed test | [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084515885), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084515883), [Package](https://github.com/brusvv/dots_inventory-/actions/runs/46084515887) |
+
+
+## 2026-11-28 — consolidated work plan and PR review
+
+### Current source branch
+
+- Working branch: `feature/supply-correction-fifo-replay`.
+- Branch HEAD at this update: `a763a36cbe714a4f0cd9849d50152b2a649c8e16`.
+- It is 201 commits ahead of `feature/github-preview-releases`, with no commits behind; the incremental comparison contains 37 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
+- SC-01 through SC-04 are implemented in source: immutable receipt/source audit; append-only correction relation journal; candidate/effective FIFO preview and normal replay integration; explicit correction operation with recovery and a read-only all-sheet preview probe.
+- SC-04 remains source-ready only. The mutating API `di3CorrectReceivedSupply()` is not exposed in the menu. It must not be used on a live/production supply until runtime acceptance on a restored disposable workbook.
+- Known SC limitation: a second correction of the same supply is blocked; correction-chain document hydration is not implemented.
+- Latest source CI is run [46100406477](https://github.com/brusvv/dots_inventory-/actions/runs/46100406477) on parent source commit `ae963fc958991ae809453cf9551933f299e8c849`: Apps Script syntax and all regression suites passed. The current branch HEAD adds documentation only after that source commit; therefore this is source/Node evidence, not Apps Script runtime evidence.
+- The all-sheet preview probe is prepared but has not been executed in a bound workbook. No live Apps Script project, Drive, spreadsheet, production data, or deployment was changed.
+
+### GitHub pull-request audit (2026-11-28)
+
+All currently open PRs are Draft. No PR has submitted reviews or inline review threads. The PRs are stacked and must not be merged out of order.
+
+| PR | Scope | Current assessment | Decision |
+|---|---|---|---|
+| #1 | N-03 clean schema v4, F-02 and core hardening | Source CI passed; broad foundational change; runtime migration/setup and business-flow acceptance remain pending. Includes N-02 source resolution code, but N-02 runtime fault injection remains deferred. | Keep Draft; do not merge before disposable-copy acceptance. |
+| #2 | D-01/D-02 release manifest/package | Base is PR #1 branch; GitHub reports merge conflict/not mergeable at this snapshot. | Keep Draft; rebase/resolve only after its base is finalized. |
+| #3 | D-03/D-04 release inspection and verified source backup | Depends on #2; source tests pass; Apps Script scopes and actual Drive backup/read-back are not runtime accepted. | Keep Draft. |
+| #4 | D-05 confirmed installer | Depends on #3; source tests pass; no disposable-project install/read-back acceptance. | Keep Draft. |
+| #5 | D-06 verified code rollback | Depends on #4; source tests pass; no disposable-project rollback acceptance. | Keep Draft. |
+| #6 | D-07 runtime acceptance runbook | Depends on #5; documentation/CI only. D-07 execution is still blocked until the release chain is available and a disposable project is prepared. | Keep Draft. |
+| #7 | Stable/Preview channels and updater safeguards | Depends on #6; release pipeline, package build and quality gates passed on its checked head. D-07 live runtime acceptance has not run. | Keep Draft; no tag/release/merge yet. |
+| #8 | D-08 browser-only bootstrap | Depends on #7; CI passed on its checked head, but GitHub reports not mergeable. Its bootstrap pins an older source commit and needs an explicit freshness/upgrade decision before acceptance. | Keep Draft; inspect/update the pinned source before merge. |
+| #10 | D-09 pinned branch selector | Depends on #7; focused run [46099723578](https://github.com/brusvv/dots_inventory-/actions/runs/46099723578) passed 55 syntax checks and 69 deployment-manager tests. Full release-pipeline CI on the exact PR head and runtime acceptance are not evidenced. | Keep Draft; require full CI and disposable-project runtime acceptance. |
+
+### PR sequencing and next action
+
+1. Keep the foundational chain #1 → #2 → #3 → #4 → #5 → #6 → #7 intact. Do not merge a child PR before its base is accepted.
+2. #8 and #10 are separate stacked follow-ups to #7; they are not prerequisites for the supply correction work.
+3. Created Draft [PR #11](https://github.com/brusvv/dots_inventory-/pull/11) from `feature/supply-correction-fifo-replay` to `feature/github-preview-releases`. This makes the 34-file incremental SC/supply delta reviewable without mixing it into the older D-02 PR. The new PR remains blocked from merge until source review and disposable-workbook runtime acceptance.
+4. Run the complete quality-gates, release-pipeline and package workflows on the new PR head. The current green run is on its parent source commit.
+5. Do not run N-02 fault injection, production migration, received-supply correction, release publication, or deployment without separate explicit approval.
+
+### Revised verification order
+
+- [ ] Review/accept the foundational release chain in dependency order, but only after its required runtime gates.
+- [ ] Complete R0 inventory on the exact disposable project: actual manifest/scopes, timezone, project fingerprint, triggers/deployments, Script Properties key names only, and verified full source backup.
+- [ ] Resolve the three source mismatches (modules 11, 19, 35) from exact diffs; do not overwrite based on summaries.
+- [ ] Complete N-03 Dry Run, backup and v3→v4 migration on the disposable copy only, after explicit approval.
+- [ ] Finish Supply Workspace UX, lifecycle, Dashboard W-1–W-10 and commission/Finance runtime acceptance.
+- [ ] Complete F-01 return-after-later-stock-operation and F-02 historical-sale chronology/PeriodGuard acceptance.
+- [ ] Complete Backup/Restore-as-new, F-13 timing, F-14 two-session ScriptLock, and remaining C-01–C-17 checks.
+- [ ] SC-01: execute the read-only source audit on representative received supplies in the disposable copy; verify blocked/mismatch cases.
+- [ ] SC-02/03: validate relation resolution, candidate replay and effective FIFO projections in the disposable copy, including REMOVE-only products and insufficient-stock cases.
+- [ ] SC-04: first test the all-sheet read-only preview probe; then test correction execution only after a separately approved backup, exact preview, and explicit write authorization. Inject failures at every write boundary only in the disposable copy.
+- [ ] Keep second correction of the same supply out of scope until document hydration and correction-chain acceptance are implemented.
+- [!] N-02 runtime fault injection remains deferred by the user.
+- [ ] Final RC9 gate: exact candidate commit CI green, all required runtime evidence recorded, PR approvals/merge order explicitly authorized, and no unresolved P0/P1 defects.
+
+
+## 2026-11-28 — PR #11 exact-head CI evidence
+
+- [x] Created Draft [PR #11](https://github.com/brusvv/dots_inventory-/pull/11), head `feature/supply-correction-fifo-replay`, base `feature/github-preview-releases`.
+- [x] Added the PR base branch to quality-gates, release-pipeline and package workflow filters.
+- [x] Exact PR head `1df024ab46b22c2eb28ded02dc5fdf5292442e86`: [quality gates 46100646815](https://github.com/brusvv/dots_inventory-/actions/runs/46100646815), [release pipeline 46100646810](https://github.com/brusvv/dots_inventory-/actions/runs/46100646810), [package build 46100646814](https://github.com/brusvv/dots_inventory-/actions/runs/46100646814) — all PASS.
+- [ ] Source-level code review and approval for PR #11.
+- [ ] Read-only all-sheet runtime probe on a restored disposable workbook.
+- [ ] SC-04 partial-failure/recovery acceptance on the disposable copy, after separate explicit authorization.
+- [!] N-02 runtime fault injection remains deferred.
+
+
+## 2026-11-28 — SC-04 preflight hardening
+
+- [x] Remove schema/FIFO bootstrap from `di3CorrectReceivedSupply()`; the mutating correction entrypoint now performs only a read-only v4/FIFO readiness audit before any operation registration or business write.
+- [x] Fail closed if any core v4 sheet is missing, any core header differs, FIFO state version is absent/wrong, or FIFO cursor is behind the current StockLedger sequence.
+- [x] Add four regression cases for prerequisite readiness and the no-bootstrap contract.
+- [x] Exact source commit `7ea2989bb6f06a81ab5424594e9f869fdefa3773`: 69 Apps Script syntax files; snapshot 8/8; FIFO 46/46; order 22/22; supply/correction 153/153; catalog/order UX 14/14; system safety 39/39; Dashboard 11/11; Finance 4/4; Deployment Manager 57/57.
+- [x] Exact-head GitHub Actions: [quality gates 46100854031](https://github.com/brusvv/dots_inventory-/actions/runs/46100854031), [release pipeline 46100854106](https://github.com/brusvv/dots_inventory-/actions/runs/46100854106), [package 46100854083](https://github.com/brusvv/dots_inventory-/actions/runs/46100854083) — PASS.
+- [ ] Run the all-sheet preview probe on the restored disposable workbook.
+- [ ] Run SC-04 write-boundary failure/recovery acceptance on the disposable copy after separate explicit approval.
+
+
+## PR review update — 2026-11-28
+
+- [x] PR #10 latest focused CI: [46100554436](https://github.com/brusvv/dots_inventory-/actions/runs/46100554436), 55/55 syntax and 71/71 deployment-manager tests PASS. Full quality-gates/package checks and runtime acceptance are still not evidenced for its current head.
+- [!] PR #2 has a Git merge conflict (`mergeable_state=dirty`); resolve after its N-03 base is finalized.
+- [!] PR #8 has a Git merge conflict (`mergeable_state=dirty`) and uses an older pinned bootstrap source commit; update/review before merge.
+- [x] PR #11 current documentation head `352c04436798a0da69bca83e8319d60728a5780a`: quality gates [46100927016](https://github.com/brusvv/dots_inventory-/actions/runs/46100927016), release pipeline [46100927023](https://github.com/brusvv/dots_inventory-/actions/runs/46100927023), package [46100926970](https://github.com/brusvv/dots_inventory-/actions/runs/46100926970) all PASS.
+- [ ] No PR has external code review/approval; all open PRs remain Draft.
+
+
+## Final PR #11 snapshot — 2026-11-28
+
+- [x] PR #11 head `fec19b0f4ab79a6a6c89524492dbc774a3e2a2e8`, 37 changed files, GitHub mergeability clean.
+- [x] Exact-head quality gates [46101031880](https://github.com/brusvv/dots_inventory-/actions/runs/46101031880), release pipeline [46101031846](https://github.com/brusvv/dots_inventory-/actions/runs/46101031846), package [46101031804](https://github.com/brusvv/dots_inventory-/actions/runs/46101031804) — PASS.
+- [ ] External/code review approval.
+- [ ] Disposable-workbook read-only preview probe.
+- [ ] Disposable-workbook SC-04 failure/recovery acceptance after separate authorization.
+
+## SC-04 runtime acceptance runbook — 2026-11-28
+
+- [x] Expand the all-sheet preview snapshot to include notes, number formats, backgrounds, font colors/weights, data validations and frozen panes in addition to values/formulas and sheet/grid identity.
+- [x] Add [Supply correction runtime acceptance runbook](research/SUPPLY_CORRECTION_RUNTIME_ACCEPTANCE.md) covering SC-01 source audit, SC-02/03 relation/FIFO cases, read-only preview, SC-04 write-boundary recovery, finance/order assertions and evidence capture.
+- [x] Exact source commit `549fe463564213ed81d507b39fc1abde4d02da8b`: Apps Script syntax 69/69; snapshot audit 8/8; FIFO 46/46; order 22/22; supply/correction/lifecycle 153/153; catalog/order UX 14/14; system safety 39/39; warehouse 11/11; finance 4/4. Quality gates [46101506552](https://github.com/brusvv/dots_inventory-/actions/runs/46101506552), release pipeline [46101506580](https://github.com/brusvv/dots_inventory-/actions/runs/46101506580), package [46101506563](https://github.com/brusvv/dots_inventory-/actions/runs/46101506563): PASS.
+- [ ] Run the read-only probe on a restored disposable workbook.
+- [ ] Obtain separate explicit approval before any mutating SC-04 failure/recovery test, even on the disposable copy.
+- [ ] Do not correct supply #17 or change the live workbook until all runtime gates pass and the exact mutation is separately approved.
+
+### SC-04 pack-variant reconciliation review — 2026-11-28
+
+- [x] Preserve `PackVariants.updated_at`: update only when `is_current` actually changes; use the reconciliation timestamp rather than copying a historical supply receipt timestamp.
+- [x] Fail closed on ambiguous latest received-supply source data for affected products: invalid `received_at`, invalid/duplicate `line_no`, or missing selected `pack_variant_id`.
+- [x] Exact source commit `1761f0a2d418825982a20f56724d8f40ba3aec3f`: quality gates [46101790363](https://github.com/brusvv/dots_inventory-/actions/runs/46101790363), release pipeline [46101795652](https://github.com/brusvv/dots_inventory-/actions/runs/46101795652), package [46101795713](https://github.com/brusvv/dots_inventory-/actions/runs/46101795713) — PASS; supply/correction/lifecycle 161/161, Deployment Manager 57/57.
+- [ ] Disposable-workbook runtime acceptance remains NOT RUN.
+
+- [x] Additional chronology guard: two received supplies for the same affected product with identical `received_at` and `created_at` now block current-variant reconciliation rather than choosing an arbitrary supply ID; singleton line numbers are validated explicitly.
+- [x] Exact source commit `8feeb93980f92043004bd10e4f57e97898925b9a`: quality gates [46101862857](https://github.com/brusvv/dots_inventory-/actions/runs/46101862857), release pipeline [46101862869](https://github.com/brusvv/dots_inventory-/actions/runs/46101862869), package [46101862835](https://github.com/brusvv/dots_inventory-/actions/runs/46101862835) — PASS; supply/correction/lifecycle 162/162.
+
+### SC-04 source review — document projection preflight
+
+- [x] Independent review found that the correction handler validated the live supply document against its before/after snapshots only inside the document writer, after replacement StockLedger/StockMovementDetails/StockLots rows had already been appended.
+- [x] Added a read-only before/after state audit for the supply row and all current item rows; it accepts safe partial target states for recovery but rejects unknown, duplicate, cross-supply or conflicting rows before any replacement stock source write.
+- [x] Added four regression tests covering untouched/fully applied states, partial target state, conflicting/foreign rows and invalid immutable snapshots.
+- [x] Exact source/test head `4ff400a52e2cce57b986e5bb9f3609d08e823473`: 69/69 Apps Script syntax; snapshot audit 8/8; FIFO replay 46/46; order 22/22; supply/correction/lifecycle 166/166; catalog/order UX 14/14; system safety 39/39; warehouse 11/11; finance 4/4; Deployment Manager 57/57; release manifest 15/15; tag policy passed.
+- [x] Exact-head quality gates [46104168374](https://github.com/brusvv/dots_inventory-/actions/runs/46104168374), release pipeline [46104168337](https://github.com/brusvv/dots_inventory-/actions/runs/46104168337), package [46104168304](https://github.com/brusvv/dots_inventory-/actions/runs/46104168304) — PASS.
+- [ ] Disposable-workbook read-only preview remains NOT RUN.
+- [ ] SC-04 write-boundary failure/recovery acceptance remains pending separate explicit authorization.
+- [ ] PR #11 remains Draft; do not merge or deploy based on source CI alone.
+
+### SC-04 recovery and PackVariants reconciliation hardening
+
+- [x] Closed a retry gap after the operation-backed FULL FIFO replay has reached COMMITTED but the enclosing SUPPLY_CORRECTION operation has not yet committed. Recovery now locates the unique committed run for that operation, validates its final FULL FifoReplayEvents entry, verifies active allocation and lot-cache target fingerprints, and reuses its original F-06 archive instead of attempting a second run with the stable replay_id.
+- [x] Added pure regression coverage for valid committed-run selection, a still-PREPARED or mismatched final event, duplicate committed runs, and broken event sequence.
+- [x] Independent schema review found PackVariants reconciliation was reading V3_Supplies status/created_at/received_at from legacy numeric offsets (15/16/18), while the live v4 schema defines those fields at 3/4/7. This could leave the latest-received map empty and clear current flags after a correction.
+- [x] Replaced hard-coded supply and item offsets with indexes resolved from DI3_TABLE_SCHEMAS; corrected line_no and product_id selection/sorting to use schema indexes.
+- [x] Reworked PackVariants test fixtures to use the actual v4 schema and added a regression that deliberately puts currency/updated_at/expected_received_date values at the old offsets.
+- [x] Exact-head CI for `f7aef30c25883b79d31c3a7a5e2ad0f96e676ede`: 69/69 Apps Script syntax; snapshot audit 8/8; FIFO replay 46/46; order 22/22; supply/correction/lifecycle 170/170; catalog/order UX 14/14; system safety 39/39; warehouse 11/11; finance 4/4; Deployment Manager 57/57; release manifest 15/15; tag policy passed.
+- [x] Exact-head quality gates [46104514845](https://github.com/brusvv/dots_inventory-/actions/runs/46104514845), release pipeline [46104514897](https://github.com/brusvv/dots_inventory-/actions/runs/46104514897), package [46104514829](https://github.com/brusvv/dots_inventory-/actions/runs/46104514829) — PASS.
+- [ ] Disposable-workbook read-only preview remains NOT RUN.
+- [ ] SC-04 write-boundary failure/recovery acceptance remains pending separate explicit authorization.

@@ -9,6 +9,7 @@ on:
       - feature/github-deployment-manager
       - feature/github-release-pipeline
       - feature/github-preview-releases
+      - feature/supply-correction-fifo-replay
     paths:
       - "src/apps_script/**"
       - "tools/build_release_manifest.js"
@@ -25,6 +26,7 @@ on:
       - feature/github-runtime-acceptance
       - feature/github-deployment-manager
       - feature/github-release-pipeline
+      - feature/github-preview-releases
 
 permissions:
   contents: read

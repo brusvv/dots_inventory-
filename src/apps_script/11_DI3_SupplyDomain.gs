@@ -221,15 +221,50 @@ function di3BuildSupplyFinancialPlan_(input) {
   };
 }
 
-function di3GetProductFormOptionIndex_() {
-  di3EnsureProductPublicCodes_();
-  var products = di3ListActiveProductsForWarehouse_();
+function di3GetProductFormOptionIndex_(skipPublicCodeEnsure) {
+  if (skipPublicCodeEnsure !== true) di3EnsureProductPublicCodes_();
+  // Load the catalogue once. Active products feed the selector; byId retains
+  // inactive products so an existing historical supply still renders its label.
+  var allProducts = di3ListAllProductsForWarehouse_();
+  var products = allProducts.filter(function (product) {
+    return product.active !== false && String(product.active).toLowerCase() !== "false";
+  });
   var codes = di3GetProductPublicCodeMap_();
   var byLabel = {};
+  var byId = Object.create(null);
+  allProducts.forEach(function (product) { byId[String(product.product_id)] = product; });
   products.forEach(function (product) {
     byLabel[di3GetProductOptionLabelWithMap_(product, codes)] = product;
   });
-  return { products: products, byLabel: byLabel, options: Object.keys(byLabel).sort() };
+  return { products: products, byId: byId, codes: codes, byLabel: byLabel, options: Object.keys(byLabel).sort() };
+}
+
+/**
+ * Load the supply form/catalogue repositories once for a single validation +
+ * materialization transaction. The snapshot is operation-local and must not
+ * be persisted or reused across separate executions.
+ */
+function di3LoadSupplyFormLineSnapshot_(readOnlyCatalog) {
+  var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  return {
+    values: sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues(),
+    products: di3GetProductFormOptionIndex_(readOnlyCatalog === true),
+    variants: di3LoadPackVariantIndex_()
+  };
+}
+
+/** Build supply-form rows from one preloaded product index (no per-line repository reads). */
+function di3BuildSupplyLoadedLineRows_(items, productIndex) {
+  productIndex = productIndex || {};
+  var productsById = productIndex.byId || Object.create(null);
+  var codes = productIndex.codes || {};
+  return (items || []).map(function (item) {
+    var product = productsById[String(item.product_id)] || null;
+    var label = product
+      ? di3GetProductOptionLabelWithMap_(product, codes)
+      : (item.product_label_snapshot || "Неизвестный товар");
+    return [label, item.units_per_pack, item.packs, item.purchase_price_per_pack];
+  });
 }
 
 /** Parse a date-only input into a stable local calendar date (stored at noon). */
@@ -556,8 +591,9 @@ function di3SupplyItemToRow_(supplyId, line, lineNo, existing) {
   ];
 }
 
-function di3SetSupplySelectorValidation_(sheet, includeNumber) {
-  var numbers = di3GetSupplyFormLoadSummary_().map(function (supply) { return String(supply.supply_number); });
+function di3SetSupplySelectorValidation_(sheet, includeNumber, supplySummary) {
+  var summary = Array.isArray(supplySummary) ? supplySummary : di3GetSupplyFormLoadSummary_();
+  var numbers = summary.map(function (supply) { return String(supply.supply_number); });
   if (includeNumber) numbers.push(String(includeNumber));
   var seen = Object.create(null);
   numbers = numbers.filter(function (number) {
@@ -575,10 +611,11 @@ function di3SetSupplySelectorValidation_(sheet, includeNumber) {
   return numbers;
 }
 
-function di3SetSupplyDraftEditContext_(sheet, supplyNumber, supplyId) {
+function di3SetSupplyDraftEditContext_(sheet, supplyNumber, supplyId, options) {
+  options = options || {};
   // B2 is a strict dropdown. Include the in-flight number before writing it,
   // because a new parent row does not exist yet at this point in the save flow.
-  di3SetSupplySelectorValidation_(sheet, supplyNumber);
+  if (options.skipSelectorValidation !== true) di3SetSupplySelectorValidation_(sheet, supplyNumber);
   // Write the technical target first. If execution stops between these cell
   // updates and the parent append, the next save can safely detect stale context.
   sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).setValue(String(supplyId));
@@ -680,7 +717,8 @@ function di3SaveSupplyDraft(options) {
     var expectedReceivedDate = di3ParseSupplyCalendarDate_(planningDateValues[1][0], "Ожидаемая дата прибытия");
     di3ValidateSupplyPlanningDates_(orderCreatedInStoreDate, expectedReceivedDate);
 
-    var currentLines = di3ResolveSupplyFormLines_(false);
+    var lineSnapshot = di3LoadSupplyFormLineSnapshot_(false);
+    var currentLines = di3ResolveSupplyFormLines_(false, false, lineSnapshot);
     if (!currentLines.length) throw new Error("Добавь хотя бы одну товарную позицию.");
     // Validate every input and all money allocation before creating missing pack variants.
     di3BuildSupplyFinancialPlan_({
@@ -689,7 +727,7 @@ function di3SaveSupplyDraft(options) {
       partner_discount_amount: partnerDiscount,
       shipping_amount: shipping
     });
-    currentLines = di3ResolveSupplyFormLines_(true);
+    currentLines = di3ResolveSupplyFormLines_(true, false, lineSnapshot);
     var plan = di3BuildSupplyFinancialPlan_({
       lines: currentLines,
       seller_discount_amount: sellerDiscount,
@@ -721,6 +759,8 @@ function di3SaveSupplyDraft(options) {
     var supplyRecord = {
       supply_id: supplyId, supply_number: supplyNumber, supplier: supplier,
       status: DI3_SUPPLY_STATUS.CREATED, created_at: existing ? existing.created_at : now,
+      sent_at: existing && existing.sent_at || "", awaiting_at: existing && existing.awaiting_at || "",
+      received_at: existing && existing.received_at || "",
       goods_amount: plan.goods_amount, seller_discount_amount: plan.seller_discount_amount,
       partner_discount_amount: plan.partner_discount_amount, discount_total: plan.discount_total,
       shipping_amount: plan.shipping_amount, final_amount: plan.final_amount, notes: notes,
@@ -795,12 +835,16 @@ function di3SaveSupplyDraft(options) {
       ]]);
     }
 
-    // Persist the explicit edit target after every successful create/update.
-    // Only «Новая поставка» clears this context and enables CREATE.
-    di3SetSupplyDraftEditContext_(sheet, supplyNumber, supplyId);
+    // New drafts already persisted their edit identity before the parent append.
+    // Existing drafts keep that identity; only a recalculated number needs a new
+    // selector rule. Product/money validations are unchanged by saving a supply.
+    if (!isNewDraft) {
+      di3SetSupplyDraftEditContext_(sheet, supplyNumber, supplyId, {
+        skipSelectorValidation: !numberRecalculated
+      });
+    }
     di3RenderSupplyFinancialPreview_(plan);
-    di3RefreshSupplyFormValidations();
-    di3RefreshSupplyDatePanel_(di3FindSupplyByNumber_(supplyNumber), { preservePendingInput: true });
+    di3RefreshSupplyDatePanel_(supplyRecord, { preservePendingInput: true });
     di3SetSupplyFormStateBaseline_(sheet);
     return {
       status: isNewDraft ? "CREATED" : "UPDATED",
@@ -837,16 +881,14 @@ function di3GetSupplyFormLoadSummary_() {
     DI3_SUPPLY_STATUS.RECEIVED, "Доставлена", "Получена",
     DI3_SUPPLY_STATUS.CANCELLED, "Отменена"];
   var byId = Object.create(null);
-  statuses.forEach(function (status) {
-    di3ReadRowsByColumnValue_("V3_Supplies", 3, status).forEach(function (match) {
-      var row = match.values;
-      var supplyId = String(row[0] || "");
-      if (!supplyId || byId[supplyId]) return;
-      byId[supplyId] = {
-        supply_id: supplyId, supply_number: String(row[1] || ""), supplier: String(row[2] || ""),
-        status: String(row[3] || ""), created_at: row[4] || "", supplier_order_date: row[17] || ""
-      };
-    });
+  di3ReadRowsByColumnValues_("V3_Supplies", 3, statuses).forEach(function (match) {
+    var row = match.values;
+    var supplyId = String(row[0] || "");
+    if (!supplyId || byId[supplyId]) return;
+    byId[supplyId] = {
+      supply_id: supplyId, supply_number: String(row[1] || ""), supplier: String(row[2] || ""),
+      status: String(row[3] || ""), created_at: row[4] || "", supplier_order_date: row[17] || ""
+    };
   });
   return Object.keys(byId).map(function (id) { return byId[id]; }).sort(function (a, b) {
     return di3CompareSupplyOrderChronology_(a.supplier_order_date, a.created_at, a.supply_number,
@@ -855,10 +897,8 @@ function di3GetSupplyFormLoadSummary_() {
 }
 
 function di3GetSupplyDraftSummary() {
-  var rows = [];
-  [DI3_SUPPLY_STATUS.CREATED, "Создана", "Оформлена"].forEach(function (status) {
-    rows = rows.concat(di3ReadRowsByColumnValue_("V3_Supplies", 3, status));
-  });
+  var rows = di3ReadRowsByColumnValues_("V3_Supplies", 3,
+    [DI3_SUPPLY_STATUS.CREATED, "Создана", "Оформлена"]);
   var seenSupplyIds = Object.create(null);
   var result = [];
   rows.forEach(function (match) {
@@ -880,7 +920,7 @@ function di3GetSupplyDraftSummary() {
 /** Preview never creates pack variants or writes document records. */
 function di3PreviewSupplyForm() {
   var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
-  var lines = di3ResolveSupplyFormLines_(false);
+  var lines = di3ResolveSupplyFormLines_(false, true);
   var form = sheet.getRange("B5:B7").getValues().map(function (row) { return row[0]; });
   var plan = di3BuildSupplyFinancialPlan_({
     lines: lines,
@@ -918,11 +958,11 @@ function di3RenderSupplyFinancialPreview_(plan) {
   sheet.getRange("M4:M8").setNumberFormat("#,##0.00 ₽");
 }
 
-function di3ResolveSupplyFormLines_(createVariants) {
-  var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
-  var values = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues();
-  var products = di3GetProductFormOptionIndex_();
-  var variants = di3LoadPackVariantIndex_();
+function di3ResolveSupplyFormLines_(createVariants, readOnlyCatalog, lineSnapshot) {
+  var snapshot = lineSnapshot || di3LoadSupplyFormLineSnapshot_(readOnlyCatalog);
+  var values = snapshot.values;
+  var products = snapshot.products;
+  var variants = snapshot.variants;
   var lines = [];
   values.forEach(function (row, offset) {
     var label = String(row[0] || "").trim();
@@ -934,25 +974,29 @@ function di3ResolveSupplyFormLines_(createVariants) {
     if (!Number.isInteger(units) || units <= 0) throw new Error("Строка " + (DI3_SUPPLY_FORM.firstLine + offset) + ": укажи фасовку в штуках.");
     var key = di3BuildPackVariantKey_(String(product.product_id), units);
     var existingVariant = variants.byProductAndUnits[key];
-    var variantId;
-    if (createVariants) {
-      variantId = di3GetOrCreatePackVariant_(String(product.product_id), units, "SUPPLY_DRAFT").pack_variant_id;
-    } else {
-      variantId = existingVariant ? String(existingVariant.pack_variant_id) : "PREVIEW:" + key;
-    }
     lines.push({
-      product_id: String(product.product_id), pack_variant_id: variantId,
+      product_id: String(product.product_id),
+      pack_variant_id: existingVariant ? String(existingVariant.pack_variant_id) : "PREVIEW:" + key,
       product_label_snapshot: di3GetProductLabel_(product), units_per_pack: units,
       packs: row[2], purchase_price_per_pack: row[3]
     });
   });
+  if (createVariants && lines.length) {
+    // The caller may pass a single operation-local snapshot through validation
+    // and materialization, avoiding duplicate form/catalogue repository reads.
+    var resolved = di3GetOrCreatePackVariants_(lines, "SUPPLY_DRAFT", products.byId, variants);
+    lines.forEach(function (line, index) {
+      line.pack_variant_id = resolved[index].pack_variant_id;
+    });
+  }
   return lines;
 }
 
-function di3RefreshSupplyFormValidations() {
+function di3RefreshSupplyFormValidations(options) {
+  options = options || {};
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
   if (!sheet) throw new Error('Сначала запусти di3SetupSupplyForm().');
-  var productIndex = di3GetProductFormOptionIndex_();
+  var productIndex = options.productIndex || di3GetProductFormOptionIndex_();
   var productRange = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 1);
   if (productIndex.options.length) {
     productRange.setDataValidation(SpreadsheetApp.newDataValidation()
@@ -971,9 +1015,12 @@ function di3RefreshSupplyFormValidations() {
   sheet.getRange("B12").setNote("Для заполненной строки: штук в упаковке — положительное целое число.");
   sheet.getRange("C12").setNote("Для заполненной строки: число упаковок — положительное целое число.");
   sheet.getRange("D12").setNote("Для заполненной строки: закупочная цена за упаковку — неотрицательное число; 0 допустим для бесплатного товара.");
-  var drafts = di3GetSupplyDraftSummary();
-  var selectableSupplies = di3GetSupplyFormLoadSummary_();
-  di3SetSupplySelectorValidation_(sheet, "");
+  var selectableSupplies = Array.isArray(options.supplySummary)
+    ? options.supplySummary : di3GetSupplyFormLoadSummary_();
+  var drafts = selectableSupplies.filter(function (supply) {
+    return di3NormalizeSupplyStatus_(supply.status) === DI3_SUPPLY_STATUS.CREATED;
+  });
+  di3SetSupplySelectorValidation_(sheet, "", selectableSupplies);
 
   // This menu command is also the supported repair path for stale G5:G7 rules.
   // Re-apply the next-stage validation from the authoritative loaded supply ID,
@@ -1247,14 +1294,14 @@ function di3NewSupplyForm(options) {
   sheet.getRange("G2:G7").clearContent();
   sheet.getRange("H5:H7").clearContent();
   sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent();
-  sheet.getRange("M4:M8").clearContent();
-  sheet.getRange(DI3_SUPPLY_FORM.editSupplyId).clearContent();
-  sheet.getRange(DI3_SUPPLY_FORM.historicalMode).clearContent();
-  sheet.getRange("N4:N7").clearContent();
-  sheet.getRange("M9").clearContent();
+  // Adjacent transient form fields are cleared in one range call each.
+  sheet.getRange("M4:M9").clearContent();
+  sheet.getRange("N2:N7").clearContent();
   sheet.getRange("M2").setValue("Новая поставка");
   sheet.getRange("G2").setValue(di3ParseSupplyCalendarDate_(new Date(), "Дата создания заказа в магазине"));
-  di3RefreshSupplyFormValidations();
+  // Clearing values does not remove existing data validations. Keep the
+  // installed product/money/selector rules instead of rebuilding catalogue
+  // indexes and both supply summaries on every "New supply" action.
   di3RefreshSupplyDatePanel_(null);
   di3SetSupplyFormStateBaseline_(sheet);
   return { status: "READY", cleared: true };
@@ -1313,13 +1360,8 @@ function di3LoadSelectedSupplyDraft(options) {
   sheet.getRange("G2:G3").setValues([[supply.supplier_order_date || ""], [supply.expected_received_date || ""]]);
   di3RefreshSupplyDatePanel_(supply);
   sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent();
-  var products = di3GetProductFormOptionIndex_();
-  var codes = di3GetProductPublicCodeMap_();
-  var output = items.map(function (item) {
-    var product = di3LoadProductById_(String(item.product_id));
-    var label = product ? di3GetProductOptionLabelWithMap_(product, codes) : (item.product_label_snapshot || "Неизвестный товар");
-    return [label, item.units_per_pack, item.packs, item.purchase_price_per_pack];
-  });
+  var productIndex = di3GetProductFormOptionIndex_();
+  var output = di3BuildSupplyLoadedLineRows_(items, productIndex);
   if (output.length) sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, output.length, 4).setValues(output);
   di3RenderSupplyFinancialPreview_({
     lines: items.map(function (item) {
@@ -1336,7 +1378,9 @@ function di3LoadSelectedSupplyDraft(options) {
     partner_discount_amount: Number(supply.partner_discount_amount), shipping_amount: Number(supply.shipping_amount),
     final_amount: Number(supply.final_amount)
   });
-  di3RefreshSupplyFormValidations();
+  if (options.skipValidationRefresh !== true) {
+    di3RefreshSupplyFormValidations({ productIndex: productIndex });
+  }
   di3SetSupplyFormStateBaseline_(sheet);
   return { loaded: true, supply_number: supply.supply_number, items: items.length };
 }
@@ -1347,8 +1391,14 @@ function di3InstallSupplyFormTrigger_() {
 
 function di3SupplyFormOnEdit(e) {
   if (!e || !e.range || !e.range.getSheet) return;
-  if (e.range.getSheet().getName() !== DI3_SUPPLY_FORM_SHEET || e.range.getA1Notation() !== DI3_SUPPLY_FORM.selector) return;
+  if (e.range.getSheet().getName() !== DI3_SUPPLY_FORM_SHEET) return;
   var sheet = e.range.getSheet();
+  var fullEdit = String(sheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === "FULL_EDIT";
+  if (fullEdit && di3IsSupplyFullEditFinancialInputRange_(
+      e.range.getRow(), e.range.getColumn(), e.range.getNumRows(), e.range.getNumColumns())) {
+    return di3RefreshSupplyFullEditFinancialPreview_(sheet);
+  }
+  if (e.range.getA1Notation() !== DI3_SUPPLY_FORM.selector) return;
   var attemptedNumber = String(e.value == null ? sheet.getRange(DI3_SUPPLY_FORM.selector).getValue() || "" : e.value).trim();
   var previousNumber = typeof e.oldValue === "undefined" ? di3GetCurrentSupplyFormSelector_(sheet) : String(e.oldValue || "");
   if (!attemptedNumber) {
@@ -1356,7 +1406,6 @@ function di3SupplyFormOnEdit(e) {
     sheet.getRange(DI3_SUPPLY_FORM.pendingSelector + ":" + DI3_SUPPLY_FORM.previousSelector).clearContent();
     return { status: "IGNORED_EMPTY_SELECTOR" };
   }
-  var fullEdit = String(sheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === "FULL_EDIT";
   if (fullEdit) {
     sheet.getRange(DI3_SUPPLY_FORM.selector).setValue(di3GetCurrentSupplyFormSelector_(sheet) || previousNumber);
     sheet.getRange(DI3_SUPPLY_FORM.pendingSelector + ":" + DI3_SUPPLY_FORM.previousSelector).clearContent();

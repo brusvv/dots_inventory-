@@ -269,21 +269,26 @@ function di3OpenProductForm() {
 
 function di3NewProductForm(options) {
   options = options || {};
-  var sheet = di3GetSpreadsheet_().getSheetByName(DI3_PRODUCT_FORM_SHEET);
+  var ss = di3GetSpreadsheet_();
+  var sheet = ss.getSheetByName(DI3_PRODUCT_FORM_SHEET);
   if (!sheet) throw new Error('Лист «Карточка продукта» не найден.');
   if (di3HasUnsavedProductFormChanges_(sheet) && options.skipUnsavedConfirmation !== true) {
     var confirmed = di3ConfirmProductFormDiscard_("Очистить карточку продукта?",
       "В карточке есть несохранённые изменения. Команда «Новый товар» очистит выбранный товар и поля B6:B15. Продолжить?");
     if (!confirmed) return { status: "CANCELLED_BY_USER", cleared: false };
   }
-  sheet.getRange("B4:B16").clearContent();
-  sheet.getRange("B16").setValue("Появятся после выбора существующего товара");
+  sheet.getRange("B4:B16").setValues([
+    [""], [""], [""], [""], [""], [""], [""], [""], [""], [""], [""], [""],
+    ["Появятся после выбора существующего товара"]
+  ]);
   di3SetProductFormStateBaseline_(sheet);
-  di3OpenProductForm();
+  // Clearing values does not remove data validations. Avoid reopening through the normal open path, which would rebuild the product index and all rules.
+  ss.setActiveSheet(sheet);
   return { status: "READY", cleared: true, mode: "CREATE" };
 }
 
-function di3RefreshProductsSheet() {
+function di3RefreshProductsSheet(options) {
+  options = options || {};
   var ss = di3GetSpreadsheet_();
   var sheet = ss.getSheetByName(DI3_PRODUCTS_UI_SHEET);
   if (!sheet) throw new Error('Сначала запусти di3SetupProductsSheet().');
@@ -365,7 +370,7 @@ function di3RefreshProductsSheet() {
   // Refresh it whenever the catalogue register refreshes so bulk imports and
   // repository-driven changes cannot leave the edit selector stale.
   var productFormOptions = null;
-  if (ss.getSheetByName(DI3_PRODUCT_FORM_SHEET)) {
+  if (options.skipProductFormValidations !== true && ss.getSheetByName(DI3_PRODUCT_FORM_SHEET)) {
     productFormOptions = di3RefreshProductFormValidations();
   }
   return {
@@ -517,7 +522,7 @@ function di3SaveProductForm() {
     var row = di3ProductToRow_(parsed, String(oldProduct.product_id), now, oldProduct);
     di3ApplyContiguousRowUpdates_("Products", [{ row_number: oldProduct.row_number, values: row }]);
     var variant = units == null ? null : di3GetOrCreatePackVariant_(String(oldProduct.product_id), units, "PRODUCT_CATALOG");
-    di3RefreshProductsSheet();
+    di3RefreshProductsSheet({ skipProductFormValidations: true });
     if (typeof di3RefreshDependentCatalogViews_ === "function") di3RefreshDependentCatalogViews_();
     sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).clearContent();
     sheet.getRange("B6:B15").clearContent();
@@ -575,8 +580,7 @@ function di3SaveNewProductForm() {
   if (!result.created) {
     throw new Error(result.message || "Не удалось создать товар.");
   }
-  di3RefreshProductsSheet();
-  di3RefreshProductFormValidations();
+  di3RefreshProductsSheet({ skipProductFormValidations: true });
   if (typeof di3RefreshDependentCatalogViews_ === "function") di3RefreshDependentCatalogViews_();
   sheet.getRange("B4:B15").clearContent();
   sheet.getRange("B16").setValue("Создано: " + result.display_code + ". Фасовки можно добавить при редактировании товара.");

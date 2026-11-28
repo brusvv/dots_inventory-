@@ -128,6 +128,13 @@ var DI3_TABLE_SCHEMAS = Object.freeze({
     "snapshot_id", "order_id", "order_item_id", "calculation_version", "fifo_run_id",
     "cost_amount_minor", "cost_status", "quantity", "captured_at", "reason",
     "previous_snapshot_id", "delta_amount_minor"
+  ],
+  SupplyCorrectionEvents: [
+    "event_id", "relation_id", "correction_id", "operation_id", "supply_id",
+    "event_sequence", "event_type", "relation_type", "source_movement_id",
+    "replacement_movement_id", "source_product_id", "replacement_product_id",
+    "source_supply_item_id", "replacement_supply_item_id", "effective_at",
+    "created_at", "details_json"
   ]
 });
 

@@ -11,6 +11,7 @@ function di3GetOperationHandlerRegistry_() {
   return {
     MANUAL_STOCK_MOVEMENT: di3ApplyManualStockOperation_,
     SUPPLY_RECEIVE: di3ApplySupplyReceiptOperation_,
+    SUPPLY_CORRECTION: di3ApplySupplyCorrectionOperation_,
     SUPPLY_DOCUMENT_EDIT: di3ApplySupplyDocumentEditOperation_,
     ORDER_DISPATCH: di3ApplyOrderDispatchOperation_,
     ORDER_RETURN: di3ApplyOrderReturnOperation_,

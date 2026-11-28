@@ -1,0 +1,234 @@
+/** Pure and structural regression tests for SC-01 received-supply source audit. */
+function di3RunSupplyCorrectionUnitTests() {
+  var passed = 0, failed = [];
+  function test(name, callback) {
+    try { callback(); passed++; }
+    catch (error) { failed.push({ name: name, error: error.message || String(error) }); }
+  }
+  function equal(actual, expected, message) {
+    if (actual !== expected) throw new Error((message || "Values differ") + ": expected " + JSON.stringify(expected) + ", got " + JSON.stringify(actual));
+  }
+  function throws(callback, pattern) {
+    var error = null;
+    try { callback(); } catch (caught) { error = caught; }
+    if (!error) throw new Error("Expected error matching " + pattern + ", but no error was thrown");
+    if (pattern && !pattern.test(String(error.message || error))) throw new Error("Expected error matching " + pattern + ", got: " + String(error.message || error));
+  }
+  function fixture() {
+    var effective = new Date("2026-11-20T10:00:00.000Z");
+    var recorded = new Date("2026-11-20T11:00:00.000Z");
+    return {
+      operation: { values: ["OP-1", "SUPPLY_RECEIVE:S1", "SUPPLY_RECEIVE", "SUPPLY", "S1",
+        "COMMITTED", "PAYLOAD-HASH", new Date("2026-11-20T11:01:00.000Z"),
+        new Date("2026-11-20T11:02:00.000Z"), "", "actor@example.test"] },
+      payload: { supply_id: "S1", supply_number: "26NR201", received_at: effective.toISOString(),
+        recorded_at: recorded.toISOString(), lines: [{
+          supply_item_id: "ITEM-1", movement_id: "MOVE-1", lot_id: "LOT-1",
+          event_key: "SUPPLY_RECEIVE:S1:ITEM-1", product_id: "P1", pack_variant_id: "VAR-20",
+          units_per_pack: 20, packs: 2, quantity: 40, unit_cost: 4.5, cost_per_pack: 90,
+          total_cost_minor: 18000, cost_status: "KNOWN",
+          effective_at: effective.toISOString(), recorded_at: recorded.toISOString()
+        }] },
+      ledger: [{ row_number: 2, values: ["MOVE-1", "OP-1", "SUPPLY_RECEIVE:S1:ITEM-1", "P1", "SUPPLY", "S1",
+        40, effective, recorded, "", "", "Приёмка поставки 26NR201", 101] }],
+      details: [{ row_number: 2, values: ["MOVE-1", "MOV-000101", "IN", "SUPPLY_RECEIVE", "", "", "KNOWN", "",
+        "actor@example.test", "Приёмка поставки 26NR201", "SUPPLY"] }],
+      lots: [{ row_number: 2, values: ["LOT-1", "P1", "MOVE-1", "SUPPLY", "S1", "VAR-20",
+        effective, recorded, 40, 4.5, "KNOWN", "RUB", "Поставка 26NR201", 40, 18000] }],
+      items: [{ supply_item_id: "ITEM-1", supply_id: "S1", product_id: "P1", pack_variant_id: "VAR-20",
+        units_per_pack: 20, packs: 2, received_units: 40, unit_cost: 4.5, final_pack_cost: 90, final_line_amount: 180 }],
+      allocations: []
+    };
+  }
+  function audit(data) {
+    return di3BuildSupplyCorrectionSourceMap_(data.operation, data.payload, data.ledger, data.details, data.lots, data.items, data.allocations);
+  }
+
+  test("valid committed receipt maps each payload line to exactly one ledger, detail and lot", function () {
+    var result = audit(fixture());
+    equal(result.status, "VALID");
+    equal(result.source_lines.length, 1);
+    equal(result.source_lines[0].movement_id, "MOVE-1");
+    equal(result.source_lines[0].lot_id, "LOT-1");
+    equal(result.source_lines[0].quantity, 40);
+    equal(result.affected_product_ids.join(","), "P1");
+    equal(result.fingerprint.length > 0, true);
+  });
+  test("source audit rejects non-committed and non-receipt operations", function () {
+    var data = fixture(); data.operation.values[5] = "PREPARED";
+    throws(function () { audit(data); }, /не имеет статус COMMITTED/);
+    data = fixture(); data.operation.values[2] = "SUPPLY_DOCUMENT_EDIT";
+    throws(function () { audit(data); }, /не соответствует SUPPLY_RECEIVE/);
+  });
+  test("source audit rejects duplicate source item, movement, lot and event identities", function () {
+    ["supply_item_id", "movement_id", "lot_id", "event_key"].forEach(function (field) {
+      var data = fixture(), duplicate = Object.assign({}, data.payload.lines[0]);
+      duplicate.supply_item_id = "ITEM-2";
+      duplicate[field] = data.payload.lines[0][field];
+      data.payload.lines.push(duplicate);
+      data.items.push(Object.assign({}, data.items[0], { supply_item_id: "ITEM-2" }));
+      throws(function () { audit(data); }, /повторяется идентификатор|повторяется supply_item_id/);
+    });
+  });
+  test("source audit rejects missing and duplicate ledger, detail and lot records", function () {
+    var data = fixture(); data.ledger = [];
+    throws(function () { audit(data); }, /ровно одна запись|Количество движений/);
+    data = fixture(); data.details.push(data.details[0]);
+    throws(function () { audit(data); }, /Количество деталей движений/);
+    data = fixture(); data.lots = [];
+    throws(function () { audit(data); }, /Количество FIFO-партий/);
+    data = fixture(); data.lots.push(data.lots[0]);
+    throws(function () { audit(data); }, /Количество FIFO-партий/);
+  });
+  test("source audit rejects ledger operation, event, product, document and quantity mismatches", function () {
+    var mutations = [
+      function (d) { d.ledger[0].values[1] = "OTHER-OP"; },
+      function (d) { d.ledger[0].values[2] = "OTHER-EVENT"; },
+      function (d) { d.ledger[0].values[3] = "OTHER-PRODUCT"; },
+      function (d) { d.ledger[0].values[5] = "OTHER-SUPPLY"; },
+      function (d) { d.ledger[0].values[6] = -40; }
+    ];
+    mutations.forEach(function (mutate) {
+      var data = fixture(); mutate(data);
+      throws(function () { audit(data); }, /StockLedger|операцией/);
+    });
+  });
+  test("source audit rejects detail and lot identity/cost mismatches", function () {
+    var data = fixture(); data.details[0].values[2] = "OUT";
+    throws(function () { audit(data); }, /StockMovementDetails/);
+    data = fixture(); data.lots[0].values[5] = "VAR-40";
+    throws(function () { audit(data); }, /StockLots/);
+    data = fixture(); data.lots[0].values[14] = 17999;
+    throws(function () { audit(data); }, /total_cost_minor/);
+  });
+  test("source audit rejects quantity formula and date/sequence mismatches", function () {
+    var data = fixture(); data.items[0].packs = 3;
+    throws(function () { audit(data); }, /V3_SupplyItems/);
+    data = fixture(); data.ledger[0].values[8] = new Date("2026-11-20T11:03:00.000Z");
+    throws(function () { audit(data); }, /recorded_at/);
+    data = fixture(); data.ledger[0].values[12] = 0;
+    throws(function () { audit(data); }, /ledger_sequence/);
+  });
+  test("source audit reconciles active FIFO allocations with each source lot cache", function () {
+    var data = fixture();
+    data.lots[0].values[13] = 20;
+    data.allocations = [{ row_number: 7, values: [
+      "ALLOC-1", "RUN-1", "OUT-1", "LOT-1", "P1", "CONSUME", 20, 4.5,
+      "KNOWN", 90, new Date("2026-11-21T12:00:00.000Z"),
+      new Date("2026-11-21T12:00:01.000Z"), "", 9000
+    ] }];
+    var result = audit(data);
+    equal(result.source_lines[0].consumed_quantity, 20);
+    equal(result.source_lines[0].remaining_quantity, 20);
+    equal(result.source_lines[0].allocation_count, 1);
+    equal(result.fifo_allocation_count, 1);
+
+    data = fixture();
+    data.lots[0].values[13] = 20;
+    throws(function () { audit(data); }, /CONSUME и remaining_quantity/);
+
+    data = fixture();
+    data.allocations = [{ row_number: 7, values: [
+      "ALLOC-1", "RUN-1", "OUT-1", "LOT-1", "P2", "CONSUME", 20, 4.5,
+      "KNOWN", 90, new Date("2026-11-21T12:00:00.000Z"),
+      new Date("2026-11-21T12:00:01.000Z"), "", 9000
+    ] }];
+    throws(function () { audit(data); }, /товар, тип, количество/);
+
+    data = fixture();
+    data.lots[0].values[13] = 20;
+    data.allocations = [{ row_number: 7, values: [
+      "ALLOC-1", "RUN-1", "OUT-1", "LOT-1", "P1", "CONSUME", 20, 4.5,
+      "KNOWN", 89.99, new Date("2026-11-21T12:00:00.000Z"),
+      new Date("2026-11-21T12:00:01.000Z"), "", 8999
+    ] }];
+    throws(function () { audit(data); }, /сумма allocated_cost_minor/);
+  });
+  test("source audit rejects duplicate allocation IDs and uninitialized lot remaining cache", function () {
+    var data = fixture();
+    data.allocations = [
+      { row_number: 7, values: ["ALLOC-1", "RUN-1", "OUT-1", "LOT-1", "P1", "CONSUME", 10, 4.5, "KNOWN", 45, new Date("2026-11-21T12:00:00.000Z"), new Date("2026-11-21T12:00:01.000Z"), "", 4500] },
+      { row_number: 8, values: ["ALLOC-1", "RUN-1", "OUT-2", "LOT-1", "P1", "CONSUME", 10, 4.5, "KNOWN", 45, new Date("2026-11-21T13:00:00.000Z"), new Date("2026-11-21T13:00:01.000Z"), "", 4500] }
+    ];
+    throws(function () { audit(data); }, /повторяется allocation_id/);
+    data = fixture();
+    data.lots[0].values[13] = "";
+    throws(function () { audit(data); }, /remaining_quantity/);
+  });
+  test("source audit rejects extra movements belonging to the original receipt operation", function () {
+    var data = fixture();
+    data.ledger.push({ row_number: 3, values: ["MOVE-EXTRA", "OP-1", "EXTRA", "P1", "SUPPLY", "S1", 1,
+      new Date("2026-11-20T10:00:00.000Z"), new Date("2026-11-20T11:00:00.000Z"), "", "", "", 102] });
+    throws(function () { audit(data); }, /лишние складские движения|Количество движений/);
+  });
+  test("SC-01 entry point is structurally read-only", function () {
+    var source = di3AuditSupplyCorrectionSource.toString();
+    ["di3FindRowByFirstColumn_", "di3ReadRowsByColumnValue_", "di3ReadRowsByColumnValues_", "di3BuildSupplyCorrectionSourceMap_"].forEach(function (name) {
+      equal(source.indexOf(name) !== -1, true);
+    });
+    ["di3WithLock_(", "di3EnsureCoreFoundationSchemas_(", "di3AppendTableRows_(", "di3ExecutePreparedOperation_(", "di3RebuildFifoAllocations_("].forEach(function (name) {
+      equal(source.indexOf(name), -1, "SC-01 must not call " + name);
+    });
+    equal(/\.setValue\s*\(/.test(source), false);
+    equal(/\.deleteRow\s*\(/.test(source), false);
+    equal(/\.appendRow\s*\(/.test(source), false);
+  });
+
+
+  test("SC-04 prerequisite audit accepts exact v4 schemas and a current FIFO cursor", function () {
+    var names = DI3_CORE_TABLE_NAMES.slice();
+    var headers = Object.create(null);
+    names.forEach(function (name) { headers[name] = DI3_TABLE_SCHEMAS[name].slice(); });
+    var result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, {
+      fifo_state_version: DI3_FIFO_STATE_VERSION,
+      fifo_ledger_sequence_cursor: 101
+    }, { max_sequence: 101, movement_count: 3 });
+    equal(result.status, "READY");
+    equal(result.required_table_count, names.length);
+  });
+
+  test("SC-04 prerequisite audit blocks missing tables and non-v4 headers", function () {
+    var names = DI3_CORE_TABLE_NAMES.slice();
+    var headers = Object.create(null);
+    names.forEach(function (name) { headers[name] = DI3_TABLE_SCHEMAS[name].slice(); });
+    names = names.filter(function (name) { return name !== "SupplyCorrectionEvents"; });
+    var result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, {
+      fifo_state_version: DI3_FIFO_STATE_VERSION,
+      fifo_ledger_sequence_cursor: 101
+    }, { max_sequence: 101 });
+    equal(result.status, "BLOCKED");
+    equal(result.issues.some(function (issue) { return issue.indexOf("SupplyCorrectionEvents") !== -1; }), true);
+
+    names = DI3_CORE_TABLE_NAMES.slice();
+    headers.StockLedger[12] = "row_number";
+    result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, {
+      fifo_state_version: DI3_FIFO_STATE_VERSION,
+      fifo_ledger_sequence_cursor: 101
+    }, { max_sequence: 101 });
+    equal(result.status, "BLOCKED");
+    equal(result.issues.some(function (issue) { return issue.indexOf("StockLedger") !== -1; }), true);
+  });
+
+  test("SC-04 prerequisite audit blocks an uninitialized or lagging FIFO projection", function () {
+    var names = DI3_CORE_TABLE_NAMES.slice();
+    var headers = Object.create(null);
+    names.forEach(function (name) { headers[name] = DI3_TABLE_SCHEMAS[name].slice(); });
+    var meta = { fifo_state_version: "", fifo_ledger_sequence_cursor: "" };
+    var result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, meta, { max_sequence: 101 });
+    equal(result.status, "BLOCKED");
+    meta = { fifo_state_version: DI3_FIFO_STATE_VERSION, fifo_ledger_sequence_cursor: 99 };
+    result = di3BuildSupplyCorrectionPrerequisiteAudit_(names, headers, meta, { max_sequence: 101 });
+    equal(result.status, "BLOCKED");
+  });
+
+  test("SC-04 mutating entrypoint fails closed instead of bootstrapping schemas or FIFO", function () {
+    var source = di3CorrectReceivedSupply.toString();
+    equal(source.indexOf("di3AssertSupplyCorrectionRuntimeReady_") !== -1, true);
+    equal(source.indexOf("di3EnsureStockCoreSchemas_"), -1);
+    equal(source.indexOf("di3EnsureCoreFoundationSchemas_"), -1);
+  });
+
+  var report = { passed: passed, failed: failed.length, failures: failed };
+  if (failed.length) throw new Error("Supply correction source audit tests failed: " + JSON.stringify(failed));
+  return report;
+}

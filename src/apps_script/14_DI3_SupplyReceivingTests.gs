@@ -16,6 +16,47 @@ function di3RunSupplyReceivingUnitTests() {
     if (pattern && !pattern.test(String(error.message || error))) throw new Error("Expected error matching " + pattern + ", got: " + String(error.message || error));
   }
 
+  test("status history idempotency is scoped to the exact transition event", function () {
+    var firstAt = new Date("2026-11-01T10:00:00.000Z");
+    var retryAt = new Date("2026-11-01T10:00:00.000Z");
+    var laterAt = new Date("2026-11-03T12:30:00.000Z");
+    var row = ["H1", "SUPPLY", "S1", DI3_SUPPLY_STATUS.CREATED, DI3_SUPPLY_STATUS.SENT,
+      firstAt, "actor@example.test", "", "sent"];
+    equal(di3SupplyStatusHistoryEventMatches_(row, "S1", DI3_SUPPLY_STATUS.CREATED,
+      DI3_SUPPLY_STATUS.SENT, retryAt, ""), true);
+    equal(di3SupplyStatusHistoryEventMatches_(row, "S1", DI3_SUPPLY_STATUS.CREATED,
+      DI3_SUPPLY_STATUS.SENT, laterAt, ""), false,
+      "a later transition to the same status must be recorded after a rollback");
+    equal(di3SupplyStatusHistoryEventMatches_(row, "S1", DI3_SUPPLY_STATUS.AWAITING,
+      DI3_SUPPLY_STATUS.SENT, retryAt, ""), false);
+    equal(di3SupplyStatusHistoryEventMatches_(row, "S1", DI3_SUPPLY_STATUS.CREATED,
+      DI3_SUPPLY_STATUS.SENT, retryAt, "different-operation"), false);
+  });
+
+  test("receipt boundary revalidates unique product/pack pairs and integer pack counts", function () {
+    equal(di3ValidateSupplyReceiptLineIdentities_([
+      { supply_item_id: "I1", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 3 },
+      { supply_item_id: "I2", product_id: "P1", pack_variant_id: "V40", units_per_pack: 40, packs: 2 }
+    ]), true);
+    throws(function () {
+      di3ValidateSupplyReceiptLineIdentities_([
+        { supply_item_id: "I1", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 3 },
+        { supply_item_id: "I2", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 2 }
+      ]);
+    }, /повторяют товар и фасовку/);
+    throws(function () {
+      di3ValidateSupplyReceiptLineIdentities_([
+        { supply_item_id: "I1", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 1.5 }
+      ]);
+    }, /количество упаковок должно быть положительным целым числом/);
+    throws(function () {
+      di3ValidateSupplyReceiptLineIdentities_([
+        { supply_item_id: "I1", product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 1 },
+        { supply_item_id: "I1", product_id: "P2", pack_variant_id: "V20", units_per_pack: 20, packs: 1 }
+      ]);
+    }, /supply_item_id/);
+  });
+
   test("supply state machine only permits the next transition", function () {
     equal(DI3_SUPPLY_STATUS_TRANSITIONS[DI3_SUPPLY_STATUS.CREATED], DI3_SUPPLY_STATUS.SENT);
     equal(DI3_SUPPLY_STATUS_TRANSITIONS[DI3_SUPPLY_STATUS.SENT], DI3_SUPPLY_STATUS.AWAITING);
@@ -43,6 +84,23 @@ function di3RunSupplyReceivingUnitTests() {
   });
   test("repeated cancellation is identified as already cancelled", function () {
     equal(di3ValidateSupplyCancellation_({ supply_id: "S1", status: DI3_SUPPLY_STATUS.CANCELLED }, null, 0).already_cancelled, true);
+  });
+  test("supply status and receipt paths do not rebuild unchanged product/money validations", function () {
+    var transition = di3AdvanceSupplyStatus.toString();
+    var receipt = di3CompleteSupplyReceipt_.toString();
+    equal(transition.indexOf("di3RefreshSupplyFormValidations()"), -1);
+    equal(receipt.indexOf("di3RefreshSupplyFormValidations()"), -1);
+  });
+  test("register transition clears the refreshed row by supply_id and avoids a second full refresh", function () {
+    var source = di3TransitionSelectedSupply_.toString();
+    equal(source.indexOf('register.getRange(4, 12') >= 0, true);
+    equal(source.indexOf("selected.row_number, 13"), -1);
+    equal(source.indexOf('if (String(result.status) === "ALREADY_RECEIVED") di3RefreshSupplyRegister()') >= 0, true);
+  });
+  test("form stage action does not refresh the date panel a second time after a successful transition", function () {
+    var source = di3ApplyNextSupplyStageFromForm.toString();
+    equal(source.indexOf('["ALREADY_IN_STATUS", "ALREADY_RECEIVED"]') >= 0, true);
+    equal(source.indexOf("di3RefreshSupplyDatePanel_(updatedSupply);") > source.indexOf("ALREADY_IN_STATUS"), true);
   });
   test("receipt date parser accepts Russian date and time", function () {
     var date = di3ParseSupplyEffectiveDate_("20.11.2026 14:35", null);

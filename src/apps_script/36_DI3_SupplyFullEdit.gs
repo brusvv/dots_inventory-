@@ -33,20 +33,27 @@ function di3SupplyFullEditHash_(value) {
 }
 
 /** Read-only authoritative snapshot. It does not create sheets, operations or rows. */
-function di3BuildSupplyFullEditSnapshot_(supplyId) {
+function di3BuildSupplyFullEditSnapshot_(supplyId, options) {
+  options = options || {};
   var id = String(supplyId || "").trim();
   if (!id) throw new Error("Для аудита полного редактирования требуется supply_id.");
-  var supply = di3GetSupplyById_(id);
+
+  // Full audit remains the default. Interactive editor entry/save paths may
+  // request only the business fingerprint and receipt-payload integrity.
+  var includeStockAudit = options.includeStockAudit !== false;
+  var includeReceiptPayload = options.includeReceiptPayload !== false;
+  var supply = options.supply || di3GetSupplyById_(id);
   if (!supply) throw new Error("Поставка не найдена по supply_id " + id + ".");
   var items = di3GetSupplyItems_(id);
-  var receiptOperation = di3GetSupplyReceiptOperation_(id);
+  var receiptOperation = options.includeReceiptOperation === false ? null
+    : (Object.prototype.hasOwnProperty.call(options, "receiptOperation")
+      ? options.receiptOperation : di3GetSupplyReceiptOperation_(id));
   var receiptPayload = null;
-  var receiptPayloadIntegrity = "NOT_APPLICABLE";
-  if (receiptOperation && ["PREPARED", "RETRYABLE", "COMMITTED", "QUARANTINED", "REJECTED"].indexOf(String(receiptOperation.values[5])) !== -1) {
-    // This snapshot is a strict read-only audit. Do not call
-    // the operation verifier here: that helper quarantines a damaged
-    // operation and therefore has a write side effect. Inspect raw payload/hash
-    // and report integrity without changing Operations.
+  var receiptPayloadIntegrity = receiptOperation ? "NOT_CHECKED" : "NOT_APPLICABLE";
+  if (includeReceiptPayload && receiptOperation &&
+      ["PREPARED", "RETRYABLE", "COMMITTED", "QUARANTINED", "REJECTED"].indexOf(String(receiptOperation.values[5])) !== -1) {
+    // This is a strict read-only audit. Do not call the operation verifier:
+    // that helper quarantines a damaged operation and therefore writes state.
     var rawPayloadRecord = di3FindRowByFirstColumn_("OperationPayloads", String(receiptOperation.values[0]));
     if (!rawPayloadRecord) {
       receiptPayloadIntegrity = "MISSING";
@@ -61,23 +68,44 @@ function di3BuildSupplyFullEditSnapshot_(supplyId) {
       }
     }
   }
-  var ledgerMatches = di3ReadRowsByColumnValue_("StockLedger", 5, id);
-  var movementIds = ledgerMatches.map(function (match) { return String(match.values[0]); });
+
+  var ledgerMatches = [];
   var detailsById = Object.create(null);
-  if (movementIds.length) {
-    di3ReadRowsByColumnValues_("StockMovementDetails", 0, movementIds).forEach(function (match) {
-      detailsById[String(match.values[0])] = match.values;
+  var lots = [];
+  var allocations = [];
+  var costHistory = [];
+  if (includeStockAudit) {
+    ledgerMatches = di3ReadRowsByColumnValue_("StockLedger", 5, id);
+    var movementIds = ledgerMatches.map(function (match) { return String(match.values[0]); });
+    if (movementIds.length) {
+      di3ReadRowsByColumnValues_("StockMovementDetails", 0, movementIds).forEach(function (match) {
+        detailsById[String(match.values[0])] = match.values;
+      });
+    }
+    lots = di3ReadRowsByColumnValue_("StockLots", 4, id).map(function (match) { return match.values; });
+    var lotIds = Object.create(null);
+    lots.forEach(function (row) { lotIds[String(row[0])] = true; });
+    allocations = Object.keys(lotIds).length
+      ? di3ReadRowsByColumnValues_("StockAllocations", 3, Object.keys(lotIds)).map(function (match) { return match.values; })
+      : [];
+
+    // The immutable receipt payload is the authoritative list of original item IDs.
+    // Include current document items as a defensive fallback for pre-receipt/legacy states.
+    var historyItemIds = Object.create(null);
+    items.forEach(function (item) { historyItemIds[String(item.supply_item_id || "")] = true; });
+    if (receiptPayload && Array.isArray(receiptPayload.lines)) {
+      receiptPayload.lines.forEach(function (line) {
+        if (line && line.supply_item_id) historyItemIds[String(line.supply_item_id)] = true;
+      });
+    }
+    var costHistoryKeys = Object.keys(historyItemIds).filter(Boolean).map(function (itemId) {
+      return "SUPPLY_RECEIPT:" + id + ":" + itemId;
     });
+    costHistory = costHistoryKeys.length
+      ? di3ReadRowsByColumnValues_("ProductCostHistory", 7, costHistoryKeys).map(function (match) { return match.values; })
+      : [];
   }
-  var lots = di3ReadRowsByColumnValue_("StockLots", 4, id).map(function (match) { return match.values; });
-  var lotIds = Object.create(null);
-  lots.forEach(function (row) { lotIds[String(row[0])] = true; });
-  var allocations = Object.keys(lotIds).length
-    ? di3ReadRowsByColumnValues_("StockAllocations", 3, Object.keys(lotIds)).map(function (match) { return match.values; })
-    : [];
-  var costHistory = di3ReadTableValues_("ProductCostHistory").filter(function (row) {
-    return String(row[7] || "").indexOf("SUPPLY_RECEIPT:" + id + ":") === 0;
-  });
+
   var supplyData = DI3_TABLE_SCHEMAS.V3_Supplies.map(function (header) {
     return di3SupplyFullEditNormalizeValue_(supply[header]);
   });
@@ -177,7 +205,12 @@ function di3EnableFullSupplyEditMode() {
     if (receipt && ["PREPARED", "RETRYABLE", "QUARANTINED", "REJECTED"].indexOf(String(receipt.values[5])) !== -1) {
       throw new Error("По поставке существует операция приёмки в состоянии " + String(receipt.values[5]) + ". Сначала разберись с ней в журнале операций.");
     }
-    var snapshot = di3BuildSupplyFullEditSnapshot_(supplyId);
+    var snapshot = di3BuildSupplyFullEditSnapshot_(supplyId, {
+      includeStockAudit: false,
+      includeReceiptPayload: status === DI3_SUPPLY_STATUS.RECEIVED,
+      supply: supply,
+      receiptOperation: receipt
+    });
     if (status === DI3_SUPPLY_STATUS.RECEIVED &&
         (!snapshot.receipt_operation || snapshot.receipt_operation.status !== "COMMITTED" || snapshot.receipt_operation.payload_integrity !== "VALID")) {
       throw new Error("Для полученной поставки не удалось подтвердить целостность исходного payload SUPPLY_RECEIVE. Полное редактирование остановлено без изменений.");
@@ -207,9 +240,18 @@ function di3EndFullSupplyEditMode(reload) {
   if (reload !== false && supplyId) {
     var current = di3GetSupplyById_(supplyId);
     if (current) {
+      var previousNumber = String(sheet.getRange(DI3_SUPPLY_FORM.selector).getValue() || "").trim();
       sheet.getRange(DI3_SUPPLY_FORM.selector).setValue(current.supply_number);
       sheet.getRange(DI3_SUPPLY_FORM.number).setValue(current.supply_number);
-      return di3LoadSelectedSupplyDraft({ skipUnsavedConfirmation: true });
+      // A number change can happen after a successful full edit. Refresh only
+      // the selector rule in that case; all other form validations are intact.
+      if (previousNumber !== String(current.supply_number)) {
+        di3SetSupplySelectorValidation_(sheet, current.supply_number);
+      }
+      return di3LoadSelectedSupplyDraft({
+        skipUnsavedConfirmation: true,
+        skipValidationRefresh: true
+      });
     }
   }
   var supply = number ? di3FindSupplyByNumber_(number) : null;
@@ -281,7 +323,7 @@ function di3ValidateSupplyFullEditDates_(input, nowMillis) {
   return { order_date: orderDate, expected_date: expectedDate, sent_at: sentAt, awaiting_at: awaitingAt, received_at: receivedAt };
 }
 
-function di3BuildSupplyFullEditPlan_(context, createVariants) {
+function di3BuildSupplyFullEditPlan_(context, createVariants, lineSnapshot) {
   var input = di3ParseSupplyFullEditInput_(context.sheet);
   var currentStatus = di3NormalizeSupplyStatus_(context.supply.status);
   if (currentStatus === DI3_SUPPLY_STATUS.RECEIVED && !input.received_at) {
@@ -300,7 +342,7 @@ function di3BuildSupplyFullEditPlan_(context, createVariants) {
     ? DI3_SUPPLY_STATUS.RECEIVED
     : (input.awaiting_at ? DI3_SUPPLY_STATUS.AWAITING : (input.sent_at ? DI3_SUPPLY_STATUS.SENT : DI3_SUPPLY_STATUS.CREATED));
 
-  var rawLines = di3ResolveSupplyFormLines_(false);
+  var rawLines = di3ResolveSupplyFormLines_(false, false, lineSnapshot);
   if (!rawLines.length) throw new Error("Добавь хотя бы одну товарную позицию.");
   var seen = Object.create(null);
   rawLines.forEach(function (line, index) {
@@ -315,7 +357,7 @@ function di3BuildSupplyFullEditPlan_(context, createVariants) {
     shipping_amount: input.shipping_amount
   });
   if (createVariants) {
-    rawLines = di3ResolveSupplyFormLines_(true);
+    rawLines = di3ResolveSupplyFormLines_(true, false, lineSnapshot);
     plan = di3BuildSupplyFinancialPlan_({
       lines: rawLines,
       seller_discount_amount: input.seller_discount_amount,
@@ -409,6 +451,65 @@ function di3BuildSupplyFullEditPlan_(context, createVariants) {
     number_recalculated: targetNumber !== String(context.supply.supply_number),
     old_snapshot_hash: context.baseline_hash
   };
+}
+
+/**
+ * Detect edits that invalidate the financial preview in the full supply editor.
+ * Supports single-cell edits and pasted multi-cell ranges.
+ */
+function di3IsSupplyFullEditFinancialInputRange_(row, column, numRows, numColumns) {
+  row = Number(row); column = Number(column);
+  numRows = Math.max(1, Number(numRows) || 1);
+  numColumns = Math.max(1, Number(numColumns) || 1);
+  var lastRow = row + numRows - 1;
+  var lastColumn = column + numColumns - 1;
+  function intersects(r1, c1, r2, c2) {
+    return row <= r2 && lastRow >= r1 && column <= c2 && lastColumn >= c1;
+  }
+  // Product, units per pack, pack count and purchase price.
+  return intersects(DI3_SUPPLY_FORM.firstLine, 1,
+      DI3_SUPPLY_FORM.firstLine + DI3_SUPPLY_FORM.lineCount - 1, 4) ||
+    // Seller discount, partner discount and shipping.
+    intersects(5, 2, 7, 2);
+}
+
+/**
+ * Recalculate the full-edit form preview only. This function never creates
+ * pack variants, persists supply rows, posts stock movements or starts FIFO.
+ * Invalid intermediate input clears the previous preview so stale values are
+ * never mistaken for the current calculation.
+ */
+function di3RefreshSupplyFullEditFinancialPreview_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  try {
+    var lines = di3ResolveSupplyFormLines_(false, true);
+    var financialInputs = sheet.getRange("B5:B7").getValues().map(function (row) {
+      return row[0] === "" || row[0] == null ? 0 : row[0];
+    });
+    var plan = di3BuildSupplyFinancialPlan_({
+      lines: lines,
+      seller_discount_amount: financialInputs[0],
+      partner_discount_amount: financialInputs[1],
+      shipping_amount: financialInputs[2]
+    });
+    di3RenderSupplyFinancialPreview_(plan);
+    sheet.getRange("M2").setNote("Предварительный расчёт обновляется автоматически при изменении товара, фасовки, количества упаковок, закупочной цены, скидок или доставки. Это расчёт документа, не проведение складской корректировки.");
+    return {
+      status: "PREVIEW_UPDATED",
+      lines: plan.lines.length,
+      goods_amount: plan.goods_amount,
+      final_amount: plan.final_amount
+    };
+  } catch (error) {
+    sheet.getRange(DI3_SUPPLY_FORM.firstLine, 5, DI3_SUPPLY_FORM.lineCount, 6).clearContent();
+    sheet.getRange("L4:M8").clearContent();
+    sheet.getRange("M2").setNote("Предварительный расчёт не обновлён: " + (error && error.message ? error.message : String(error)) +
+      ". Исправь данные в строках поставки или финансовых полях. Сохранение с некорректными данными также будет заблокировано.");
+    return {
+      status: "PREVIEW_INVALID",
+      error: error && error.message ? error.message : String(error)
+    };
+  }
 }
 
 function di3PreviewFullSupplyEdit() {
@@ -529,7 +630,8 @@ function di3SaveFullSupplyEdit() {
       // Never resume an immutable operation blindly: the user may have changed
       // the form after a failed/lost acknowledgement. Rebuild a side-effect-free
       // request fingerprint and only resume when it exactly matches the payload.
-      var currentRequestPlan = di3BuildSupplyFullEditPlan_(context, false);
+      var requestLineSnapshot = di3LoadSupplyFormLineSnapshot_(false);
+      var currentRequestPlan = di3BuildSupplyFullEditPlan_(context, false, requestLineSnapshot);
       if (currentRequestPlan.current_status !== DI3_SUPPLY_STATUS.RECEIVED) {
         // Variant creation is deliberately not repeated for the comparison path.
         // PREVIEW IDs are normalized away by the request fingerprint helper.
@@ -557,13 +659,19 @@ function di3SaveFullSupplyEdit() {
     if (pendingEdits.length) {
       throw new Error("По этой поставке уже есть незавершённая корректировка. Сначала восстанови или проверь её в журнале операций: " + String(pendingEdits[0].values[0]));
     }
-    var snapshot = di3BuildSupplyFullEditSnapshot_(context.supply_id);
+    var snapshot = di3BuildSupplyFullEditSnapshot_(context.supply_id, {
+      includeStockAudit: false,
+      includeReceiptPayload: false,
+      includeReceiptOperation: false,
+      supply: context.supply
+    });
     if (snapshot.fingerprint !== context.baseline_hash) {
       throw new Error("Поставка была изменена после включения полного редактирования. Изменения не применены. Отмени режим и загрузи свежую версию.");
     }
-    var plan = di3BuildSupplyFullEditPlan_(context, false);
+    var lineSnapshot = di3LoadSupplyFormLineSnapshot_(false);
+    var plan = di3BuildSupplyFullEditPlan_(context, false, lineSnapshot);
     if (plan.current_status !== DI3_SUPPLY_STATUS.RECEIVED) {
-      plan = di3BuildSupplyFullEditPlan_(context, true);
+      plan = di3BuildSupplyFullEditPlan_(context, true, lineSnapshot);
     }
     if (plan.target_number !== String(context.supply.supply_number)) {
       di3SetSupplySelectorValidation_(context.sheet, plan.target_number);
@@ -616,6 +724,64 @@ function di3BuildSupplyFullEditStatusHistoryTransitions_(oldStatus, newStatus) {
 }
 
 /** Idempotent document-only operation handler. Never writes StockLedger/FIFO. */
+/**
+ * Build a complete item-row projection plan before the first document write.
+ * Existing identities are resolved in one repository read by the caller.
+ */
+function di3BuildSupplyFullEditItemProjectionPlan_(targetRows, removedItemIds, existingMatches, supplyId) {
+  var id = String(supplyId || "");
+  var seenTargetIds = Object.create(null);
+  (targetRows || []).forEach(function (row) {
+    var itemId = String(row && row[0] || "");
+    if (!itemId || seenTargetIds[itemId] || String(row[1]) !== id) {
+      throw new Error("В payload повторяется или не согласован supply_item_id.");
+    }
+    seenTargetIds[itemId] = true;
+  });
+
+  var removeIds = (removedItemIds || []).map(function (value) { return String(value || ""); });
+  var seenRemoveIds = Object.create(null);
+  removeIds.forEach(function (itemId) {
+    if (!itemId || seenRemoveIds[itemId]) throw new Error("В payload повторяется или не согласован удаляемый supply_item_id.");
+    if (seenTargetIds[itemId]) throw new Error("Одна товарная строка одновременно добавлена и помечена к удалению: " + itemId);
+    seenRemoveIds[itemId] = true;
+  });
+
+  var existingById = Object.create(null);
+  (existingMatches || []).forEach(function (match) {
+    var itemId = String(match && match.values && match.values[0] || "");
+    if (!itemId || existingById[itemId]) throw new Error("В V3_SupplyItems найден повторяющийся supply_item_id: " + itemId);
+    existingById[itemId] = match;
+  });
+
+  var itemUpdates = [];
+  var itemAppends = [];
+  (targetRows || []).forEach(function (row) {
+    var itemId = String(row[0]);
+    var existing = existingById[itemId];
+    if (existing) {
+      if (String(existing.values[1]) !== id) throw new Error("supply_item_id уже принадлежит другой поставке: " + itemId);
+      itemUpdates.push({ row_number: Number(existing.row_number), values: row });
+    } else {
+      itemAppends.push(row);
+    }
+  });
+
+  var removeRowNumbers = [];
+  removeIds.forEach(function (itemId) {
+    var match = existingById[itemId];
+    if (!match) return;
+    if (String(match.values[1]) !== id) throw new Error("Нельзя удалить товарную строку другой поставки.");
+    removeRowNumbers.push(Number(match.row_number));
+  });
+
+  return {
+    item_updates: itemUpdates,
+    item_appends: itemAppends,
+    remove_row_numbers: removeRowNumbers
+  };
+}
+
 function di3ApplySupplyDocumentEditOperation_(operationRecord, payload) {
   if (!payload || Number(payload.schema_version) !== 1 || !payload.supply_id || !Array.isArray(payload.supply_row) || !Array.isArray(payload.item_rows)) {
     throw new Error("Некорректный immutable payload SUPPLY_DOCUMENT_EDIT.");
@@ -638,7 +804,14 @@ function di3ApplySupplyDocumentEditOperation_(operationRecord, payload) {
   if (storedStatus === DI3_SUPPLY_STATUS.CANCELLED) throw new Error("Отменённую поставку нельзя корректировать без отдельного восстановления.");
   if (storedStatus === DI3_SUPPLY_STATUS.RECEIVED) {
     if (!receipt || String(receipt.values[5]) !== "COMMITTED") throw new Error("Полученная поставка не имеет подтверждённой операции приёмки.");
-    var receiptAudit = di3BuildSupplyFullEditSnapshot_(String(payload.supply_id)).receipt_operation;
+    // This handler only needs to verify the immutable receipt payload. The
+    // full stock/FIFO audit remains available through the explicit audit entrypoint.
+    var receiptAudit = di3BuildSupplyFullEditSnapshot_(String(payload.supply_id), {
+      includeStockAudit: false,
+      includeReceiptPayload: true,
+      supply: supply,
+      receiptOperation: receipt
+    }).receipt_operation;
     if (!receiptAudit || receiptAudit.payload_integrity !== "VALID") {
       throw new Error("Не удалось подтвердить целостность исходного payload SUPPLY_RECEIVE. Документная корректировка остановлена без изменений.");
     }
@@ -652,45 +825,29 @@ function di3ApplySupplyDocumentEditOperation_(operationRecord, payload) {
   targetParent[0] = String(payload.supply_id);
   targetParent[4] = supply.created_at;
   if (String(targetParent[1]) !== String(payload.supply_number_after)) throw new Error("Номер поставки в payload не согласован.");
+  var itemsSheet = di3GetSheetOrThrow_("V3_SupplyItems");
+  var targetRows = payload.item_rows.map(function (row) { return di3HydrateSupplyFullEditRow_(row, "ITEM"); });
+  var removeIds = (payload.removed_item_ids || []).map(String);
+  var lookupIds = targetRows.map(function (row) { return String(row[0] || ""); }).concat(removeIds);
+  var existingMatches = lookupIds.length
+    ? di3ReadRowsByColumnValues_("V3_SupplyItems", 0, lookupIds)
+    : [];
+  // Validate every target/removal identity and ownership before writing the parent
+  // document or any item projection. This also makes retries deterministic.
+  var itemPlan = di3BuildSupplyFullEditItemProjectionPlan_(
+    targetRows, removeIds, existingMatches, String(payload.supply_id)
+  );
+
   if (Number(supply.row_number) !== Number(payload.supply_row_number)) {
     // The document row may move only through controlled sheet maintenance. Find it again by ID.
     payload.supply_row_number = Number(supply.row_number);
   }
   di3ApplyContiguousRowUpdates_("V3_Supplies", [{ row_number: supply.row_number, values: targetParent }]);
 
-  var itemsSheet = di3GetSheetOrThrow_("V3_SupplyItems");
-  var targetRows = payload.item_rows.map(function (row) { return di3HydrateSupplyFullEditRow_(row, "ITEM"); });
-  var seenTargetIds = Object.create(null);
-  targetRows.forEach(function (row) {
-    var id = String(row[0] || "");
-    if (!id || seenTargetIds[id] || String(row[1]) !== String(payload.supply_id)) throw new Error("В payload повторяется или не согласован supply_item_id.");
-    seenTargetIds[id] = true;
-  });
-  var itemUpdates = [];
-  var itemAppends = [];
-  targetRows.forEach(function (row) {
-    var existing = di3FindRowByFirstColumn_("V3_SupplyItems", String(row[0]));
-    if (existing) {
-      if (String(existing.values[1]) !== String(payload.supply_id)) throw new Error("supply_item_id уже принадлежит другой поставке: " + row[0]);
-      itemUpdates.push({ row_number: existing.row_number, values: row });
-    } else {
-      itemAppends.push(row);
-    }
-  });
-  if (itemUpdates.length) di3ApplyContiguousRowUpdates_("V3_SupplyItems", itemUpdates);
-  if (itemAppends.length) di3AppendTableRows_("V3_SupplyItems", itemAppends);
-
-  var removeIds = (payload.removed_item_ids || []).map(String);
-  var removeRows = [];
-  removeIds.forEach(function (id) {
-    if (seenTargetIds[id]) throw new Error("Одна товарная строка одновременно добавлена и помечена к удалению: " + id);
-    var match = di3FindRowByFirstColumn_("V3_SupplyItems", id);
-    if (match) {
-      if (String(match.values[1]) !== String(payload.supply_id)) throw new Error("Нельзя удалить товарную строку другой поставки.");
-      removeRows.push(Number(match.row_number));
-    }
-  });
-  removeRows.sort(function (a, b) { return b - a; }).forEach(function (rowNumber) { itemsSheet.deleteRow(rowNumber); });
+  if (itemPlan.item_updates.length) di3ApplyContiguousRowUpdates_("V3_SupplyItems", itemPlan.item_updates);
+  if (itemPlan.item_appends.length) di3AppendTableRows_("V3_SupplyItems", itemPlan.item_appends);
+  itemPlan.remove_row_numbers.sort(function (a, b) { return b - a; })
+    .forEach(function (rowNumber) { itemsSheet.deleteRow(rowNumber); });
 
   var operationId = String(operationRecord.values[0]);
   var statusTransitions = di3BuildSupplyFullEditStatusHistoryTransitions_(payload.old_status, payload.new_status);
@@ -719,7 +876,7 @@ function di3ApplySupplyDocumentEditOperation_(operationRecord, payload) {
     old_status: String(payload.old_status),
     new_status: String(payload.new_status),
     item_rows: targetRows.length,
-    removed_item_rows: removeRows.length,
+    removed_item_rows: itemPlan.remove_row_numbers.length,
     stock_movements_created: 0,
     audit_payload: "OperationPayloads"
   };

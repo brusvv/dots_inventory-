@@ -9,6 +9,9 @@ function di3RunSupplyFullEditUnitTests() {
   function equal(actual, expected, message) {
     if (actual !== expected) throw new Error((message || "Values differ") + ": expected " + JSON.stringify(expected) + ", got " + JSON.stringify(actual));
   }
+  function includes(source, fragment, message) {
+    equal(String(source).indexOf(fragment) !== -1, true, message || ("Expected source to contain: " + fragment));
+  }
   function throws(callback, pattern) {
     var error = null;
     try { callback(); } catch (caught) { error = caught; }
@@ -133,6 +136,251 @@ function di3RunSupplyFullEditUnitTests() {
     var handlerSource = di3ApplySupplyDocumentEditOperation_.toString();
     equal(enableSource.indexOf("snapshot.receipt_operation.payload_integrity !== \"VALID\"") !== -1, true);
     equal(handlerSource.indexOf("receiptAudit.payload_integrity !== \"VALID\"") !== -1, true);
+  });
+
+  test("interactive full-edit snapshots skip unrelated stock audit tables but retain receipt verification", function () {
+    var snapshotSource = di3BuildSupplyFullEditSnapshot_.toString();
+    var enableSource = di3EnableFullSupplyEditMode.toString();
+    var saveSource = di3SaveFullSupplyEdit.toString();
+    includes(snapshotSource, "options.includeStockAudit !== false");
+    includes(snapshotSource, "if (includeStockAudit)");
+    includes(snapshotSource, "options.includeReceiptPayload !== false");
+    includes(snapshotSource, "options.supply || di3GetSupplyById_(id)");
+    includes(snapshotSource, "options.receiptOperation");
+    includes(enableSource, "includeStockAudit: false");
+    includes(enableSource, "includeReceiptPayload: status === DI3_SUPPLY_STATUS.RECEIVED");
+    includes(enableSource, "receiptOperation: receipt");
+    includes(saveSource, "includeStockAudit: false");
+    includes(saveSource, "includeReceiptPayload: false");
+    includes(saveSource, "includeReceiptOperation: false");
+    // The public audit entry point deliberately keeps the default, complete snapshot.
+    includes(di3AuditSupplyForFullEdit.toString(), "di3BuildSupplyFullEditSnapshot_(id)");
+  });
+
+  test("lightweight full-edit snapshot avoids every stock audit table read", function () {
+    var originals = {
+      getSupply: di3GetSupplyById_,
+      getItems: di3GetSupplyItems_,
+      getReceipt: di3GetSupplyReceiptOperation_,
+      readOne: di3ReadRowsByColumnValue_,
+      readMany: di3ReadRowsByColumnValues_
+    };
+    var readTables = [];
+    var supply = {};
+    DI3_TABLE_SCHEMAS.V3_Supplies.forEach(function (header) { supply[header] = ""; });
+    supply.supply_id = "S-LIGHT";
+    supply.supply_number = "26NR001";
+    supply.status = DI3_SUPPLY_STATUS.CREATED;
+    supply.row_number = 2;
+    try {
+      di3GetSupplyById_ = function () { return supply; };
+      di3GetSupplyItems_ = function () { return []; };
+      di3GetSupplyReceiptOperation_ = function () { throw new Error("Receipt lookup must be skipped"); };
+      di3ReadRowsByColumnValue_ = function (table) { readTables.push(table); return []; };
+      di3ReadRowsByColumnValues_ = function (table) { readTables.push(table); return []; };
+      var result = di3BuildSupplyFullEditSnapshot_("S-LIGHT", {
+        includeStockAudit: false,
+        includeReceiptPayload: false,
+        includeReceiptOperation: false,
+        supply: supply
+      });
+      equal(readTables.length, 0);
+      equal(result.counts.ledger_movements, 0);
+      equal(result.counts.fifo_lots, 0);
+      equal(result.counts.fifo_allocations, 0);
+      equal(result.counts.cost_history_rows, 0);
+      equal(!!result.fingerprint, true);
+    } finally {
+      di3GetSupplyById_ = originals.getSupply;
+      di3GetSupplyItems_ = originals.getItems;
+      di3GetSupplyReceiptOperation_ = originals.getReceipt;
+      di3ReadRowsByColumnValue_ = originals.readOne;
+      di3ReadRowsByColumnValues_ = originals.readMany;
+    }
+  });
+
+  test("default full-edit audit snapshot still reads stock and FIFO evidence", function () {
+    var originals = {
+      getSupply: di3GetSupplyById_,
+      getItems: di3GetSupplyItems_,
+      getReceipt: di3GetSupplyReceiptOperation_,
+      readOne: di3ReadRowsByColumnValue_,
+      readMany: di3ReadRowsByColumnValues_
+    };
+    var readTables = [];
+    var supply = {};
+    DI3_TABLE_SCHEMAS.V3_Supplies.forEach(function (header) { supply[header] = ""; });
+    supply.supply_id = "S-AUDIT";
+    supply.supply_number = "26NR002";
+    supply.status = DI3_SUPPLY_STATUS.CREATED;
+    supply.row_number = 3;
+    try {
+      di3GetSupplyById_ = function () { return supply; };
+      di3GetSupplyItems_ = function () { return []; };
+      di3GetSupplyReceiptOperation_ = function () { return null; };
+      di3ReadRowsByColumnValue_ = function (table) { readTables.push(table); return []; };
+      di3ReadRowsByColumnValues_ = function (table) { readTables.push(table); return []; };
+      var result = di3BuildSupplyFullEditSnapshot_("S-AUDIT");
+      equal(readTables.indexOf("StockLedger") !== -1, true);
+      equal(readTables.indexOf("StockLots") !== -1, true);
+      equal(result.counts.ledger_movements, 0);
+      equal(!!result.fingerprint, true);
+    } finally {
+      di3GetSupplyById_ = originals.getSupply;
+      di3GetSupplyItems_ = originals.getItems;
+      di3GetSupplyReceiptOperation_ = originals.getReceipt;
+      di3ReadRowsByColumnValue_ = originals.readOne;
+      di3ReadRowsByColumnValues_ = originals.readMany;
+    }
+  });
+
+  test("full-edit cancel and successful reload can reuse existing form validations", function () {
+    var endSource = di3EndFullSupplyEditMode.toString();
+    var loadSource = di3LoadSelectedSupplyDraft.toString();
+    includes(endSource, "skipValidationRefresh: true");
+    includes(endSource, "di3SetSupplySelectorValidation_(sheet, current.supply_number)");
+    includes(loadSource, "options.skipValidationRefresh !== true");
+  });
+
+  test("full edit auto-preview reacts to quantity, pack size, price and financial inputs", function () {
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 2, 1, 1), true, "units per pack");
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 3, 1, 1), true, "pack count");
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 4, 1, 1), true, "purchase price");
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 1, 1, 1), true, "product");
+    equal(di3IsSupplyFullEditFinancialInputRange_(5, 2, 1, 1), true, "seller discount");
+    equal(di3IsSupplyFullEditFinancialInputRange_(6, 2, 2, 1), true, "partner discount and shipping paste");
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 5, 1, 1), false, "calculated columns do not trigger recalculation");
+    equal(di3IsSupplyFullEditFinancialInputRange_(8, 2, 1, 1), false, "notes do not trigger recalculation");
+    equal(di3IsSupplyFullEditFinancialInputRange_(31, 1, 1, 4), true, "last supported item row");
+    equal(di3IsSupplyFullEditFinancialInputRange_(32, 1, 1, 4), false, "rows below supply form do not trigger recalculation");
+  });
+  test("changing units per pack recalculates received units and unit cost", function () {
+    var original = di3BuildSupplyFinancialPlan_({
+      lines: [{ product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 3, purchase_price_per_pack: 100 }],
+      seller_discount_amount: 10, partner_discount_amount: 20, shipping_amount: 15
+    });
+    var changed = di3BuildSupplyFinancialPlan_({
+      lines: [{ product_id: "P1", pack_variant_id: "V40", units_per_pack: 40, packs: 3, purchase_price_per_pack: 100 }],
+      seller_discount_amount: 10, partner_discount_amount: 20, shipping_amount: 15
+    });
+    equal(original.lines[0].received_units, 60);
+    equal(changed.lines[0].received_units, 120);
+    equal(changed.goods_amount, original.goods_amount);
+    equal(changed.final_amount, original.final_amount);
+    equal(changed.lines[0].final_line_amount, original.lines[0].final_line_amount);
+    equal(changed.lines[0].unit_cost, original.lines[0].unit_cost / 2);
+  });
+  test("changing pack count recalculates goods, discounts, shipping and final unit cost", function () {
+    var original = di3BuildSupplyFinancialPlan_({
+      lines: [{ product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 3, purchase_price_per_pack: 100 }],
+      seller_discount_amount: 10, partner_discount_amount: 20, shipping_amount: 15
+    });
+    var changed = di3BuildSupplyFinancialPlan_({
+      lines: [{ product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 4, purchase_price_per_pack: 100 }],
+      seller_discount_amount: 10, partner_discount_amount: 20, shipping_amount: 15
+    });
+    equal(changed.lines[0].received_units, 80);
+    equal(changed.goods_amount, 400);
+    equal(changed.discount_total, 30);
+    equal(changed.shipping_amount, 15);
+    equal(changed.final_amount, 385);
+    equal(changed.lines[0].final_pack_cost, 96.25);
+    equal(changed.lines[0].unit_cost, 4.8125);
+  });
+  test("full edit automatic preview is read-only and never posts stock or creates pack variants", function () {
+    var source = di3RefreshSupplyFullEditFinancialPreview_.toString();
+    equal(source.indexOf("di3ResolveSupplyFormLines_(false, true)") !== -1, true);
+    equal(source.indexOf("di3GetOrCreatePackVariant_") === -1, true);
+    var resolverSource = di3ResolveSupplyFormLines_.toString();
+    equal(resolverSource.indexOf("di3LoadSupplyFormLineSnapshot_(readOnlyCatalog)") !== -1, true);
+    var snapshotSource = di3LoadSupplyFormLineSnapshot_.toString();
+    equal(snapshotSource.indexOf("di3GetProductFormOptionIndex_(readOnlyCatalog === true)") !== -1, true);
+    var indexSource = di3GetProductFormOptionIndex_.toString();
+    equal(indexSource.indexOf("if (skipPublicCodeEnsure !== true)") !== -1, true);
+    equal(source.indexOf("di3AppendTableRows_") === -1, true);
+    equal(source.indexOf("di3RebuildFifoAllocations_") === -1, true);
+    var handler = di3SupplyFormOnEdit.toString();
+    equal(handler.indexOf("di3IsSupplyFullEditFinancialInputRange_") !== -1, true);
+    equal(handler.indexOf("di3RefreshSupplyFullEditFinancialPreview_") !== -1, true);
+  });
+
+  test("full edit item projection batches identity resolution and plans updates, appends and removals", function () {
+    var plan = di3BuildSupplyFullEditItemProjectionPlan_([
+      ["I1", "S1", "P1", "V1"],
+      ["I3", "S1", "P3", "V3"]
+    ], ["I2"], [
+      { row_number: 10, values: ["I1", "S1", "P1", "V1"] },
+      { row_number: 11, values: ["I2", "S1", "P2", "V2"] }
+    ], "S1");
+    equal(plan.item_updates.length, 1);
+    equal(plan.item_updates[0].row_number, 10);
+    equal(plan.item_appends.length, 1);
+    equal(plan.item_appends[0][0], "I3");
+    equal(plan.remove_row_numbers.length, 1);
+    equal(plan.remove_row_numbers[0], 11);
+  });
+  test("full edit item projection rejects target IDs owned by another supply", function () {
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["I1", "S1"]], [], [
+        { row_number: 10, values: ["I1", "S2"] }
+      ], "S1");
+    }, /принадлежит другой поставке/);
+  });
+  test("full edit item projection rejects removal IDs owned by another supply", function () {
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([], ["I1"], [
+        { row_number: 10, values: ["I1", "S2"] }
+      ], "S1");
+    }, /удалить товарную строку другой поставки/);
+  });
+  test("full edit item projection rejects target/removal overlap and duplicate database identities", function () {
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["I1", "S1"]], ["I1"], [], "S1");
+    }, /одновременно добавлена и помечена к удалению/);
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["I1", "S1"]], [], [
+        { row_number: 10, values: ["I1", "S1"] },
+        { row_number: 11, values: ["I1", "S1"] }
+      ], "S1");
+    }, /повторяющийся supply_item_id/);
+  });
+  test("full edit item projection rejects duplicate and empty payload identities", function () {
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["I1", "S1"], ["I1", "S1"]], [], [], "S1");
+    }, /повторяется или не согласован supply_item_id/);
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["", "S1"]], [], [], "S1");
+    }, /повторяется или не согласован supply_item_id/);
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([], [""], [], "S1");
+    }, /удаляемый supply_item_id/);
+  });
+  test("full edit handler returns the planned removal count and does not reference an undefined collection", function () {
+    var source = di3ApplySupplyDocumentEditOperation_.toString();
+    includes(source, "removed_item_rows: itemPlan.remove_row_numbers.length");
+    equal(source.indexOf("removeRows.length"), -1);
+  });
+  test("received full-edit commit verifies receipt payload without loading full stock audit", function () {
+    var source = di3ApplySupplyDocumentEditOperation_.toString();
+    includes(source, "includeStockAudit: false");
+    includes(source, "includeReceiptPayload: true");
+    includes(source, "receiptOperation: receipt");
+  });
+  test("full edit handler resolves all item IDs in one batch before parent projection write", function () {
+    var source = di3ApplySupplyDocumentEditOperation_.toString();
+    equal(source.indexOf("di3ReadRowsByColumnValues_(\"V3_SupplyItems\", 0, lookupIds)") !== -1, true);
+    equal(/di3FindRowByFirstColumn_\s*\(\s*[\"']V3_SupplyItems/.test(source), false);
+    equal(source.indexOf("di3BuildSupplyFullEditItemProjectionPlan_") < source.indexOf("di3ApplyContiguousRowUpdates_(\"V3_Supplies\""), true);
+  });
+
+  test("full edit validation and materialization share one form/catalogue snapshot", function () {
+    var planSource = di3BuildSupplyFullEditPlan_.toString();
+    var saveSource = di3SaveFullSupplyEdit.toString();
+    equal(planSource.indexOf("di3ResolveSupplyFormLines_(false, false, lineSnapshot)") !== -1, true);
+    equal(planSource.indexOf("di3ResolveSupplyFormLines_(true, false, lineSnapshot)") !== -1, true);
+    equal(saveSource.indexOf("var lineSnapshot = di3LoadSupplyFormLineSnapshot_(false)") !== -1, true);
+    equal(saveSource.indexOf("di3BuildSupplyFullEditPlan_(context, false, lineSnapshot)") !== -1, true);
+    equal(saveSource.indexOf("di3BuildSupplyFullEditPlan_(context, true, lineSnapshot)") !== -1, true);
   });
 
   var report = { passed: passed, failed: failed.length, failures: failed };

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/github-preview-releases
+      - feature/supply-correction-fifo-replay
     paths:
       - "src/apps_script/**"
       - "runtime/probes/**"
@@ -11,12 +12,14 @@ on:
       - "docs/RUNTIME_PROBES.md"
       - "docs/SOURCE_MODULE_INDEX.md"
       - "docs/ROADMAP_AND_STATUS.md"
+      - "docs/RC9_WORK_PLAN_CHECKLIST.md"
       - "README.md"
       - "tools/**"
       - ".github/workflows/package-installation.yml"
   pull_request:
     branches:
       - feature/github-runtime-acceptance
+      - feature/github-preview-releases
     paths:
       - "src/apps_script/**"
       - "runtime/probes/**"
@@ -24,6 +27,7 @@ on:
       - "docs/RUNTIME_PROBES.md"
       - "docs/SOURCE_MODULE_INDEX.md"
       - "docs/ROADMAP_AND_STATUS.md"
+      - "docs/RC9_WORK_PLAN_CHECKLIST.md"
       - "README.md"
       - "tools/**"
       - ".github/workflows/package-installation.yml"
@@ -48,6 +52,7 @@ jobs:
             exit 1
           fi
           ROOT="DotsInventory_v4_install"
+          SOURCE_BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           mkdir -p "$ROOT/Apps_Script" "$ROOT/Runtime_Probes" "$ROOT/Documentation" "$ROOT/QA_Tools"
           cp src/apps_script/*.gs "$ROOT/Apps_Script/"
           cp runtime/probes/*.gs "$ROOT/Runtime_Probes/"
@@ -56,6 +61,7 @@ jobs:
           cp docs/RUNTIME_PROBES.md "$ROOT/Documentation/"
           cp docs/SOURCE_MODULE_INDEX.md "$ROOT/Documentation/"
           cp docs/ROADMAP_AND_STATUS.md "$ROOT/Documentation/"
+          cp docs/RC9_WORK_PLAN_CHECKLIST.md "$ROOT/Documentation/"
           cp -R tools/. "$ROOT/QA_Tools/"
           cat > "$ROOT/INSTALLATION_RU.txt" <<'EOF'
           DOTS INVENTORY v4 — ПАКЕТ ИСХОДНИКОВ ДЛЯ УСТАНОВКИ
@@ -88,6 +94,7 @@ jobs:
           Конфигурация часового пояса в исходниках: Europe/Moscow.
           Текущая ветка: feature/github-preview-releases.
           EOF
+          sed -i "s|^Текущая ветка:.*|Текущая ветка: ${SOURCE_BRANCH}|" "$ROOT/INSTALLATION_RU.txt"
           find "$ROOT" -type f -print0 | sort -z | xargs -0 sha256sum > "$ROOT/SHA256SUMS.txt"
           zip -qr "DotsInventory_v4_install.zip" "$ROOT"
           sha256sum "DotsInventory_v4_install.zip" > "DotsInventory_v4_install.zip.sha256"

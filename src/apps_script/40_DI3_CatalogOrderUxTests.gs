@@ -18,12 +18,17 @@ function di3RunCatalogOrderUxUnitTests() {
     equal(Object.keys(payload).join(","), "settings,lines");
     equal(payload.lines[0][1], 2);
   });
-  test("new order form confirms before clearing dirty data", function () {
+  test("new order form confirms before clearing dirty data and preserves validations", function () {
     var source = di3NewOrderForm.toString();
     var guard = source.indexOf("di3HasUnsavedOrderFormChanges_");
-    var clear = source.indexOf('sheet.getRange("B3:B8").clearContent()');
-    equal(guard >= 0 && clear > guard, true);
+    var reset = source.indexOf('sheet.getRange("B3:B8").setValues(');
+    equal(guard >= 0 && reset > guard, true);
     includes(source, "CANCELLED_BY_USER");
+    equal(source.indexOf("di3RefreshOrderFormValidations()"), -1,
+      "Reset must not rebuild unchanged dropdown and numeric validations");
+    equal(source.indexOf("insertCheckboxes()"), -1,
+      "Reset must retain existing checkbox validations");
+    includes(source, "di3SetOrderFormStateBaseline_(sheet)");
   });
   test("successful order save bypasses the second discard prompt only after creation", function () {
     var source = di3SaveOrderForm.toString();
@@ -37,12 +42,23 @@ function di3RunCatalogOrderUxUnitTests() {
     equal(source.indexOf("B4") === -1, true);
     equal(source.indexOf("B16") === -1, true);
   });
-  test("new product form protects dirty card before clearing", function () {
+  test("new product form protects dirty card and preserves existing validations", function () {
     var source = di3NewProductForm.toString();
     var guard = source.indexOf("di3HasUnsavedProductFormChanges_");
-    var clear = source.indexOf('sheet.getRange("B4:B16").clearContent()');
-    equal(guard >= 0 && clear > guard, true);
+    var reset = source.indexOf('sheet.getRange("B4:B16").setValues(');
+    equal(guard >= 0 && reset > guard, true);
     includes(source, "CANCELLED_BY_USER");
+    equal(source.indexOf("di3OpenProductForm()"), -1,
+      "Reset must not reopen the form and rebuild the catalogue validations");
+    includes(source, "ss.setActiveSheet(sheet)");
+  });
+  test("new product refreshes product and order selectors once through dependent views", function () {
+    var save = di3SaveNewProductForm.toString();
+    includes(save, "di3RefreshProductsSheet({ skipProductFormValidations: true })");
+    equal(save.indexOf("di3RefreshProductFormValidations()"), -1);
+    includes(save, "di3RefreshDependentCatalogViews_()");
+    var refresh = di3RefreshProductsSheet.toString();
+    includes(refresh, "options.skipProductFormValidations !== true");
   });
   test("product selector defers replacement while the current card is dirty", function () {
     var source = di3ProductCatalogOnEdit.toString();

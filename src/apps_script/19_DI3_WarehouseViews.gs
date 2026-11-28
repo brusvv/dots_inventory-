@@ -394,7 +394,15 @@ function di3BuildStockJournalRows_(options) {
   if (pendingOperations.length && options.allowPending !== true) {
     throw new Error("Есть незавершённые складские операции (" + pendingOperations.length + "). Сначала запусти восстановление складских операций.");
   }
-  var ledger = di3ReadTableValues_("StockLedger");
+  var correctionMap = di3ReadSupplyCorrectionEffectiveMovementMap_();
+  di3AssertSupplyCorrectionFifoProjectionCurrent_(correctionMap);
+  var superseded = Object.create(null);
+  correctionMap.superseded_movement_ids.forEach(function (id) { superseded[String(id)] = true; });
+  // The operational journal shows the effective stock history. Superseded
+  // source movements remain immutable in StockLedger for audit/recovery.
+  var ledger = di3ReadTableValues_("StockLedger").filter(function (row) {
+    return !superseded[String(row[0] || "")];
+  });
   var details = di3ReadTableValues_("StockMovementDetails");
   var lots = di3ReadTableValues_("StockLots");
   var active = di3GetActiveRunAllocations_();
@@ -648,5 +656,6 @@ function di3RefreshDependentCatalogViews_() {
     results.fifo_history_products = di3RefreshFifoHistoryProductOptions();
   }
   if (ss.getSheetByName(DI3_PRODUCT_FORM_SHEET)) results.product_form_options = di3RefreshProductFormValidations();
+  if (ss.getSheetByName(DI3_ORDER_FORM_SHEET)) results.order_form_options = di3RefreshOrderFormValidations();
   return results;
 }

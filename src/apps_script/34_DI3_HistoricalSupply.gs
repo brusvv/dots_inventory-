@@ -34,7 +34,6 @@ function di3StartHistoricalSupplyEntry() {
   sheet.getRange("M2").setValue("Внесение старой поставки");
   sheet.getRange("D8").setValue("Режим «Внести старую поставку»: заполни G2, при необходимости G3, а также даты G5:G7 и обязательное время HH:mm в H5:H7. После проверки и подтверждения будет создан документ и одна складская операция приёмки.");
   di3RefreshSupplyDatePanel_(null);
-  di3RefreshSupplyFormValidations();
   // The refresh function respects the mode marker and therefore leaves all G5:G7 editable.
   sheet.getRange("M2").setValue("Внесение старой поставки");
   di3SetSupplyFormStateBaseline_(sheet);
@@ -268,9 +267,10 @@ function di3FinalizeHistoricalSupplyReceipt_(sheet, supplyId, sourceLabel, recei
   sheet.getRange(DI3_SUPPLY_FORM.historicalMode).clearContent();
   var finalSupply = di3GetSupplyById_(supplyId);
   if (!finalSupply) throw new Error("Поставка исчезла после завершения приёмки. Проверь Operations и supply_id " + supplyId + ".");
-  di3RefreshSupplyDatePanel_(finalSupply);
+  // The normal COMMITTED receipt handler already refreshed this panel.
+  // The ALREADY_RECEIVED fast path still needs its state restored.
+  if (String(receiptResult.status) === "ALREADY_RECEIVED") di3RefreshSupplyDatePanel_(finalSupply);
   sheet.getRange("M2").setValue("Просмотр / этапы: " + finalSupply.supply_number + " — " + di3GetSupplyStatusLabel_(finalSupply.status));
-  di3RefreshSupplyFormValidations();
   if (typeof di3RefreshWarehouseViewsAfterCommit_ === "function") di3RefreshWarehouseViewsAfterCommit_(sourceLabel + " " + finalSupply.supply_number);
   return receiptResult;
 }

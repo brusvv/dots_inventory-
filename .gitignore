@@ -4,3 +4,6 @@ node_modules/
 .DS_Store
 *.log
 coverage/
+
+# Private local product catalog and one-off import tools
+/private/

@@ -13,6 +13,29 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     equal(String(source).indexOf(fragment) !== -1, true, message || ("Expected source to contain: " + fragment));
   }
 
+  test("supply form load resolves item labels from one preloaded product index", function () {
+    var items = [
+      { product_id: "P1", product_label_snapshot: "Old label", units_per_pack: 20, packs: 3, purchase_price_per_pack: 229 },
+      { product_id: "P2", product_label_snapshot: "Historical product", units_per_pack: 40, packs: 2, purchase_price_per_pack: 100 }
+    ];
+    var index = {
+      byId: {
+        P1: { product_id: "P1", brand: "Acme", model: "Alpha", diameter: "6.5" }
+      },
+      codes: { P1: "D001" }
+    };
+    var rows = di3BuildSupplyLoadedLineRows_(items, index);
+    equal(rows[0][0], "D001 | Acme Alpha, 6,5 мм");
+    equal(rows[1][0], "Historical product");
+    equal(rows[0][1], 20);
+    equal(rows[0][2], 3);
+    equal(rows[0][3], 229);
+    var loaderSource = di3LoadSelectedSupplyDraft.toString();
+    includes(loaderSource, "di3BuildSupplyLoadedLineRows_");
+    equal(loaderSource.indexOf("di3LoadProductById_") === -1, true,
+      "supply loading must not perform one product repository read per item");
+  });
+
   test("form-state fingerprint payload tracks only editable business inputs", function () {
     var date = new Date("2026-11-25T10:30:00.000Z");
     var payload = di3BuildSupplyFormStatePayload_({
@@ -49,7 +72,8 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     equal(DI3_SUPPLY_REGISTER_HEADERS[13], "Время следующего этапа (HH:mm)");
     includes(di3GetSelectedSupplyRegisterRow_.toString(), "di3BuildEffectiveDateTime_");
     includes(di3RefreshSupplyRegister.toString(), "input.time");
-    includes(di3TransitionSelectedSupply_.toString(), "getRange(selected.row_number, 13, 1, 2).clearContent()");
+    includes(di3TransitionSelectedSupply_.toString(), "register.getRange(targetRow, 13, 1, 2).clearContent()");
+    includes(di3GetSelectedSupplyRegisterRow_.toString(), "supply_id: supplyId");
   });
 
   test("discard confirmation is requested for dirty forms unless an internal caller explicitly bypasses it", function () {
@@ -65,6 +89,26 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     includes(source, "di3HasUnsavedSupplyFormChanges_");
     equal(guard >= 0 && clear > guard, true, "dirty-state guard must precede form clearing");
     includes(source, "CANCELLED_BY_USER");
+  });
+
+  test("new supply form clears values without rebuilding catalogue and status validations", function () {
+    var source = di3NewSupplyForm.toString();
+    includes(source, 'sheet.getRange("B2:B8").clearContent()');
+    includes(source, 'sheet.getRange("M4:M9").clearContent()');
+    includes(source, 'sheet.getRange("N2:N7").clearContent()');
+    includes(source, 'sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent()');
+    includes(source, "di3RefreshSupplyDatePanel_(null)");
+    equal(source.indexOf("di3RefreshSupplyFormValidations()") === -1, true,
+      "clearing form values must not reload product indexes and supply summaries");
+    equal(source.indexOf("clearDataValidations()") === -1, true,
+      "existing data validations should remain installed");
+  });
+
+  test("full-edit reload can skip validation rebuild while explicit load keeps the repair path", function () {
+    var loadSource = di3LoadSelectedSupplyDraft.toString();
+    includes(loadSource, "options.skipValidationRefresh !== true");
+    includes(di3RefreshSupplyFormValidations.toString(), "di3GetProductFormOptionIndex_");
+    includes(di3RefreshSupplyFormValidations.toString(), "di3GetSupplyFormLoadSummary_");
   });
 
   test("switching B2 with unsaved data stores the requested document and restores the previous selector", function () {
