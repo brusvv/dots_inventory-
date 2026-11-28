@@ -273,3 +273,24 @@ FIFO or change the existing fail-closed guard. SC-02–SC-04 remain pending.
 The subsystem is not ready for stock-affecting correction of an already received supply. The current fail-closed guard is correct and should remain until S-01/S-02/S-05 are implemented and runtime-accepted.
 
 There are several low-risk optimizations worth implementing, starting with the supply loader's N+1 reads and batched pack-variant resolution. The status-history idempotency rule and receipt-boundary line validation should be hardened before enabling corrections.
+
+
+### SC-02 foundation — correction relation journal
+
+Added an additive \`SupplyCorrectionEvents\` schema and a pure resolver for
+append-only correction relations. Lifecycle events are grouped by stable
+\`relation_id\` and ordered by unique \`event_sequence\`. Ordinary replay may
+consume only COMMITTED relation events whose owning \`SUPPLY_CORRECTION\`
+operation is also COMMITTED. A pending candidate may opt into PREPARED rows for
+its exact operation ID only.
+
+The resolver validates relation shape (REPLACE/REMOVE/ADD), operation ownership,
+stable metadata, source/replacement uniqueness and correction-chain acyclicity.
+It rejects quarantined relations. Tests cover committed and pending visibility,
+correction chains, REMOVE/ADD, abort/quarantine, duplicate supersession,
+duplicate replacement, product mismatch and cycles.
+
+This does not yet modify the FIFO event stream or execute corrections. No
+handler is registered and no live workbook/schema, stock ledger, lot, allocation,
+cost history, order snapshot or document was changed. The fail-closed guard for
+received-supply stock edits remains in place.
