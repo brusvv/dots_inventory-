@@ -367,3 +367,12 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 - [x] Exact-head GitHub Actions: [quality gates 46100854031](https://github.com/brusvv/dots_inventory-/actions/runs/46100854031), [release pipeline 46100854106](https://github.com/brusvv/dots_inventory-/actions/runs/46100854106), [package 46100854083](https://github.com/brusvv/dots_inventory-/actions/runs/46100854083) — PASS.
 - [ ] Run the all-sheet preview probe on the restored disposable workbook.
 - [ ] Run SC-04 write-boundary failure/recovery acceptance on the disposable copy after separate explicit approval.
+
+
+## PR review update — 2026-11-28
+
+- [x] PR #10 latest focused CI: [46100554436](https://github.com/brusvv/dots_inventory-/actions/runs/46100554436), 55/55 syntax and 71/71 deployment-manager tests PASS. Full quality-gates/package checks and runtime acceptance are still not evidenced for its current head.
+- [!] PR #2 has a Git merge conflict (`mergeable_state=dirty`); resolve after its N-03 base is finalized.
+- [!] PR #8 has a Git merge conflict (`mergeable_state=dirty`) and uses an older pinned bootstrap source commit; update/review before merge.
+- [x] PR #11 current documentation head `352c04436798a0da69bca83e8319d60728a5780a`: quality gates [46100927016](https://github.com/brusvv/dots_inventory-/actions/runs/46100927016), release pipeline [46100927023](https://github.com/brusvv/dots_inventory-/actions/runs/46100927023), package [46100926970](https://github.com/brusvv/dots_inventory-/actions/runs/46100926970) all PASS.
+- [ ] No PR has external code review/approval; all open PRs remain Draft.
