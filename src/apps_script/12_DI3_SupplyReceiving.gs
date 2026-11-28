@@ -266,7 +266,6 @@ function di3AdvanceSupplyStatus(supplyNumber, nextStatus, effectiveAt) {
     di3SetSupplyStatusCell_(supply, nextStatus, date);
     di3EnsureSupplyStatusHistory_(supply.supply_id, oldStatus, nextStatus, date, "", "Изменение статуса поставки");
     di3RefreshSupplyRegister();
-    di3RefreshSupplyFormValidations();
     var updatedSupply = di3GetSupplyById_(supply.supply_id);
     var formSheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
     if (formSheet && String(formSheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "") === String(supply.supply_id)) {
@@ -537,7 +536,6 @@ function di3CompleteSupplyReceipt_(supply, operationId, operationRowNumber, payl
     DI3_SUPPLY_STATUS.RECEIVED, new Date(payload.received_at), operationId,
     "Фактическая приёмка; созданы FIFO-партии");
   di3RefreshSupplyRegister();
-  di3RefreshSupplyFormValidations();
   var formSheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
   if (formSheet && String(formSheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "") === String(supply.supply_id)) {
     di3RefreshSupplyDatePanel_(di3GetSupplyById_(supply.supply_id));
@@ -627,22 +625,39 @@ function di3GetSelectedSupplyRegisterRow_() {
   var rowNumber = activeRange.getRow();
   if (rowNumber < 4 || rowNumber > sheet.getLastRow()) throw new Error("Выбери строку поставки начиная с 4-й строки.");
   var supplyNumber = String(sheet.getRange(rowNumber, 2).getValue() || "").trim();
+  var supplyId = String(sheet.getRange(rowNumber, 12).getValue() || "").trim();
   if (!supplyNumber) throw new Error("В выбранной строке нет номера поставки.");
   var effectiveAt = di3BuildEffectiveDateTime_(
     sheet.getRange(rowNumber, 13).getValue(),
     sheet.getRange(rowNumber, 14).getDisplayValue(),
     "Следующий этап поставки"
   );
-  return { supply_number: supplyNumber, row_number: rowNumber, effective_at: effectiveAt };
+  return { supply_number: supplyNumber, supply_id: supplyId, row_number: rowNumber, effective_at: effectiveAt };
 }
 
 function di3TransitionSelectedSupply_(nextStatus) {
   var selected = di3GetSelectedSupplyRegisterRow_();
   var result = di3AdvanceSupplyStatus(selected.supply_number, nextStatus, selected.effective_at);
-  if (["UPDATED", "COMMITTED", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1) {
+  var committedStatuses = ["UPDATED", "COMMITTED", "ALREADY_RECEIVED", "ALREADY_IN_STATUS"];
+  if (committedStatuses.indexOf(String(result.status)) !== -1) {
     var register = di3GetSheetOrThrow_(DI3_SUPPLY_REGISTER_SHEET);
-    register.getRange(selected.row_number, 13, 1, 2).clearContent();
-    di3RefreshSupplyRegister();
+    // The status/receipt handler already rebuilds the register except for the
+    // ALREADY_RECEIVED fast path. Re-find by immutable ID because a refresh can
+    // reorder rows and make the originally selected row number stale.
+    var lastRow = register.getLastRow();
+    var idValues = lastRow >= 4 ? register.getRange(4, 12, lastRow - 3, 1).getValues() : [];
+    var targetRow = -1;
+    for (var i = 0; i < idValues.length; i++) {
+      if (String(idValues[i][0] || "") === String(selected.supply_id || "")) { targetRow = i + 4; break; }
+    }
+    if (targetRow < 0 && !selected.supply_id) {
+      var numberValues = lastRow >= 4 ? register.getRange(4, 2, lastRow - 3, 1).getValues() : [];
+      for (var j = 0; j < numberValues.length; j++) {
+        if (String(numberValues[j][0] || "") === String(selected.supply_number)) { targetRow = j + 4; break; }
+      }
+    }
+    if (targetRow >= 4) register.getRange(targetRow, 13, 1, 2).clearContent();
+    if (String(result.status) === "ALREADY_RECEIVED") di3RefreshSupplyRegister();
   }
   if (nextStatus === DI3_SUPPLY_STATUS.RECEIVED && ["UPDATED", "COMMITTED", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1 && typeof di3RefreshWarehouseViewsAfterCommit_ === "function") {
     di3RefreshWarehouseViewsAfterCommit_("Поставка " + selected.supply_number);
@@ -729,7 +744,6 @@ function di3CancelSupplyByNumber_(supplyNumber, reason) {
     di3EnsureSupplyStatusHistory_(supply.supply_id, oldStatus, DI3_SUPPLY_STATUS.CANCELLED,
       cancelledAt, "", eligibility.already_cancelled ? "Восстановление истории отмены поставки" : (reason || "Отмена поставки пользователем"));
     di3RefreshSupplyRegister();
-    di3RefreshSupplyFormValidations();
 
     var formSheet = di3GetSpreadsheet_().getSheetByName(DI3_SUPPLY_FORM_SHEET);
     if (formSheet && String(formSheet.getRange(DI3_SUPPLY_FORM.editSupplyId).getValue() || "") === String(supply.supply_id)) {
