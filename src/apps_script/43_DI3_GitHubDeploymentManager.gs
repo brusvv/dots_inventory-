@@ -190,7 +190,7 @@ function di3ValidateGitHubReleaseManifest_(manifest, releaseTag) {
     if (!/^[0-9a-f]{40}$/.test(commit) || tag !== "branch:" + sourceBranch + "@" + commit.slice(0, 12)) {
       issues.push("Branch snapshot должен быть привязан к точному commit SHA и выбранной ветке.");
     }
-  } else if (!/^dots-inventory-v[0-9]+\\.[0-9]+\\.[0-9]+(-preview\\.[0-9]+)?$/.test(String(releaseTag || ""))) {
+  } else if (!/^dots-inventory-v[0-9]+\.[0-9]+\.[0-9]+(-preview\.[0-9]+)?$/.test(String(releaseTag || ""))) {
     issues.push("Некорректный GitHub release tag.");
   }
   if (manifest && manifest.git_tag !== releaseTag) issues.push("git_tag манифеста не совпадает с GitHub Release.");
