@@ -17,6 +17,30 @@ function di3BuildSupplyCorrectionPreviewRuntimeSnapshot_() {
     var range = sheet.getDataRange();
     var values = range.getValues();
     var formulas = range.getFormulas();
+    var notes = range.getNotes();
+    var numberFormats = range.getNumberFormats();
+    var backgrounds = range.getBackgrounds();
+    var fontColors = range.getFontColors();
+    var fontWeights = range.getFontWeights();
+    var validations = range.getDataValidations().map(function (row) {
+      return row.map(function (rule) {
+        if (!rule) return null;
+        return {
+          criteria_type: String(rule.getCriteriaType()),
+          criteria_values: (rule.getCriteriaValues() || []).map(function (value) {
+            if (value && typeof value.getA1Notation === "function") {
+              return {
+                sheet_id: value.getSheet().getSheetId(),
+                a1: value.getA1Notation()
+              };
+            }
+            return value instanceof Date ? value.toISOString() : value;
+          }),
+          allow_invalid: rule.getAllowInvalid(),
+          help_text: rule.getHelpText()
+        };
+      });
+    });
     snapshot.sheets.push({
       sheet_id: sheet.getSheetId(),
       name: sheet.getName(),
@@ -25,12 +49,20 @@ function di3BuildSupplyCorrectionPreviewRuntimeSnapshot_() {
       max_columns: sheet.getMaxColumns(),
       last_row: sheet.getLastRow(),
       last_column: sheet.getLastColumn(),
+      frozen_rows: sheet.getFrozenRows(),
+      frozen_columns: sheet.getFrozenColumns(),
       values: values.map(function (row) {
         return row.map(function (value) {
           return value instanceof Date ? value.toISOString() : value;
         });
       }),
-      formulas: formulas
+      formulas: formulas,
+      notes: notes,
+      number_formats: numberFormats,
+      backgrounds: backgrounds,
+      font_colors: fontColors,
+      font_weights: fontWeights,
+      data_validations: validations
     });
   });
   return snapshot;
