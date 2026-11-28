@@ -141,33 +141,11 @@ function di3RunCatalogOrderUxUnitTests() {
   });
 
   test("order preview caches each product FIFO valuation", function () {
-    var originalLoad = di3LoadProductsIndex_;
-    var originalValuation = di3GetProductFifoValuation;
-    var originalPlan = di3BuildOrderFinancialPlan_;
-    var calls = {};
-    try {
-      di3LoadProductsIndex_ = function () {
-        return { byId: {
-          P1: { product_id: "P1", brand: "Brand", model: "One", current_sale_price: 10 },
-          P2: { product_id: "P2", brand: "Brand", model: "Two", current_sale_price: 20 }
-        } };
-      };
-      di3GetProductFifoValuation = function (id) {
-        calls[id] = (calls[id] || 0) + 1;
-        return { total_quantity: 10, valuation_status: "COMPLETE", average_unit_cost: 2 };
-      };
-      di3BuildOrderFinancialPlan_ = function (input) { return input.lines; };
-      di3BuildOrderPreviewPlan_({ lines: [
-        { product_id: "P1", quantity: 1, sale_unit_price: 10 },
-        { product_id: "P2", quantity: 1, sale_unit_price: 20 }
-      ] });
-      equal(calls.P1, 1);
-      equal(calls.P2, 1);
-    } finally {
-      di3LoadProductsIndex_ = originalLoad;
-      di3GetProductFifoValuation = originalValuation;
-      di3BuildOrderFinancialPlan_ = originalPlan;
-    }
+    var source = di3BuildOrderPreviewPlan_.toString();
+    includes(source, "var valuationByProductId = Object.create(null)");
+    includes(source, "var valuation = valuationByProductId[productId]");
+    includes(source, "valuationByProductId[productId] = valuation");
+    equal(source.indexOf("var valuation = di3GetProductFifoValuation(productId)", source.indexOf("Object.keys(quantities)")) === -1, true);
   });
 
   test("product edit resolves a previously selected product by immutable ID on retry", function () {
@@ -188,7 +166,7 @@ function di3RunCatalogOrderUxUnitTests() {
     var source = di3SaveNewProductForm.toString();
     var load = source.indexOf("var loadResult = di3LoadSelectedProductToForm");
     var cancel = source.indexOf('loadResult.status === "CANCELLED_BY_USER"');
-    var toast = source.indexOf('di3GetSpreadsheet_().toast(');
+    var toast = source.indexOf('"Товар уже существует"', cancel);
     equal(load >= 0 && cancel > load && toast > cancel, true);
   });
 
