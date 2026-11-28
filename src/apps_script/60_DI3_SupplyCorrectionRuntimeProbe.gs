@@ -8,7 +8,7 @@
 function di3BuildSupplyCorrectionPreviewRuntimeSnapshot_() {
   var spreadsheet = di3GetSpreadsheet_();
   var names = [
-    "Products", "ProductPublicCodes", "PackVariants",
+    "Products", "ProductPublicCodes", "PackVariants", "_AppMeta", "SchemaMigrations",
     "V3_Supplies", "V3_SupplyItems",
     "StockLedger", "StockMovementDetails", "StockLots", "StockAllocations",
     "ProductCostHistory", "Operations", "OperationPayloads",
@@ -36,7 +36,15 @@ function di3RunSupplyCorrectionPreviewRuntimeProbe(supplyId, correctionSpec) {
   return di3WithLock_(function () {
     var before = di3BuildSupplyCorrectionPreviewRuntimeSnapshot_();
     var beforeFingerprint = di3BuildManualOperationPayloadHash_(before);
-    var preview = di3PreviewSupplyCorrection(supplyId, correctionSpec);
+    var preview;
+    try {
+      preview = di3PreviewSupplyCorrection(supplyId, correctionSpec);
+    } catch (error) {
+      preview = {
+        status: "BLOCKED",
+        reason: error && error.message ? error.message : String(error)
+      };
+    }
     var after = di3BuildSupplyCorrectionPreviewRuntimeSnapshot_();
     var afterFingerprint = di3BuildManualOperationPayloadHash_(after);
     var unchanged = beforeFingerprint === afterFingerprint;
