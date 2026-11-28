@@ -1386,13 +1386,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
   // Correction relations are part of the immutable FIFO input. A changed
   // committed relation map invalidates the prior projection and forces a full
   // replay, including REMOVE-only products with no new ledger tail.
-  var correctionRelationRows = di3GetSpreadsheet_().getSheetByName("SupplyCorrectionEvents")
-    ? di3ReadTableValues_("SupplyCorrectionEvents") : [];
-  var correctionOperationRows = di3GetSpreadsheet_().getSheetByName("Operations")
-    ? di3ReadTableValues_("Operations") : [];
-  var correctionMap = di3BuildSupplyCorrectionEffectiveMovementMap_(
-    correctionRelationRows, correctionOperationRows, { include_operation_id: operationId }
-  );
+  var correctionMap = di3ReadSupplyCorrectionEffectiveMovementMap_(operationId);
   var storedCorrectionFingerprint = String(di3GetAppMetaValue_("fifo_supply_correction_fingerprint") || "");
   if (!isFullReplay && storedCorrectionFingerprint !== correctionMap.fingerprint) isFullReplay = true;
 
