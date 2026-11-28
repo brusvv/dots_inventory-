@@ -379,7 +379,8 @@ var DI3_PRODUCT_FORM_STATE_KEYS = Object.freeze({
   baseline: "DI3_PRODUCT_FORM_STATE_BASELINE",
   selected: "DI3_PRODUCT_FORM_SELECTED_OPTION",
   pending: "DI3_PRODUCT_FORM_PENDING_OPTION",
-  previous: "DI3_PRODUCT_FORM_PREVIOUS_OPTION"
+  previous: "DI3_PRODUCT_FORM_PREVIOUS_OPTION",
+  selectedProductId: "DI3_PRODUCT_FORM_SELECTED_PRODUCT_ID"
 });
 
 function di3BuildProductFormStatePayload_(fields) {
@@ -407,15 +408,17 @@ function di3HasUnsavedProductFormChanges_(sheet) {
   return baseline ? di3GetProductFormStateHash_(sheet) !== baseline : di3HasProductFormUserData_(sheet);
 }
 
-function di3SetProductFormStateBaseline_(sheet) {
+function di3SetProductFormStateBaseline_(sheet, productId) {
   sheet = sheet || di3GetSheetOrThrow_(DI3_PRODUCT_FORM_SHEET);
   var properties = di3DocumentProperties_();
   var selected = String(sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).getValue() || "");
   properties.setProperty(DI3_PRODUCT_FORM_STATE_KEYS.baseline, di3GetProductFormStateHash_(sheet));
   properties.setProperty(DI3_PRODUCT_FORM_STATE_KEYS.selected, selected);
+  if (productId) properties.setProperty(DI3_PRODUCT_FORM_STATE_KEYS.selectedProductId, String(productId));
+  else properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.selectedProductId);
   properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.pending);
   properties.deleteProperty(DI3_PRODUCT_FORM_STATE_KEYS.previous);
-  return { baseline_set: true, selected: selected };
+  return { baseline_set: true, selected: selected, product_id: productId ? String(productId) : "" };
 }
 
 function di3ConfirmProductFormDiscard_(title, message) {
@@ -459,7 +462,7 @@ function di3LoadSelectedProductToForm(options) {
   sheet.getRange("B8").setNote(storedDiameter.invalidDate
     ? "Ранее сохранено значение, похожее на дату/серийный номер Google Sheets. Укажи фактический диаметр текстом или оставь поле пустым."
     : "Введи диаметр как текст, например 6,5. Поле не преобразует значение в дату.");
-  di3SetProductFormStateBaseline_(sheet);
+  di3SetProductFormStateBaseline_(sheet, p.product_id);
   return { loaded: true, product_id: p.product_id, label: di3GetProductLabel_(p), diameter_needs_review: storedDiameter.invalidDate };
 }
 
@@ -490,7 +493,12 @@ function di3SaveProductForm() {
     if (!di3NormalizeText_(command.brand)) throw new Error('Заполни обязательное поле «Бренд».');
     var products = di3ListAllProductsForWarehouse_();
     var codeMap = di3GetProductPublicCodeMap_();
-    var selected = products.filter(function (p) { return di3ProductUiOption_(p, codeMap) === selectedValue; });
+    var properties = di3DocumentProperties_();
+    var trackedOption = String(properties.getProperty(DI3_PRODUCT_FORM_STATE_KEYS.selected) || "");
+    var trackedProductId = String(properties.getProperty(DI3_PRODUCT_FORM_STATE_KEYS.selectedProductId) || "");
+    var selected = trackedProductId && selectedValue === trackedOption
+      ? products.filter(function (p) { return String(p.product_id) === trackedProductId; })
+      : products.filter(function (p) { return di3ProductUiOption_(p, codeMap) === selectedValue; });
     if (selected.length !== 1) throw new Error('Не удалось определить редактируемый товар. Обнови список.');
     var oldProduct = selected[0];
     var normalizedDiameter = di3NormalizeDiameter_(command.diameter, command.diameter);
@@ -515,8 +523,10 @@ function di3SaveProductForm() {
     var units = di3NormalizeProductPackInput_(command.units_per_pack);
     var now = new Date();
     var row = di3ProductToRow_(parsed, String(oldProduct.product_id), now, oldProduct);
-    di3ApplyContiguousRowUpdates_("Products", [{ row_number: oldProduct.row_number, values: row }]);
+    // Validate/create the optional pack before changing product fields. If the
+    // variant is invalid or disabled, the product edit remains untouched.
     var variant = units == null ? null : di3GetOrCreatePackVariant_(String(oldProduct.product_id), units, "PRODUCT_CATALOG");
+    di3ApplyContiguousRowUpdates_("Products", [{ row_number: oldProduct.row_number, values: row }]);
     di3RefreshProductsSheet();
     if (typeof di3RefreshDependentCatalogViews_ === "function") di3RefreshDependentCatalogViews_();
     sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).clearContent();
@@ -563,7 +573,8 @@ function di3SaveNewProductForm() {
   if (existing) {
     var existingOption = di3GetProductOptionLabel_(existing);
     sheet.getRange(DI3_PRODUCTS_UI_CELLS.selected).setValue(existingOption);
-    di3LoadSelectedProductToForm({ requestedOption: existingOption });
+    var loadResult = di3LoadSelectedProductToForm({ requestedOption: existingOption });
+    if (loadResult && loadResult.status === "CANCELLED_BY_USER") return loadResult;
     di3GetSpreadsheet_().toast(
       'Товар ' + existingOption + ' уже существует. Карточка загружена; для добавления фасовки укажи её размер в B15 и сохрани.',
       "Товар уже существует",
