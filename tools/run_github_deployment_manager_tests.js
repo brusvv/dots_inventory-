@@ -640,7 +640,7 @@ function configureRollbackHarness(answer, outcome) {
   const selectedEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(oldProject) + ", 'sheet-123', '2026-11-27T00:00:00.000Z')", context);
   const currentEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(baseline) + ", 'sheet-123', '2026-11-28T00:00:00.000Z')", context);
   let readCount = 0, updateCalls = 0, alerts = [], selectedBackupReadCount = 0,
-    selectedBackupMode = "normal";
+    selectedBackupMode = "normal", lockAcquireCount = 0, lockReleaseCount = 0;
   context.SpreadsheetApp = { getUi: () => ({
     Button: { OK: "OK", CANCEL: "CANCEL", YES: "YES", NO: "NO" },
     ButtonSet: { OK_CANCEL: "OK_CANCEL", YES_NO: "YES_NO", OK: "OK" },
@@ -670,9 +670,43 @@ function configureRollbackHarness(answer, outcome) {
   context.di3ReadAndVerifyInstallBackup_ = () => ({ file_id: "current-backup-123456", file_name: "DI3_SOURCE_BACKUP_current.json", url: "https://drive.google.com/current" });
   context.di3UpdateAppsScriptProjectContent_ = () => { updateCalls++; if (outcome === "update-uncertain") throw new Error("simulated rollback transport timeout"); return { updateTime: "2026-11-28T00:00:00Z" }; };
   context.PropertiesService = { getScriptProperties: () => ({ deleteProperty: () => {} }) };
+  context.LockService = { getScriptLock: () => ({
+    tryLock: () => { lockAcquireCount++; return outcome !== "lock-busy"; },
+    releaseLock: () => { lockReleaseCount++; }
+  }) };
   return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; },
-    get selectedBackupReadCount() { return selectedBackupReadCount; }, set selectedBackupMode(value) { selectedBackupMode = value; }, alerts };
+    get selectedBackupReadCount() { return selectedBackupReadCount; },
+    get lockAcquireCount() { return lockAcquireCount; }, get lockReleaseCount() { return lockReleaseCount; },
+    set selectedBackupMode(value) { selectedBackupMode = value; }, alerts };
 }
+
+test("rollback does not write when the shared script lock is already held", () => {
+  const h = configureRollbackHarness("YES", "lock-busy");
+  try {
+    const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
+    assert.equal(result.status, "LOCK_NOT_ACQUIRED");
+    assert.equal(result.write_performed, false);
+    assert.equal(h.updateCalls, 0);
+    assert.equal(h.selectedBackupReadCount, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockReleaseCount, 0);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
+test("rollback releases the shared script lock after verified restore", () => {
+  const h = configureRollbackHarness("YES", "restore-expected");
+  try {
+    const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
+    assert.equal(result.status, "ROLLED_BACK_AND_VERIFIED");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
 
 test("rollback NO cancellation never calls updateContent", () => {
   const h = configureRollbackHarness("NO", "normal");
