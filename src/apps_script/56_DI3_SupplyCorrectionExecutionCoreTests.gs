@@ -102,6 +102,79 @@ function di3RunSupplyCorrectionExecutionCoreTests() {
     equal(result[0].replacement_supply_item_id, "RI-NEW");
   });
 
+  test("document projection preflight accepts untouched and fully applied snapshots", function () {
+    var beforeSupply = ["SUP-1", "RECEIVED", 100];
+    var afterSupply = ["SUP-1", "RECEIVED", 120];
+    var beforeItem = ["ITEM-1", "SUP-1", "P1", 2];
+    var afterItem = ["ITEM-1", "SUP-1", "P1", 3];
+    var payload = {
+      supply_id: "SUP-1",
+      before_supply_row: beforeSupply,
+      after_supply_row: afterSupply,
+      before_item_rows: [beforeItem],
+      after_item_rows: [afterItem]
+    };
+    equal(di3BuildSupplyCorrectionDocumentProjectionAudit_(beforeSupply, [beforeItem], payload).status, "READY");
+    equal(di3BuildSupplyCorrectionDocumentProjectionAudit_(afterSupply, [afterItem], payload).status, "READY");
+  });
+
+  test("document projection preflight accepts a partially applied target with new rows not appended yet", function () {
+    var beforeSupply = ["SUP-1", "RECEIVED", 100];
+    var afterSupply = ["SUP-1", "RECEIVED", 120];
+    var beforeItem = ["ITEM-1", "SUP-1", "P1", 2];
+    var afterItem = ["ITEM-1", "SUP-1", "P1", 3];
+    var addedItem = ["ITEM-2", "SUP-1", "P2", 1];
+    var payload = {
+      supply_id: "SUP-1",
+      before_supply_row: beforeSupply,
+      after_supply_row: afterSupply,
+      before_item_rows: [beforeItem],
+      after_item_rows: [afterItem, addedItem]
+    };
+    equal(di3BuildSupplyCorrectionDocumentProjectionAudit_(afterSupply, [beforeItem], payload).status, "READY");
+  });
+
+  test("document projection preflight rejects conflicting or foreign live rows before writes", function () {
+    var beforeSupply = ["SUP-1", "RECEIVED", 100];
+    var afterSupply = ["SUP-1", "RECEIVED", 120];
+    var beforeItem = ["ITEM-1", "SUP-1", "P1", 2];
+    var afterItem = ["ITEM-1", "SUP-1", "P1", 3];
+    var payload = {
+      supply_id: "SUP-1",
+      before_supply_row: beforeSupply,
+      after_supply_row: afterSupply,
+      before_item_rows: [beforeItem],
+      after_item_rows: [afterItem]
+    };
+    throws(function () {
+      di3BuildSupplyCorrectionDocumentProjectionAudit_(["SUP-1", "RECEIVED", 999], [beforeItem], payload);
+    }, /V3_Supplies.*source.*target/);
+    throws(function () {
+      di3BuildSupplyCorrectionDocumentProjectionAudit_(beforeSupply, [["FOREIGN", "SUP-1", "P2", 1]], payload);
+    }, /посторонняя строка/);
+    throws(function () {
+      di3BuildSupplyCorrectionDocumentProjectionAudit_(beforeSupply, [["ITEM-1", "SUP-1", "P1", 9]], payload);
+    }, /source и target snapshots/);
+  });
+
+  test("document projection preflight rejects duplicate or cross-supply immutable snapshots", function () {
+    var beforeSupply = ["SUP-1", "RECEIVED", 100];
+    var payload = {
+      supply_id: "SUP-1",
+      before_supply_row: beforeSupply,
+      after_supply_row: beforeSupply,
+      before_item_rows: [["ITEM-1", "SUP-1", "P1", 2], ["ITEM-1", "SUP-1", "P1", 3]],
+      after_item_rows: []
+    };
+    throws(function () {
+      di3BuildSupplyCorrectionDocumentProjectionAudit_(beforeSupply, [], payload);
+    }, /повторный supply_item_id/);
+    payload.before_item_rows = [["ITEM-1", "OTHER-SUPPLY", "P1", 2]];
+    throws(function () {
+      di3BuildSupplyCorrectionDocumentProjectionAudit_(beforeSupply, [], payload);
+    }, /принадлежит другой поставке/);
+  });
+
   test("SUPPLY_CORRECTION is registered for operation recovery", function () {
     var registry = di3GetOperationHandlerRegistry_();
     if (typeof registry.SUPPLY_CORRECTION !== "function") {
