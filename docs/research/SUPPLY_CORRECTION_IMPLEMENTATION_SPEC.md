@@ -343,3 +343,23 @@ Quality gates passed at source commit `56f09f4fa335f0ac18e5408e1c13ebd7cb021751`
 - [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46096055903).
 
 This is source/Node CI evidence only. It does not validate Apps Script execution against the bound workbook. No correction operation handler exists yet; no replacement movements have been written, no live FIFO projection has been rebuilt, and no supply has been corrected. SC-04 commit/recovery and runtime acceptance remain pending.
+
+
+### SC-03 lifecycle hardening follow-up
+
+The relation resolver now also enforces consistency between the relation journal and the linked `Operations` row:
+
+- A COMMITTED relation with a still-PREPARED/RETRYABLE operation remains hidden from ordinary replay, but is visible to the exact operation during candidate recovery.
+- A COMMITTED relation whose operation is REJECTED or otherwise final-but-not-COMMITTED fails closed.
+- A PREPARED relation paired with a final COMMITTED/REJECTED operation fails closed.
+- A committed relation cannot be rolled back by appending ABORTED; a quarantined relation cannot be silently reactivated.
+
+Latest quality-gate run at source commit `8ddf13e6021c7a8e091d246971d34fe000779b5e` passed:
+- Apps Script syntax: **63/63**.
+- Snapshot auditor: **8/8**; FIFO replay: **46/46**; order domain: **22/22**.
+- Supply/correction/lifecycle: **130/130** (including 15 relation tests and 8 FIFO integration tests).
+- Catalog/order UX: **14/14**; system safety/operation: **39/39**; warehouse dashboard: **11/11**; finance schema: **4/4**.
+- Total: **274 passed, 0 failed**.
+- [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46096260507).
+
+The correction operation handler and SC-04 are still not implemented. Runtime acceptance and any change to supply #17 remain explicitly deferred.
