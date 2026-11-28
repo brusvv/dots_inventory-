@@ -404,3 +404,14 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 
 - [x] Additional chronology guard: two received supplies for the same affected product with identical `received_at` and `created_at` now block current-variant reconciliation rather than choosing an arbitrary supply ID; singleton line numbers are validated explicitly.
 - [x] Exact source commit `8feeb93980f92043004bd10e4f57e97898925b9a`: quality gates [46101862857](https://github.com/brusvv/dots_inventory-/actions/runs/46101862857), release pipeline [46101862869](https://github.com/brusvv/dots_inventory-/actions/runs/46101862869), package [46101862835](https://github.com/brusvv/dots_inventory-/actions/runs/46101862835) — PASS; supply/correction/lifecycle 162/162.
+
+### SC-04 source review — document projection preflight
+
+- [x] Independent review found that the correction handler validated the live supply document against its before/after snapshots only inside the document writer, after replacement StockLedger/StockMovementDetails/StockLots rows had already been appended.
+- [x] Added a read-only before/after state audit for the supply row and all current item rows; it accepts safe partial target states for recovery but rejects unknown, duplicate, cross-supply or conflicting rows before any replacement stock source write.
+- [x] Added four regression tests covering untouched/fully applied states, partial target state, conflicting/foreign rows and invalid immutable snapshots.
+- [x] Exact source/test head `4ff400a52e2cce57b986e5bb9f3609d08e823473`: 69/69 Apps Script syntax; snapshot audit 8/8; FIFO replay 46/46; order 22/22; supply/correction/lifecycle 166/166; catalog/order UX 14/14; system safety 39/39; warehouse 11/11; finance 4/4; Deployment Manager 57/57; release manifest 15/15; tag policy passed.
+- [x] Exact-head quality gates [46104168374](https://github.com/brusvv/dots_inventory-/actions/runs/46104168374), release pipeline [46104168337](https://github.com/brusvv/dots_inventory-/actions/runs/46104168337), package [46104168304](https://github.com/brusvv/dots_inventory-/actions/runs/46104168304) — PASS.
+- [ ] Disposable-workbook read-only preview remains NOT RUN.
+- [ ] SC-04 write-boundary failure/recovery acceptance remains pending separate explicit authorization.
+- [ ] PR #11 remains Draft; do not merge or deploy based on source CI alone.
