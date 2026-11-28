@@ -204,11 +204,12 @@ GitHub Actions run #69: **success**; Git tree preflight/integrity fixtures: 9 te
 
 Статус: **IMPLEMENTED; UNIT/CI PENDING; APPS SCRIPT RUNTIME NOT RUN**.
 
-После явного YES установщик и откат получают один и тот же `LockService.getScriptLock()` с коротким ожиданием. Блокировка удерживается на протяжении последней проверки fingerprint/совместимости, повторной проверки backup для отката, `projects.updateContent`, post-write read-back и фиксации результата. Она освобождается через `finally`, включая ветки с неопределённым результатом записи и ошибками read-back.
+После явного YES установщик и откат получают один и тот же `LockService.getScriptLock()` с ограниченным ожиданием 1000 мс. Блокировка удерживается на протяжении последней проверки fingerprint/совместимости, повторной проверки backup для отката, `projects.updateContent`, post-write read-back и фиксации результата. Она освобождается через `finally`, включая ветки с неопределённым результатом записи и ошибками read-back.
 
 Если lock занят, операция возвращает `LOCK_NOT_ACQUIRED`, сохраняет сведения о проверенных backup и не вызывает `projects.updateContent`. При NO lock не запрашивается. Общий ScriptLock предотвращает взаимное наложение подтверждённой установки и подтверждённого отката в пределах одного Apps Script project.
 
 Добавлены regression fixtures:
+- обе операции используют `tryLock(1000)`; timeout проверяется assertions;
 - lock занят при установке — запись не выполняется;
 - lock занят при откате — запись не выполняется;
 - успешная установка — lock освобождён после read-back;
