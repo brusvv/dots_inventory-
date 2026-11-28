@@ -17,7 +17,7 @@ The correction replaces the effective stock contribution of the original receipt
 3. A correction is a new immutable `SUPPLY_CORRECTION` operation with a unique correction ID and a reason.
 4. The original receipt is verified as COMMITTED and its payload hash is verified before a correction candidate can be built.
 5. Every source receipt line must map to exactly one original ledger movement, one detail row and one lot. Ambiguous or incomplete source mapping blocks correction.
-6. The replacement receipt uses the original `received_at` as `effective_at`, while `recorded_at` and `ledger_sequence` are newly assigned at correction time.
+6. Replacement receipt events retain the original receipt `received_at` as `effective_at` and the original receipt `recorded_at` as the FIFO tie-break timestamp. A new `ledger_sequence` is assigned when the replacement row is appended. The correction's actual recording time is stored in `SupplyCorrectionEvents.created_at` and the correction operation; it must not silently reorder same-effective-time sales.
 7. Corrected quantities are derived only from `packs × units_per_pack`; the corrected pack variant must belong to the same product and have exactly the requested pack size.
 8. Discounts and shipping are recalculated using the existing `di3BuildSupplyFinancialPlan_` largest-remainder allocator. Unit costs retain full precision; display rounding must not be fed back into FIFO.
 9. A correction never changes order dispatch/return events. It changes FIFO allocations and downstream cost snapshots through replay.
@@ -56,15 +56,21 @@ Proposed columns:
 - `correction_id`
 - `operation_id`
 - `supply_id`
-- `event_type` (`PREPARED`, `COMMITTED`, `QUARANTINED`)
-- `source_movement_id`
-- `replacement_movement_id`
-- `product_id`
+- `event_type` (`PREPARED`, `COMMITTED`, `QUARANTINED`, `ABORTED`) — relation lifecycle
+- `relation_type` (`REPLACE`, `REMOVE`, `ADD`) — business relation
+- `source_movement_id` (required for `REPLACE`/`REMOVE`; blank for `ADD`)
+- `replacement_movement_id` (required for `REPLACE`/`ADD`; blank for `REMOVE`)
+- `source_product_id` (required for `REPLACE`/`REMOVE`)
+- `replacement_product_id` (required for `REPLACE`/`ADD`)
+- `source_supply_item_id`
+- `replacement_supply_item_id`
 - `effective_at`
 - `created_at`
 - `details_json`
 
-A PREPARED event establishes the source-to-replacement mapping for candidate replay. A COMMITTED event activates it for subsequent replay. A QUARANTINED event blocks automated continuation until reconciliation. Events are appended; they are never updated or deleted.
+A PREPARED relation is usable only by the correction operation currently building its candidate replay. A relation becomes effective for ordinary replay only when both its latest relation event is COMMITTED and its linked Operations row is COMMITTED. QUARANTINED blocks automated continuation until reconciliation; ABORTED records a rejected/abandoned correction and is never effective. Events are appended; they are never updated or deleted.
+
+Relation semantics are explicit: REPLACE has one source and one replacement movement and requires the same product ID; REMOVE has only a source movement; ADD has only a replacement movement. A product-identity change is represented as REMOVE on the old product plus ADD on the new product, never as a cross-product REPLACE. This also makes deleted and newly added lines representable without ambiguous blank-field rules.
 
 The table is a new additive system sheet. Its creation must be included in the schema registry and setup/preflight path; no live schema mutation is performed by this specification.
 
@@ -79,15 +85,15 @@ Inputs:
 - the current correction relation when replay is running for its operation ID.
 
 Algorithm:
-1. Validate each correction event group: one source movement maps to one replacement movement, product IDs match, source and replacement belong to the same supply correction, and no source movement is superseded by two committed corrections.
+1. Validate each relation according to its relation_type: REPLACE has exactly one source and replacement with matching product IDs; REMOVE has only a source; ADD has only a replacement. Verify that source/replacement IDs belong to the same supply and correction, no source movement has two active supersessions, and no correction chain contains a cycle.
 2. Build a source-movement supersession set.
 3. Exclude superseded source movements from the effective FIFO event stream.
-4. Keep replacement movements as ordinary IN events with their original effective timestamp and new recorded timestamp/ledger sequence.
+4. Keep replacement movements as ordinary IN events with the original receipt effective timestamp and original receipt recorded timestamp; retain a newly assigned ledger_sequence for append identity. The correction recorded timestamp belongs in the correction relation/operation audit, not in the FIFO tie-break field.
 5. Keep every unrelated event unchanged.
 6. Sort using the established FIFO event comparator. Do not substitute physical sheet row order for business event ordering.
 7. Include correction relations and replacement ledger rows in the replay input fingerprint.
 
-Corrections may be chained. A later correction must supersede the currently effective replacement movements, not resurrect the original source receipt. Detect cycles and multiple active replacements and fail closed.
+Corrections may be chained. A later correction must supersede the currently effective replacement movements, not resurrect the original source receipt. A removed line is represented by REMOVE; a newly added line by ADD; a product change by REMOVE + ADD. Detect cycles and multiple active replacements and fail closed.
 
 ## 6. Operation execution phases
 
