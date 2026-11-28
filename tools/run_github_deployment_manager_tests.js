@@ -889,6 +889,26 @@ test("loads paginated GitHub branch lists beyond the first 100 entries", () => {
   }
 });
 
+test("fails closed when GitHub branch count exceeds the 1,000-entry selector limit", () => {
+  let requestedPages = 0;
+  context.di3FetchGitHubJson_ = url => {
+    const pageMatch = String(url).match(/[?&]page=(\\d+)/);
+    const page = pageMatch ? Number(pageMatch[1]) : 0;
+    requestedPages++;
+    if (page >= 1 && page <= 10) {
+      return { status: "OK", data: Array.from({ length: 100 }, (_, i) => ({ name: "branch-" + page + "-" + i })) };
+    }
+    if (page === 11) return { status: "OK", data: [{ name: "branch-overflow" }] };
+    throw new Error("Unexpected page " + page);
+  };
+  try {
+    assert.throws(() => vm.runInContext("di3GetGitHubBranchNames_()", context), /более 1 000 веток/);
+    assert.equal(requestedPages, 11);
+  } finally {
+    delete context.di3FetchGitHubJson_;
+  }
+});
+
 test("branch selector persists the exact selected commit and reset restores configured channel", () => {
   const stored = {};
   const commit = "6".repeat(40);
