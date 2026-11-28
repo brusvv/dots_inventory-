@@ -229,7 +229,7 @@ function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, 
     received_at: effectiveAt.toISOString(),
     source_recorded_at: originalRecordedAt.toISOString(),
     created_at: now.toISOString(),
-    created_by: di3GetActorEmail_(),
+    created_by: "", // actor is resolved from the registered Operations row during execution
     currency: String(supply.currency || di3GetBaseCurrency_()),
     request_fingerprint: di3BuildSupplyCorrectionRequestFingerprint_(supplyId, spec)
   };
