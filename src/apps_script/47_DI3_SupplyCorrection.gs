@@ -79,16 +79,17 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
     return key;
   }
   function indexMatches(matches, columnIndex, expectedIndex, label) {
+    var indexed = Object.create(null);
     (matches || []).forEach(function (match) {
       var row = match && match.values;
       if (!row) throw new Error(label + ": некорректная запись репозитория.");
       var key = String(row[columnIndex] || "");
       if (!key) throw new Error(label + ": найдено пустое значение ключа.");
       if (!expectedIndex[key]) return;
-      if (!expectedIndex._matches) expectedIndex._matches = Object.create(null);
-      if (!expectedIndex._matches[key]) expectedIndex._matches[key] = [];
-      expectedIndex._matches[key].push(match);
+      if (!indexed[key]) indexed[key] = [];
+      indexed[key].push(match);
     });
+    return indexed;
   }
 
   lines.forEach(function (line, lineIndex) {
@@ -117,12 +118,12 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
     }
   });
 
-  indexMatches(ledgerMatches, 0, expectedMovementIds, "StockLedger");
-  indexMatches(detailMatches, 0, expectedMovementIds, "StockMovementDetails");
-  indexMatches(lotMatches, 2, expectedMovementIds, "StockLots");
+  var ledgerByMovement = indexMatches(ledgerMatches, 0, expectedMovementIds, "StockLedger");
+  var detailByMovement = indexMatches(detailMatches, 0, expectedMovementIds, "StockMovementDetails");
+  var lotByMovement = indexMatches(lotMatches, 2, expectedMovementIds, "StockLots");
 
   function exactlyOne(index, key, label) {
-    var matches = index._matches && index._matches[String(key)] ? index._matches[String(key)] : [];
+    var matches = index[String(key)] || [];
     if (matches.length !== 1) {
       throw new Error(label + " " + key + ": ожидалась ровно одна запись, найдено " + matches.length + ".");
     }
@@ -154,9 +155,9 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
   var sourceLines = lines.map(function (line, lineIndex) {
     var movementId = String(line.movement_id);
     var prefix = "Позиция " + (lineIndex + 1) + " (" + movementId + ")";
-    var ledgerMatch = exactlyOne(expectedMovementIds, movementId, "Движение");
-    var detailMatch = exactlyOne(expectedMovementIds, movementId, "Детали движения");
-    var lotMatch = exactlyOne(expectedMovementIds, movementId, "FIFO-партия");
+    var ledgerMatch = exactlyOne(ledgerByMovement, movementId, "Движение");
+    var detailMatch = exactlyOne(detailByMovement, movementId, "Детали движения");
+    var lotMatch = exactlyOne(lotByMovement, movementId, "FIFO-партия");
     var ledger = ledgerMatch.values;
     var detail = detailMatch.values;
     var lot = lotMatch.values;
