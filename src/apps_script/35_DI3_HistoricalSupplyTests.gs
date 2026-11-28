@@ -95,7 +95,7 @@ function di3RunHistoricalSupplyUnitTests() {
     var finish = di3FinalizeHistoricalSupplyReceipt_.toString();
     equal(start.indexOf("di3RefreshSupplyFormValidations()"), -1);
     equal(finish.indexOf("di3RefreshSupplyFormValidations()"), -1);
-    includes(finish, 'receiptResult.status === "ALREADY_RECEIVED"');
+    equal(finish.indexOf('receiptResult.status === "ALREADY_RECEIVED"') >= 0, true);
   });
   test("historical mode routes receipt through the standard idempotent SUPPLY_RECEIVE pipeline", function () {
     // The public entry point performs preflight/confirmation; the locked worker
