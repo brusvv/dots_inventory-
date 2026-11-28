@@ -315,8 +315,17 @@ function di3EnsureSupplyCorrectionSourceRows_(operationId, payload) {
     return append.length;
   }
   var ledgerAdded = ensure("StockLedger", 2, expected.ledger.map(function (r) { return String(r[2]); }), expected.ledger, "StockLedger");
+  var ledgerByMovement = di3ReadRowsByColumnValues_("StockLedger", 0,
+    expected.ledger.map(function (r) { return String(r[0]); }));
+  if (ledgerByMovement.length !== expected.ledger.length) {
+    throw new Error("StockLedger: replacement movement_id collision or duplicate row detected.");
+  }
   var detailAdded = ensure("StockMovementDetails", 0, expected.details.map(function (r) { return String(r[0]); }), expected.details, "StockMovementDetails");
   var lotAdded = ensure("StockLots", 2, expected.lots.map(function (r) { return String(r[2]); }), expected.lots, "StockLots");
+  var lotsById = di3ReadRowsByColumnValues_("StockLots", 0, expected.lots.map(function (r) { return String(r[0]); }));
+  if (lotsById.length !== expected.lots.length) {
+    throw new Error("StockLots: replacement lot_id collision or duplicate row detected.");
+  }
   return { ledger_added: ledgerAdded, details_added: detailAdded, lots_added: lotAdded };
 }
 
