@@ -106,7 +106,7 @@ function di3GetProductLabel_(product) {
 }
 
 function di3GetProductOptionLabelWithMap_(product, codeMap) {
-  var code = codeMap[String(product.product_id)] || di3GetShortProductCode_(product.product_id);
+  var code = di3GetShortProductCodeWithMap_(product.product_id, codeMap);
   return code + " | " + di3GetProductLabel_(product);
 }
 
