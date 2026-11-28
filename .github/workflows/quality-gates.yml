@@ -2,7 +2,8 @@ name: Apps Script quality gates
 
 on:
   push:
-    branches: [main]
+    # Keep the dedicated order/product audit branch on the full regression suite.
+    branches: [main, feature/order-product-lifecycle-audit]
     paths:
       - "src/apps_script/**"
       - "runtime/probes/**"

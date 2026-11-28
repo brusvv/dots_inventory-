@@ -196,8 +196,8 @@ function di3ApplyOrderDispatchOperation_(operationRecord, payload) {
     di3EnsureOrderStatusHistory_(order.order_id, DI3_ORDER_STATUS.NEW, DI3_ORDER_STATUS.IN_TRANSIT,
       order.dispatched_at || new Date(payload.dispatched_at), operationId, "Восстановление истории отправки заказа");
   }
-  // Rebuild already refreshes snapshots for the affected product IDs.
-  di3RefreshOrderRegister();
+  // FIFO replay already refreshed snapshots for affected products; rebuild only the register projection.
+  di3RefreshOrderRegister(null, { refreshFifoSnapshots: false });
   return {
     status: "COMMITTED", order_id: payload.order_id, order_number: payload.order_number,
     movements_created: rows.ledger.length,
@@ -440,8 +440,8 @@ function di3ApplyOrderReturnOperation_(operationRecord, payload) {
     di3EnsureOrderStatusHistory_(order.order_id, DI3_ORDER_STATUS.RETURNING, DI3_ORDER_STATUS.RETURNED,
       order.returned_at || new Date(payload.returned_at), operationId, "Восстановление истории возврата заказа");
   }
-  // Rebuild already refreshes snapshots for the affected product IDs.
-  di3RefreshOrderRegister();
+  // FIFO replay already refreshed snapshots for affected products; rebuild only the register projection.
+  di3RefreshOrderRegister(null, { refreshFifoSnapshots: false });
   return {
     status: "COMMITTED", order_id: payload.order_id, order_number: payload.order_number,
     return_movements_created: built.ledger.length,
@@ -549,8 +549,20 @@ function di3CreateHistoricalSale(command) {
     di3EnsureOrderStatusHistory_(order.order_id, DI3_ORDER_STATUS.IN_TRANSIT,
       DI3_ORDER_STATUS.COMPLETED, completionAt, "", "Историческое завершение продажи");
     if (completionAlreadyApplied) {
-      di3RefreshAllOrderFifoSnapshots_();
-      di3RefreshOrderRegister();
+      var recoveryItems = di3GetOrderItems_(order.order_id);
+      var recoveryProductIds = [];
+      var recoveryProductSet = Object.create(null);
+      recoveryItems.forEach(function (item) {
+        var productId = String(item.product_id || "");
+        if (productId && !recoveryProductSet[productId]) {
+          recoveryProductSet[productId] = true;
+          recoveryProductIds.push(productId);
+        }
+      });
+      if (recoveryProductIds.length) {
+        di3RefreshAllOrderFifoSnapshots_("HISTORICAL_SALE_RECOVERY", "", recoveryProductIds);
+      }
+      di3RefreshOrderRegister(null, { refreshFifoSnapshots: false });
     }
     // A retry that finds the immutable completion timestamp already written repairs
     // derived snapshots/register. The first completion path already refreshes them.
@@ -573,8 +585,20 @@ function di3ChangeOrderNonStockStatus_(order, nextStatus, effectiveAt) {
   }
   di3AssertPeriodOpen_(date, "Изменение статуса заказа");
   var updated = di3WriteOrderStatus_(order, nextStatus, date, "", "Изменение статуса заказа");
-  di3RefreshAllOrderFifoSnapshots_();
-  di3RefreshOrderRegister();
+  if (nextStatus === DI3_ORDER_STATUS.COMPLETED) {
+    var items = di3GetOrderItems_(order.order_id);
+    var productIds = [];
+    var productSet = Object.create(null);
+    items.forEach(function (item) {
+      var productId = String(item.product_id || "");
+      if (productId && !productSet[productId]) {
+        productSet[productId] = true;
+        productIds.push(productId);
+      }
+    });
+    if (productIds.length) di3RefreshAllOrderFifoSnapshots_("ORDER_COMPLETED", "", productIds);
+  }
+  di3RefreshOrderRegister(null, { refreshFifoSnapshots: false });
   return { status: "UPDATED", order_number: updated.order_number, old_status: order.status, new_status: nextStatus, effective_at: date };
 }
 
@@ -612,6 +636,20 @@ function di3AdvanceOrderStatus(orderNumber, nextStatus, effectiveAt) {
     if (nextStatus === DI3_ORDER_STATUS.RETURNED) return di3ReturnOrder_(order, effectiveAt);
     return di3ChangeOrderNonStockStatus_(order, nextStatus, effectiveAt);
   });
+}
+
+function di3ResolveOrderFifoSnapshotStatus_(bucket) {
+  bucket = bucket || {};
+  var count = Number(bucket.count) || 0;
+  var dispatched = Number(bucket.dispatched) || 0;
+  var complete = Number(bucket.complete) || 0;
+  if (dispatched <= 0) return "NOT_DISPATCHED";
+  // A partially linked dispatch must never be reported as a complete cost.
+  if (dispatched !== count) return "PENDING";
+  if (complete === dispatched && !bucket.partial && !bucket.unknown) return "COMPLETE";
+  if (bucket.partial || (complete > 0 && bucket.unknown)) return "PARTIAL";
+  if (bucket.unknown) return "UNKNOWN";
+  return "PENDING";
 }
 
 function di3RefreshAllOrderFifoSnapshots_(reason, fifoRunId, affectedProductIds) {
@@ -785,15 +823,9 @@ function di3RefreshAllOrderFifoSnapshots_(reason, fifoRunId, affectedProductIds)
     var orderId = String(row[0] || "");
     var bucket = costsByOrder[orderId];
     if (!orderId || !bucket) return;
-    var status = "NOT_DISPATCHED", total = "", profit = "";
-    if (bucket.dispatched > 0) {
-      if (bucket.complete === bucket.dispatched && !bucket.partial && !bucket.unknown) {
-        status = "COMPLETE";
-        total = di3MoneyFromMinorUnits_(bucket.total_minor);
-      } else if (bucket.partial || (bucket.complete > 0 && bucket.unknown)) status = "PARTIAL";
-      else if (bucket.unknown) status = "UNKNOWN";
-      else status = "PENDING";
-    }
+    var status = di3ResolveOrderFifoSnapshotStatus_(bucket);
+    var total = "", profit = "";
+    if (status === "COMPLETE") total = di3MoneyFromMinorUnits_(bucket.total_minor);
     if (String(row[3]) === DI3_ORDER_STATUS.COMPLETED && status === "COMPLETE") {
       var sellerRevenueMinor = di3MoneyToMinorUnits_(Number(row[23]), "Выручка продавца", false);
       profit = di3MoneyFromMinorUnits_(sellerRevenueMinor - bucket.total_minor);
