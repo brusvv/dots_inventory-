@@ -60,11 +60,9 @@ function di3RunCatalogAndSupplyUnitTests() {
       P1: { product_id: "P1", active: false },
       P2: { product_id: "P2", active: true }
     };
-    var variants = {
-      byProductAndUnits: {
-        "P2\\u001f40": { pack_variant_id: "V2", product_id: "P2", units_per_pack: 40, active: false }
-      },
-      byId: Object.create(null)
+    var variants = { byProductAndUnits: Object.create(null), byId: Object.create(null) };
+    variants.byProductAndUnits[di3BuildPackVariantKey_("P2", 40)] = {
+      pack_variant_id: "V2", product_id: "P2", units_per_pack: 40, active: false
     };
     var inactiveProductRejected = false, inactiveVariantRejected = false;
     try { di3GetOrCreatePackVariants_([{ product_id: "P1", units_per_pack: 20 }], "SUPPLY_DRAFT", products, variants); }
