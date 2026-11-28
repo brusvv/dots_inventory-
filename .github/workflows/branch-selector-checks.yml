@@ -5,18 +5,26 @@ on:
     branches:
       - feature/github-branch-selector
     paths:
+      - "src/apps_script/00_DI3_AppConfig.gs"
+      - "src/apps_script/22_DI3_MenuAndFilterUtils.gs"
+      - "src/apps_script/33_DI3_SchemaVersioning.gs"
       - "src/apps_script/43_DI3_GitHubDeploymentManager.gs"
       - "src/apps_script/44_DI3_GitHubInstallPreview.gs"
       - "src/apps_script/45_DI3_GitHubConfirmedInstaller.gs"
+      - "src/apps_script/46_DI3_GitHubCodeRollback.gs"
       - "tools/run_github_deployment_manager_tests.js"
       - ".github/workflows/branch-selector-checks.yml"
   pull_request:
     branches:
       - feature/github-preview-releases
     paths:
+      - "src/apps_script/00_DI3_AppConfig.gs"
+      - "src/apps_script/22_DI3_MenuAndFilterUtils.gs"
+      - "src/apps_script/33_DI3_SchemaVersioning.gs"
       - "src/apps_script/43_DI3_GitHubDeploymentManager.gs"
       - "src/apps_script/44_DI3_GitHubInstallPreview.gs"
       - "src/apps_script/45_DI3_GitHubConfirmedInstaller.gs"
+      - "src/apps_script/46_DI3_GitHubCodeRollback.gs"
       - "tools/run_github_deployment_manager_tests.js"
       - ".github/workflows/branch-selector-checks.yml"
 
