@@ -221,8 +221,8 @@ function di3BuildSupplyFinancialPlan_(input) {
   };
 }
 
-function di3GetProductFormOptionIndex_() {
-  di3EnsureProductPublicCodes_();
+function di3GetProductFormOptionIndex_(skipPublicCodeEnsure) {
+  if (skipPublicCodeEnsure !== true) di3EnsureProductPublicCodes_();
   // Load the catalogue once. Active products feed the selector; byId retains
   // inactive products so an existing historical supply still renders its label.
   var allProducts = di3ListAllProductsForWarehouse_();
@@ -939,10 +939,10 @@ function di3RenderSupplyFinancialPreview_(plan) {
   sheet.getRange("M4:M8").setNumberFormat("#,##0.00 ₽");
 }
 
-function di3ResolveSupplyFormLines_(createVariants) {
+function di3ResolveSupplyFormLines_(createVariants, readOnlyCatalog) {
   var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
   var values = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues();
-  var products = di3GetProductFormOptionIndex_();
+  var products = di3GetProductFormOptionIndex_(readOnlyCatalog === true);
   var variants = di3LoadPackVariantIndex_();
   var lines = [];
   values.forEach(function (row, offset) {
