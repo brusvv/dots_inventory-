@@ -40,8 +40,9 @@ function di3SetupDeliveryMethodsSheet() {
   return { status: "READY", sheet: "V3_DeliveryMethods", active_methods: di3GetDeliveryMethodNames_().length };
 }
 
-function di3GetOrderProductOptionIndex_() {
-  di3EnsureProductPublicCodes_();
+function di3GetOrderProductOptionIndex_(options) {
+  options = options || {};
+  if (options.readOnly !== true) di3EnsureProductPublicCodes_();
   var products = di3ListActiveProductsForWarehouse_();
   var codes = di3GetProductPublicCodeMap_();
   var byOption = {};
@@ -163,16 +164,17 @@ function di3SetupOrderForm() {
   else di3GetFormRequestToken_("ORDER");
   di3CompactSheet_(sheet, DI3_ORDER_FORM.firstLine + DI3_ORDER_FORM.lineCount - 1, 7);
   sheet.setHiddenGridlines(true);
-  di3RefreshOrderFormValidations();
+  var formValidations = di3RefreshOrderFormValidations();
   if (!di3DocumentProperties_().getProperty("DI3_ORDER_FORM_STATE_BASELINE") && !di3HasOrderFormUserData_(sheet)) {
     di3SetOrderFormStateBaseline_(sheet);
   }
-  return { status: "READY", sheet: DI3_ORDER_FORM_SHEET, product_options: di3GetOrderProductOptionIndex_().options.length };
+  return { status: "READY", sheet: DI3_ORDER_FORM_SHEET, product_options: formValidations.products };
 }
 
-function di3ReadOrderFormCommand_() {
+function di3ReadOrderFormCommand_(options) {
+  options = options || {};
   var sheet = di3GetSheetOrThrow_(DI3_ORDER_FORM_SHEET);
-  var optionIndex = di3GetOrderProductOptionIndex_();
+  var optionIndex = di3GetOrderProductOptionIndex_(options);
   var formRows = sheet.getRange(DI3_ORDER_FORM.firstLine, 1, DI3_ORDER_FORM.lineCount, 3).getValues();
   var lines = formRows.map(function (row, index) {
     var label = di3NormalizeText_(row[0]);
@@ -211,6 +213,7 @@ function di3BuildOrderPreviewPlan_(command) {
   var products = di3LoadProductsIndex_();
   var lines = [];
   var quantities = {};
+  var valuationByProductId = Object.create(null);
   (command.lines || []).forEach(function (raw, index) {
     if (!raw || (!raw.product_id && (raw.quantity === "" || raw.quantity == null))) return;
     var product = products.byId[String(raw.product_id || "")];
@@ -224,7 +227,12 @@ function di3BuildOrderPreviewPlan_(command) {
     }
     var price = hasPriceOverride ? Number(raw.sale_unit_price) : Number(product.current_sale_price);
     if (!Number.isFinite(price) || price < 0) throw new Error("Позиция " + (index + 1) + ": цена продажи некорректна.");
-    var valuation = di3GetProductFifoValuation(product.product_id);
+    var productId = String(product.product_id);
+    var valuation = valuationByProductId[productId];
+    if (!valuation) {
+      valuation = di3GetProductFifoValuation(productId);
+      valuationByProductId[productId] = valuation;
+    }
     if (valuation.total_quantity <= 0) throw new Error("«" + di3GetProductLabel_(product) + ": нет товара в наличии.");
     quantities[product.product_id] = (quantities[product.product_id] || 0) + quantity;
     lines.push({
@@ -235,7 +243,7 @@ function di3BuildOrderPreviewPlan_(command) {
     });
   });
   Object.keys(quantities).forEach(function (productId) {
-    var valuation = di3GetProductFifoValuation(productId);
+    var valuation = valuationByProductId[productId];
     if (quantities[productId] > valuation.total_quantity) throw new Error("Недостаточно товара для заказа: требуется " + quantities[productId] + ", в наличии " + valuation.total_quantity + ".");
   });
   return di3BuildOrderFinancialPlan_({
@@ -249,7 +257,7 @@ function di3BuildOrderPreviewPlan_(command) {
 
 function di3PreviewOrderForm() {
   var sheet = di3GetSheetOrThrow_(DI3_ORDER_FORM_SHEET);
-  var command = di3ReadOrderFormCommand_();
+  var command = di3ReadOrderFormCommand_({ readOnly: true });
   var plan = di3BuildOrderPreviewPlan_(command);
   sheet.getRange("F5").setValue("Комиссия площадке (" + (plan.commission_payer === "BUYER" ? "покупатель" : "продавец") + ")");
   sheet.getRange("F8").setValue(plan.commission_payer === "SELLER"
@@ -338,6 +346,12 @@ function di3NewOrderForm(options) {
 function di3SaveOrderForm() {
   var command = di3ReadOrderFormCommand_();
   var result = di3CreateOrder(command);
+  if (!result || ["CREATED", "ALREADY_CREATED"].indexOf(String(result.status)) === -1) {
+    if (result && result.status === "RETRY_DEFERRED") {
+      di3GetSpreadsheet_().toast("Создание заказа временно отложено. Форма сохранена; повтори позже или запусти восстановление операций.", "Заказ ожидает повтора", 8);
+    }
+    return result;
+  }
   di3NewOrderForm({ skipUnsavedConfirmation: true });
   di3GetSpreadsheet_().toast("Заказ " + result.order_number + " создан. Остатки пока не изменились.", "Заказ создан", 7);
   return result;
@@ -419,10 +433,11 @@ function di3SetupOrderRegister() {
   return { status: "READY", sheet: DI3_ORDER_REGISTER_SHEET, columns: 19, migrated_legacy_layout: Object.keys(preservedDateTimes).length > 0 };
 }
 
-function di3RefreshOrderRegister(preservedDateTimesOverride) {
+function di3RefreshOrderRegister(preservedDateTimesOverride, options) {
+  options = options || {};
   var sheet = di3GetSpreadsheet_().getSheetByName(DI3_ORDER_REGISTER_SHEET);
   if (!sheet) return { refreshed: false, reason: "SHEET_MISSING" };
-  di3RefreshAllOrderFifoSnapshots_();
+  if (options.refreshFifoSnapshots !== false) di3RefreshAllOrderFifoSnapshots_();
   var oldRows = sheet.getLastRow() >= 4 ? sheet.getRange(4, 1, sheet.getLastRow() - 3, 19).getValues() : [];
   var dateTimesById = preservedDateTimesOverride || {};
   oldRows.forEach(function (row) {
@@ -488,8 +503,11 @@ function di3GetSelectedOrderRegisterRow_() {
   if (row < 4 || row > sheet.getLastRow()) throw new Error("Выбери строку заказа начиная с 4-й строки.");
   var number = String(sheet.getRange(row, 1).getValue() || "").trim();
   if (!number) throw new Error("В выбранной строке отсутствует номер заказа.");
+  var orderId = String(sheet.getRange(row, 18).getValue() || "").trim();
+  if (!orderId) throw new Error("В выбранной строке отсутствует технический идентификатор заказа. Обнови реестр.");
   return {
     order_number: number,
+    order_id: orderId,
     row_number: row,
     effective_at: di3BuildEffectiveDateTime_(
       sheet.getRange(row, 16).getValue(),
@@ -520,6 +538,17 @@ function di3GetOrderTransitionConfirmationText_(order, nextStatus, effectiveAt) 
   return action + "\n\n" + effect + "\n\nДата перехода: " + when + ".\n\nПродолжить?";
 }
 
+function di3FindOrderRegisterRowById_(sheet, orderId) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_ORDER_REGISTER_SHEET);
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 4 || !orderId) return 0;
+  var ids = sheet.getRange(4, 18, lastRow - 3, 1).getValues();
+  for (var index = 0; index < ids.length; index++) {
+    if (String(ids[index][0] || "") === String(orderId)) return index + 4;
+  }
+  return 0;
+}
+
 function di3TransitionSelectedOrder_(status) {
   var selected = di3GetSelectedOrderRegisterRow_();
   var order = di3FindOrderByNumber_(selected.order_number);
@@ -537,8 +566,8 @@ function di3TransitionSelectedOrder_(status) {
   // Clear it only when the status actually changed or a PREPARED movement was recovered.
   if (["UPDATED", "COMMITTED"].indexOf(String(result.status)) !== -1) {
     var sheet = di3GetSheetOrThrow_(DI3_ORDER_REGISTER_SHEET);
-    sheet.getRange(selected.row_number, 16, 1, 2).clearContent();
-    di3RefreshOrderRegister();
+    var currentRow = di3FindOrderRegisterRowById_(sheet, selected.order_id);
+    if (currentRow) sheet.getRange(currentRow, 16, 1, 2).clearContent();
     if (typeof di3RefreshWarehouseViewsAfterCommit_ === "function") di3RefreshWarehouseViewsAfterCommit_("Заказ " + selected.order_number);
   }
   di3GetSpreadsheet_().toast("Заказ " + selected.order_number + ": " + (result.new_status || status), "Статус заказа", 6);
@@ -651,14 +680,15 @@ function di3BuildHistoricalDateTime_(dateValue, timeValue, label) {
   return di3BuildEffectiveDateTime_(dateValue, timeValue, "Историческая продажа — " + String(label || "этап"));
 }
 
-function di3ReadHistoricalSaleFormCommand_() {
+function di3ReadHistoricalSaleFormCommand_(options) {
+  options = options || {};
   var sheet = di3GetSheetOrThrow_("Историческая продажа");
-  var options = di3GetOrderProductOptionIndex_();
+  var products = di3GetOrderProductOptionIndex_(options);
   var rows = sheet.getRange("A18:C36").getValues();
   var lines = rows.map(function (row, index) {
     var label = di3NormalizeText_(row[0]);
     if (!label && (row[1] === "" || row[1] == null) && (row[2] === "" || row[2] == null)) return null;
-    var product = options.byOption[label];
+    var product = products.byOption[label];
     if (!product) throw new Error("Строка " + (index + 18) + ": выбери товар из списка.");
     return { product_id: String(product.product_id), quantity: row[1], sale_unit_price: row[2] === "" || row[2] == null ? "" : row[2] };
   }).filter(Boolean);
@@ -682,7 +712,7 @@ function di3ReadHistoricalSaleFormCommand_() {
 function di3PreviewHistoricalSaleForm(command) {
   // Accept the already-read command so the confirmation and eventual create
   // operation always describe the exact same immutable form snapshot.
-  command = command || di3ReadHistoricalSaleFormCommand_();
+  command = command || di3ReadHistoricalSaleFormCommand_({ readOnly: true });
   var products = di3LoadProductsIndex_();
   var lines = command.lines.map(function (raw, index) {
     var product = products.byId[String(raw.product_id || "")];
@@ -736,7 +766,8 @@ function di3SaveHistoricalSaleForm() {
   var result = di3CreateHistoricalSale(command);
   var sheet = di3GetSheetOrThrow_("Историческая продажа");
   sheet.getRange("B4:B6").clearContent();
-  sheet.getRange("D5:D6").clearContent();
+  sheet.getRange("C5:C6").clearContent();
+  sheet.getRange("B7").setValue(true);
   sheet.getRange("B8").setValue(0);
   sheet.getRange("B9").setValue(false);
   sheet.getRange("B10").setValue(0);
