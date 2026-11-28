@@ -542,7 +542,12 @@ function di3AssertSupplyCorrectionImmutableSource_(operationId, payload) {
     return String(match.values[1]) === String(payload.source_receipt_operation_id);
   });
   var allSupplyLots = di3ReadRowsByColumnValue_("StockLots", 4, String(payload.supply_id));
-  if (allSupplyLedger.length !== sourceLines.length || allSupplyLots.length !== sourceLines.length) {
+  var replacementMovementIds = Object.create(null);
+  (payload.replacement_lines || []).forEach(function (line) { replacementMovementIds[String(line.movement_id)] = true; });
+  var originalSupplyLots = allSupplyLots.filter(function (match) {
+    return !replacementMovementIds[String(match.values[2] || "")];
+  });
+  if (allSupplyLedger.length !== sourceLines.length || originalSupplyLots.length !== sourceLines.length) {
     throw new Error("Исходная поставка содержит лишние или отсутствующие StockLedger/StockLots строки.");
   }
   if (ledgerMatches.length !== sourceLines.length || detailMatches.length !== sourceLines.length || lotMatches.length !== sourceLines.length) {
