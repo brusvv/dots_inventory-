@@ -143,9 +143,9 @@ function di3RunSupplyCorrectionFifoPreviewTests() {
 
   test("candidate replay is read-only and does not mutate supplied snapshots", function () {
     var date = "2026-01-02T09:00:00Z";
-    var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date, "2026-01-04T09:00:00Z")];
+    var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date, date)];
     var details = [detail("SRC", "IN"), detail("REPL", "IN")];
-    var lots = [lot("LS", "P1", "SRC", 10, 10, date), lot("LR", "P1", "REPL", 10, 5, date, "2026-01-04T09:00:00Z")];
+    var lots = [lot("LS", "P1", "SRC", 10, 10, date), lot("LR", "P1", "REPL", 10, 5, date, date)];
     var relations = [relationEvent(1, "REL-1", "PREPARED", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")];
     var before = JSON.stringify({ rows: rows, details: details, lots: lots, relations: relations });
     preview(rows, details, lots, relations, [operation("OP-1", "PREPARED")], "OP-1");
