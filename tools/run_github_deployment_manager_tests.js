@@ -866,6 +866,63 @@ test("branch-selector-capable source cannot replace only part of the updater mod
   ), /полный согласованный набор updater-модулей/);
 });
 
+test("resolves a branch to one pinned commit and preflights the Git tree before raw downloads", () => {
+  const branch = "feature/api-test";
+  const commit = "7".repeat(40);
+  const treeSha = "8".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });\n',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;\n",
+    "src/apps_script/01_Module.gs": "function alpha() { return 1; }\n"
+  };
+  const entries = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  const apiCalls = [];
+  let rawFetchCount = 0;
+  context.di3FetchGitHubJson_ = url => {
+    apiCalls.push(url);
+    if (url.endsWith("/branches/" + encodeURIComponent(branch))) {
+      return { status: "OK", data: { name: branch, commit: { sha: commit } } };
+    }
+    if (url.endsWith("/git/commits/" + commit)) {
+      return { status: "OK", data: { sha: commit, tree: { sha: treeSha } } };
+    }
+    if (url.endsWith("/git/trees/" + treeSha + "?recursive=1")) {
+      return { status: "OK", data: { tree: entries, truncated: false } };
+    }
+    throw new Error("Unexpected GitHub API URL: " + url);
+  };
+  context.UrlFetchApp = { fetch: url => {
+    rawFetchCount++;
+    const name = decodeURIComponent(String(url).split("/").pop());
+    const source = sources["src/apps_script/" + name];
+    if (source == null) throw new Error("Unexpected raw URL: " + url);
+    return { getResponseCode: () => 200, getContentText: () => source };
+  } };
+  try {
+    const result = vm.runInContext("di3GetGitHubBranchManifest_(" + JSON.stringify(branch) + ")", context);
+    assert.equal(result.status, "READY");
+    assert.equal(result.manifest.git_commit, commit);
+    assert.equal(result.manifest.source_branch, branch);
+    assert.equal(result.validation.status, "VALID");
+    assert.equal(rawFetchCount, 3);
+    assert.ok(apiCalls.some(url => url.endsWith("/branches/feature%2Fapi-test")));
+
+    rawFetchCount = 0;
+    const originalMode = entries[0].mode;
+    entries[0].mode = "120000";
+    assert.throws(() => vm.runInContext("di3GetGitHubBranchManifest_(" + JSON.stringify(branch) + ")", context),
+      /разрешены только обычные файлы/);
+    assert.equal(rawFetchCount, 0);
+    entries[0].mode = originalMode;
+  } finally {
+    delete context.di3FetchGitHubJson_;
+    delete context.UrlFetchApp;
+  }
+});
+
 test("preserves installed updater modules for older branches without branch selector support", () => {
   const branch = "feature/older-business-change";
   const commit = "a".repeat(40);
