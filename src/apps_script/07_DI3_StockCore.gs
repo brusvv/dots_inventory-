@@ -564,6 +564,7 @@ function di3GetProductFifoValuation(productId) {
 
 function di3GetMovementFifoCost(movementId) {
   di3AssertNoPendingStockOperations_();
+  di3AssertSupplyCorrectionFifoProjectionCurrent_(di3ReadSupplyCorrectionEffectiveMovementMap_());
   var active = di3GetActiveRunAllocations_();
   var rows = active.rows.filter(function (row) {
     return String(row[2]) === String(movementId) && String(row[5]) === "CONSUME";
