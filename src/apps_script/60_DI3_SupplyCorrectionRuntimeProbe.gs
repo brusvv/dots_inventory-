@@ -54,7 +54,7 @@ function di3RunSupplyCorrectionPreviewRuntimeProbe(supplyId, correctionSpec) {
     var afterFingerprint = di3BuildManualOperationPayloadHash_(after);
     var unchanged = beforeFingerprint === afterFingerprint;
     return {
-      status: unchanged ? "PASS" : "SIDE_EFFECT_DETECTED",
+      status: !unchanged ? "SIDE_EFFECT_DETECTED" : (preview && preview.status === "READY" ? "PASS" : "PREVIEW_BLOCKED_NO_SIDE_EFFECT"),
       read_only: true,
       preview: preview,
       workbook_unchanged: unchanged,
