@@ -33,20 +33,26 @@ function di3SupplyFullEditHash_(value) {
 }
 
 /** Read-only authoritative snapshot. It does not create sheets, operations or rows. */
-function di3BuildSupplyFullEditSnapshot_(supplyId) {
+function di3BuildSupplyFullEditSnapshot_(supplyId, options) {
+  options = options || {};
   var id = String(supplyId || "").trim();
   if (!id) throw new Error("Для аудита полного редактирования требуется supply_id.");
-  var supply = di3GetSupplyById_(id);
+
+  // Full audit remains the default. Interactive editor entry/save paths may
+  // request only the business fingerprint and receipt-payload integrity.
+  var includeStockAudit = options.includeStockAudit !== false;
+  var includeReceiptPayload = options.includeReceiptPayload !== false;
+  var supply = options.supply || di3GetSupplyById_(id);
   if (!supply) throw new Error("Поставка не найдена по supply_id " + id + ".");
   var items = di3GetSupplyItems_(id);
-  var receiptOperation = di3GetSupplyReceiptOperation_(id);
+  var receiptOperation = Object.prototype.hasOwnProperty.call(options, "receiptOperation")
+    ? options.receiptOperation : di3GetSupplyReceiptOperation_(id);
   var receiptPayload = null;
-  var receiptPayloadIntegrity = "NOT_APPLICABLE";
-  if (receiptOperation && ["PREPARED", "RETRYABLE", "COMMITTED", "QUARANTINED", "REJECTED"].indexOf(String(receiptOperation.values[5])) !== -1) {
-    // This snapshot is a strict read-only audit. Do not call
-    // the operation verifier here: that helper quarantines a damaged
-    // operation and therefore has a write side effect. Inspect raw payload/hash
-    // and report integrity without changing Operations.
+  var receiptPayloadIntegrity = receiptOperation ? "NOT_CHECKED" : "NOT_APPLICABLE";
+  if (includeReceiptPayload && receiptOperation &&
+      ["PREPARED", "RETRYABLE", "COMMITTED", "QUARANTINED", "REJECTED"].indexOf(String(receiptOperation.values[5])) !== -1) {
+    // This is a strict read-only audit. Do not call the operation verifier:
+    // that helper quarantines a damaged operation and therefore writes state.
     var rawPayloadRecord = di3FindRowByFirstColumn_("OperationPayloads", String(receiptOperation.values[0]));
     if (!rawPayloadRecord) {
       receiptPayloadIntegrity = "MISSING";
@@ -61,35 +67,44 @@ function di3BuildSupplyFullEditSnapshot_(supplyId) {
       }
     }
   }
-  var ledgerMatches = di3ReadRowsByColumnValue_("StockLedger", 5, id);
-  var movementIds = ledgerMatches.map(function (match) { return String(match.values[0]); });
+
+  var ledgerMatches = [];
   var detailsById = Object.create(null);
-  if (movementIds.length) {
-    di3ReadRowsByColumnValues_("StockMovementDetails", 0, movementIds).forEach(function (match) {
-      detailsById[String(match.values[0])] = match.values;
+  var lots = [];
+  var allocations = [];
+  var costHistory = [];
+  if (includeStockAudit) {
+    ledgerMatches = di3ReadRowsByColumnValue_("StockLedger", 5, id);
+    var movementIds = ledgerMatches.map(function (match) { return String(match.values[0]); });
+    if (movementIds.length) {
+      di3ReadRowsByColumnValues_("StockMovementDetails", 0, movementIds).forEach(function (match) {
+        detailsById[String(match.values[0])] = match.values;
+      });
+    }
+    lots = di3ReadRowsByColumnValue_("StockLots", 4, id).map(function (match) { return match.values; });
+    var lotIds = Object.create(null);
+    lots.forEach(function (row) { lotIds[String(row[0])] = true; });
+    allocations = Object.keys(lotIds).length
+      ? di3ReadRowsByColumnValues_("StockAllocations", 3, Object.keys(lotIds)).map(function (match) { return match.values; })
+      : [];
+
+    // The immutable receipt payload is the authoritative list of original item IDs.
+    // Include current document items as a defensive fallback for pre-receipt/legacy states.
+    var historyItemIds = Object.create(null);
+    items.forEach(function (item) { historyItemIds[String(item.supply_item_id || "")] = true; });
+    if (receiptPayload && Array.isArray(receiptPayload.lines)) {
+      receiptPayload.lines.forEach(function (line) {
+        if (line && line.supply_item_id) historyItemIds[String(line.supply_item_id)] = true;
+      });
+    }
+    var costHistoryKeys = Object.keys(historyItemIds).filter(Boolean).map(function (itemId) {
+      return "SUPPLY_RECEIPT:" + id + ":" + itemId;
     });
+    costHistory = costHistoryKeys.length
+      ? di3ReadRowsByColumnValues_("ProductCostHistory", 7, costHistoryKeys).map(function (match) { return match.values; })
+      : [];
   }
-  var lots = di3ReadRowsByColumnValue_("StockLots", 4, id).map(function (match) { return match.values; });
-  var lotIds = Object.create(null);
-  lots.forEach(function (row) { lotIds[String(row[0])] = true; });
-  var allocations = Object.keys(lotIds).length
-    ? di3ReadRowsByColumnValues_("StockAllocations", 3, Object.keys(lotIds)).map(function (match) { return match.values; })
-    : [];
-  // The immutable receipt payload is the authoritative list of original item IDs.
-  // Include current document items as a defensive fallback for pre-receipt/legacy states.
-  var historyItemIds = Object.create(null);
-  items.forEach(function (item) { historyItemIds[String(item.supply_item_id || "")] = true; });
-  if (receiptPayload && Array.isArray(receiptPayload.lines)) {
-    receiptPayload.lines.forEach(function (line) {
-      if (line && line.supply_item_id) historyItemIds[String(line.supply_item_id)] = true;
-    });
-  }
-  var costHistoryKeys = Object.keys(historyItemIds).filter(Boolean).map(function (itemId) {
-    return "SUPPLY_RECEIPT:" + id + ":" + itemId;
-  });
-  var costHistory = costHistoryKeys.length
-    ? di3ReadRowsByColumnValues_("ProductCostHistory", 7, costHistoryKeys).map(function (match) { return match.values; })
-    : [];
+
   var supplyData = DI3_TABLE_SCHEMAS.V3_Supplies.map(function (header) {
     return di3SupplyFullEditNormalizeValue_(supply[header]);
   });
@@ -189,7 +204,7 @@ function di3EnableFullSupplyEditMode() {
     if (receipt && ["PREPARED", "RETRYABLE", "QUARANTINED", "REJECTED"].indexOf(String(receipt.values[5])) !== -1) {
       throw new Error("По поставке существует операция приёмки в состоянии " + String(receipt.values[5]) + ". Сначала разберись с ней в журнале операций.");
     }
-    var snapshot = di3BuildSupplyFullEditSnapshot_(supplyId);
+    var snapshot = di3BuildSupplyFullEditSnapshot_(supplyId, {\n      includeStockAudit: false,\n      includeReceiptPayload: status === DI3_SUPPLY_STATUS.RECEIVED,\n      supply: supply,\n      receiptOperation: receipt\n    });
     if (status === DI3_SUPPLY_STATUS.RECEIVED &&
         (!snapshot.receipt_operation || snapshot.receipt_operation.status !== "COMMITTED" || snapshot.receipt_operation.payload_integrity !== "VALID")) {
       throw new Error("Для полученной поставки не удалось подтвердить целостность исходного payload SUPPLY_RECEIVE. Полное редактирование остановлено без изменений.");
@@ -629,7 +644,7 @@ function di3SaveFullSupplyEdit() {
     if (pendingEdits.length) {
       throw new Error("По этой поставке уже есть незавершённая корректировка. Сначала восстанови или проверь её в журнале операций: " + String(pendingEdits[0].values[0]));
     }
-    var snapshot = di3BuildSupplyFullEditSnapshot_(context.supply_id);
+    var snapshot = di3BuildSupplyFullEditSnapshot_(context.supply_id, {\n      includeStockAudit: false,\n      includeReceiptPayload: false,\n      supply: context.supply\n    });
     if (snapshot.fingerprint !== context.baseline_hash) {
       throw new Error("Поставка была изменена после включения полного редактирования. Изменения не применены. Отмени режим и загрузи свежую версию.");
     }
