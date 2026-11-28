@@ -102,6 +102,59 @@ function di3RunSupplyCorrectionExecutionCoreTests() {
     equal(result[0].replacement_supply_item_id, "RI-NEW");
   });
 
+  test("replacement receipt rows preserve original effective and recorded timestamps", function () {
+    var originalActor = di3GetOperationInitiatorActor_;
+    var originalSequence = di3RequireLedgerSequence_;
+    var originalCurrency = di3GetBaseCurrency_;
+    try {
+      di3GetOperationInitiatorActor_ = function () { return "actor@example.test"; };
+      di3RequireLedgerSequence_ = function (value) { return Number(value); };
+      di3GetBaseCurrency_ = function () { return "RUB"; };
+      var payload = {
+        supply_id: "SUP-1", supply_number: "S-17", correction_id: "CORR-1",
+        currency: "RUB", created_by: "actor@example.test",
+        replacement_lines: [{
+          supply_item_id: "ITEM-NEW", product_id: "P1", pack_variant_id: "V1",
+          movement_id: "MOVE-NEW", lot_id: "LOT-NEW", event_key: "SUPPLY_CORRECTION:CORR-1:ITEM-NEW",
+          quantity: 60, unit_cost: 9.295, total_cost_minor: 55770, cost_status: "KNOWN",
+          effective_at: "2026-11-27T14:42:00.000Z", recorded_at: "2026-11-27T14:42:00.000Z",
+          ledger_sequence: 777, display_code: "MOV-000777"
+        }]
+      };
+      var rows = di3BuildSupplyCorrectionReceiptRows_("OP-CORR", payload);
+      equal(rows.ledger.length, 1);
+      equal(rows.ledger[0][1], "OP-CORR");
+      equal(rows.ledger[0][2], payload.replacement_lines[0].event_key);
+      equal(rows.ledger[0][12], 777);
+      equal(rows.details[0][2], "IN");
+      equal(rows.details[0][3], "SUPPLY_CORRECTION");
+      equal(rows.details[0][8], "actor@example.test");
+      equal(rows.lots[0][9], 9.295);
+      equal(rows.lots[0][14], 55770);
+      equal(rows.ledger[0][7].toISOString(), "2026-11-27T14:42:00.000Z");
+      equal(rows.ledger[0][8].toISOString(), "2026-11-27T14:42:00.000Z");
+    } finally {
+      di3GetOperationInitiatorActor_ = originalActor;
+      di3RequireLedgerSequence_ = originalSequence;
+      di3GetBaseCurrency_ = originalCurrency;
+    }
+  });
+
+  test("correction request fingerprint is stable and changes with financial inputs", function () {
+    var base = {
+      correction_id: "CORR-1", reason: "Correct receipt",
+      seller_discount_amount: 0, partner_discount_amount: 10, shipping_amount: 5,
+      lines: [{ product_id: "P1", pack_variant_id: "V1", units_per_pack: 20, packs: 3, purchase_price_per_pack: 100 }]
+    };
+    var first = di3BuildSupplyCorrectionRequestFingerprint_("SUP-1", base);
+    equal(di3BuildSupplyCorrectionRequestFingerprint_("SUP-1", base), first);
+    var changed = JSON.parse(JSON.stringify(base));
+    changed.shipping_amount = 6;
+    if (di3BuildSupplyCorrectionRequestFingerprint_("SUP-1", changed) === first) {
+      throw new Error("Changing shipping must change the correction request fingerprint.");
+    }
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply correction execution core tests failed: " + JSON.stringify(failed));
   return report;
