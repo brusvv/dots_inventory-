@@ -329,6 +329,16 @@ function di3GetGitHubSourceLabel_(channel) {
   return channel === "branch" ? "BRANCH" : (channel === "preview" ? "PREVIEW" : "STABLE");
 }
 
+function di3GitBlobSha1Hex_(source) {
+  var size = Utilities.newBlob(String(source == null ? "" : source)).getBytes().length;
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1,
+    "blob " + size + "\\u0000" + String(source == null ? "" : source), Utilities.Charset.UTF_8);
+  return bytes.map(function (byte) {
+    var normalized = byte < 0 ? byte + 256 : byte;
+    return ("0" + normalized.toString(16)).slice(-2);
+  }).join("");
+}
+
 function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, sourceTexts) {
   branch = di3ValidateGitHubBranchName_(branch);
   commit = String(commit || "").toLowerCase();
@@ -357,6 +367,10 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
     var source = sourceTexts[entry.path];
     var size = Utilities.newBlob(source).getBytes().length;
     if (Number(entry.size) !== size) throw new Error("Размер исходника не совпадает с Git tree: " + name);
+    if (!/^[0-9a-f]{40}$/i.test(String(entry.sha || "")) ||
+        di3GitBlobSha1Hex_(source).toLowerCase() !== String(entry.sha).toLowerCase()) {
+      throw new Error("Git blob SHA-1 исходника не совпадает с выбранным commit: " + name);
+    }
     files.push({ name: name, type: "SERVER_JS", source_path: entry.path,
       raw_url: "https://raw.githubusercontent.com/" + di3GetGitHubDeploymentConfig_().repository + "/" + commit + "/src/apps_script/" + encodeURIComponent(name),
       size_bytes: size, sha256: di3Sha256Hex_(source) });
