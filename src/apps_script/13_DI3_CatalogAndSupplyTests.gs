@@ -163,6 +163,69 @@ function di3RunCatalogAndSupplyUnitTests() {
     equal(thrown, true);
   });
 
+  test("read-only product option index does not allocate public product codes", function () {
+    var originals = {
+      ensure: di3EnsureProductPublicCodes_,
+      list: di3ListAllProductsForWarehouse_,
+      codes: di3GetProductPublicCodeMap_,
+      label: di3GetProductOptionLabelWithMap_
+    };
+    var ensureCalls = 0;
+    try {
+      di3EnsureProductPublicCodes_ = function () { ensureCalls++; };
+      di3ListAllProductsForWarehouse_ = function () {
+        return [{ product_id: "P1", brand: "Brand", model: "Model", diameter: "6,5", active: true }];
+      };
+      di3GetProductPublicCodeMap_ = function () { return {}; };
+      di3GetProductOptionLabelWithMap_ = function (product) { return product.product_id; };
+
+      var readOnlyIndex = di3GetProductFormOptionIndex_(true);
+      equal(readOnlyIndex.byId.P1.product_id, "P1");
+      equal(ensureCalls, 0, "read-only lookup must not allocate persistent public codes");
+
+      di3GetProductFormOptionIndex_();
+      equal(ensureCalls, 1, "ordinary catalogue lookup must preserve its existing ensure behavior");
+    } finally {
+      di3EnsureProductPublicCodes_ = originals.ensure;
+      di3ListAllProductsForWarehouse_ = originals.list;
+      di3GetProductPublicCodeMap_ = originals.codes;
+      di3GetProductOptionLabelWithMap_ = originals.label;
+    }
+  });
+
+  test("ordinary supply financial preview resolves catalogue in read-only mode", function () {
+    var originals = {
+      getSheet: di3GetSheetOrThrow_,
+      resolve: di3ResolveSupplyFormLines_,
+      build: di3BuildSupplyFinancialPlan_,
+      render: di3RenderSupplyFinancialPreview_
+    };
+    var resolveArgs = null;
+    var plan = {
+      lines: [{ product_id: "P1" }],
+      goods_amount: 100, discount_total: 0, shipping_amount: 0, final_amount: 100
+    };
+    try {
+      di3GetSheetOrThrow_ = function () {
+        return { getRange: function () { return { getValues: function () { return [[0], [0], [0]]; } }; } };
+      };
+      di3ResolveSupplyFormLines_ = function (createVariants, readOnlyCatalog) {
+        resolveArgs = [createVariants, readOnlyCatalog];
+        return [{ product_id: "P1", pack_variant_id: "V1", units_per_pack: 1, packs: 1, purchase_price_per_pack: 100 }];
+      };
+      di3BuildSupplyFinancialPlan_ = function () { return plan; };
+      di3RenderSupplyFinancialPreview_ = function () {};
+      var result = di3PreviewSupplyForm();
+      equal(resolveArgs, [false, true]);
+      equal(result.final_amount, 100);
+    } finally {
+      di3GetSheetOrThrow_ = originals.getSheet;
+      di3ResolveSupplyFormLines_ = originals.resolve;
+      di3BuildSupplyFinancialPlan_ = originals.build;
+      di3RenderSupplyFinancialPreview_ = originals.render;
+    }
+  });
+
   var report = { passed: passed, failed: failures.length, failures: failures };
   if (failures.length) throw new Error("Catalog and supply tests failed: " + JSON.stringify(failures));
   return report;
