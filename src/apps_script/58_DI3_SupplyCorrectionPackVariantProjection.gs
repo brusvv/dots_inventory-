@@ -12,17 +12,30 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
     if (!itemsBySupply[supplyId]) itemsBySupply[supplyId] = [];
     itemsBySupply[supplyId].push(row);
   });
-  var receivedSupplies = (supplyRows || []).filter(function (row) {
-    if (di3NormalizeSupplyStatus_(row[15]) !== DI3_SUPPLY_STATUS.RECEIVED) return false;
-    if (row[18] === "" || row[18] == null) return false;
-    return Number.isFinite(new Date(row[18]).getTime());
-  }).map(function (row) {
-    return {
-      supply_id: String(row[0]),
+
+  var receivedSupplies = [];
+  (supplyRows || []).forEach(function (row) {
+    if (di3NormalizeSupplyStatus_(row[15]) !== DI3_SUPPLY_STATUS.RECEIVED) return;
+    var supplyId = String(row[0] || "");
+    var rows = itemsBySupply[supplyId] || [];
+    var relevantRows = rows.filter(function (itemRow) {
+      return !!affected[String(itemRow[3] || "")];
+    });
+    if (!relevantRows.length) return;
+    if (!supplyId) throw new Error("Полученная поставка с затронутым товаром не имеет supply_id.");
+    if (row[18] === "" || row[18] == null || !Number.isFinite(new Date(row[18]).getTime())) {
+      throw new Error("Полученная поставка " + supplyId + " имеет некорректный received_at; нельзя безопасно выбрать текущую фасовку.");
+    }
+    var createdAt = row[16] === "" || row[16] == null ? new Date(row[18]) : new Date(row[16]);
+    if (!Number.isFinite(createdAt.getTime())) createdAt = new Date(row[18]);
+    receivedSupplies.push({
+      supply_id: supplyId,
       received_at: new Date(row[18]),
-      created_at: new Date(row[16] || row[18])
-    };
-  }).sort(function (a, b) {
+      created_at: createdAt,
+      relevant_rows: relevantRows
+    });
+  });
+  receivedSupplies.sort(function (a, b) {
     var receivedDiff = b.received_at.getTime() - a.received_at.getTime();
     if (receivedDiff) return receivedDiff;
     var createdDiff = b.created_at.getTime() - a.created_at.getTime();
@@ -32,12 +45,23 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
 
   var latest = Object.create(null);
   receivedSupplies.forEach(function (supply) {
-    var rows = (itemsBySupply[supply.supply_id] || []).slice().sort(function (a, b) {
-      return Number(b[2]) - Number(a[2]);
+    var rows = supply.relevant_rows.slice().sort(function (a, b) {
+      var aLine = Number(a[2]), bLine = Number(b[2]);
+      if (!Number.isSafeInteger(aLine) || aLine <= 0 || !Number.isSafeInteger(bLine) || bLine <= 0) {
+        throw new Error("Поставка " + supply.supply_id + " содержит некорректный line_no для затронутого товара.");
+      }
+      return bLine - aLine;
     });
+    var seenLineByProduct = Object.create(null);
     rows.forEach(function (row) {
       var productId = String(row[3] || "");
-      if (!affected[productId] || latest[productId]) return;
+      var lineNo = Number(row[2]);
+      var duplicateKey = productId + "\\u001f" + lineNo;
+      if (seenLineByProduct[duplicateKey]) {
+        throw new Error("Поставка " + supply.supply_id + " содержит повторный line_no " + lineNo + " для товара " + productId + ".");
+      }
+      seenLineByProduct[duplicateKey] = true;
+      if (latest[productId]) return;
       var variantId = String(row[5] || "");
       if (!variantId) throw new Error("Полученная поставка " + supply.supply_id + " содержит строку без pack_variant_id для товара " + productId + ".");
       latest[productId] = {
