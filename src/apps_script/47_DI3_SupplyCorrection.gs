@@ -107,9 +107,9 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
     }
   });
 
-  indexMatches(ledgerMatches, 0, expectedMovementIds);
-  indexMatches(detailMatches, 0, expectedMovementIds);
-  indexMatches(lotMatches, 2, expectedMovementIds);
+  indexMatches(ledgerMatches, 0, expectedMovementIds, "StockLedger");
+  indexMatches(detailMatches, 0, expectedMovementIds, "StockMovementDetails");
+  indexMatches(lotMatches, 2, expectedMovementIds, "StockLots");
 
   function exactlyOne(index, key, label) {
     var matches = index._matches && index._matches[String(key)] ? index._matches[String(key)] : [];
