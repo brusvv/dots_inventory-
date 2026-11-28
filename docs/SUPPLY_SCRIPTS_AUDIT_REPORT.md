@@ -187,3 +187,16 @@ CI ran for the branch PR merge result containing head `5f890d46f0484468930ceec1e
 The audit plan was recorded in commit `33c1d23b25005c0db4f6ca18c41b9fe9aa26ef74`. On that exact commit, the Apps Script quality gates, release pipeline checks and installation-bundle packaging workflows all completed successfully.
 
 Apps Script source and regression tests were modified in the first optimization batch. No live workbook operation, supply #17 operation, receipt, cancellation, correction, FIFO replay, restore or failure injection was run.
+
+
+## Selective PackVariants reconciliation — implementation note
+
+The normal reconciliation path no longer transfers every full row from `V3_Supplies` and `V3_SupplyItems`. It now:
+
+1. Queries `V3_SupplyItems` by the affected `product_id` set using `di3ReadRowsByColumnValues_()`.
+2. Collects the distinct parent `supply_id` values from those item rows.
+3. Queries `V3_Supplies` by those IDs, then passes the selected rows to the existing pure chronology/variant selector.
+
+This reduces full-row transfers while retaining the necessary scan of the lookup key column provided by the shared repository helper. A compatibility fallback reads all parent supply rows only when a matched item has a blank `supply_id`, preserving the previous detection of a received parent with a missing identity. Empty affected-item results do not read the parent table.
+
+Three regression tests cover the selective query plan, blank-ID fallback, and empty-match short circuit. CI for this exact source revision is pending, and no runtime benchmark has been performed. The optimization has not been exercised against any workbook.
