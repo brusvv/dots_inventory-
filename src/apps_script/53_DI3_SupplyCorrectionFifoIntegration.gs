@@ -137,13 +137,33 @@ function di3BuildSupplyCorrectionEffectiveFifoSnapshot_(ledgerRows, detailRows, 
   };
 }
 
+/** Read only Operations rows referenced by correction relation events. */
+function di3ReadSupplyCorrectionOperationRows_(relationRows) {
+  var relationHeaders = DI3_TABLE_SCHEMAS.SupplyCorrectionEvents || [];
+  var operationHeaders = DI3_TABLE_SCHEMAS.Operations || [];
+  var relationOperationIndex = relationHeaders.indexOf("operation_id");
+  var operationIdIndex = operationHeaders.indexOf("operation_id");
+  if (relationOperationIndex < 0 || operationIdIndex < 0) {
+    throw new Error("Supply correction operation lookup requires operation_id schema columns.");
+  }
+  var ids = Object.create(null);
+  (relationRows || []).forEach(function (row) {
+    var id = String(row[relationOperationIndex] || "");
+    if (id) ids[id] = true;
+  });
+  var keys = Object.keys(ids);
+  return keys.length
+    ? di3ReadRowsByColumnValues_("Operations", operationIdIndex, keys).map(function (match) { return match.values; })
+    : [];
+}
+
 /** Read the committed relation map used by ordinary FIFO projection rebuilds. */
 function di3ReadSupplyCorrectionEffectiveMovementMap_(includeOperationId) {
   var spreadsheet = di3GetSpreadsheet_();
   var relationRows = spreadsheet && spreadsheet.getSheetByName("SupplyCorrectionEvents")
     ? di3ReadTableValues_("SupplyCorrectionEvents") : [];
-  var operationRows = spreadsheet && spreadsheet.getSheetByName("Operations")
-    ? di3ReadTableValues_("Operations") : [];
+  var operationRows = relationRows.length
+    ? di3ReadSupplyCorrectionOperationRows_(relationRows) : [];
   return di3BuildSupplyCorrectionEffectiveMovementMap_(relationRows, operationRows, {
     include_operation_id: String(includeOperationId || "")
   });
