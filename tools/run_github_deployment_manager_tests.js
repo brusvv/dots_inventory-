@@ -778,7 +778,7 @@ test("branch manifest rejects symlink-mode Apps Script entries", () => {
   const branch = "feature/symlink-source";
   const commit = "d".repeat(40);
   const sources = {
-    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = { TIME_ZONE: "Europe/Moscow" };',
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });',
     "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;"
   };
   const tree = Object.entries(sources).map(([path, content]) => ({
@@ -816,7 +816,7 @@ test("preserves installed updater modules for older branches without branch sele
   const branch = "feature/older-business-change";
   const commit = "a".repeat(40);
   const sources = {
-    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = { TIME_ZONE: "Europe/Moscow" };',
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });',
     "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;",
     "src/apps_script/43_DI3_GitHubDeploymentManager.gs": 'var DI3_GITHUB_UPDATER_VERSION = "0.1.0";',
     "src/apps_script/44_DI3_GitHubInstallPreview.gs": "function oldPreview() {}",
