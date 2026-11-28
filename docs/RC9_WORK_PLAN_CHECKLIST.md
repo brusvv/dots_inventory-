@@ -299,7 +299,7 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 
 - Working branch: `feature/supply-correction-fifo-replay`.
 - Branch HEAD at this update: `a763a36cbe714a4f0cd9849d50152b2a649c8e16`.
-- It is 197 commits ahead of `feature/github-preview-releases`, with no commits behind; the incremental comparison contains 37 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
+- It is 201 commits ahead of `feature/github-preview-releases`, with no commits behind; the incremental comparison contains 37 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
 - SC-01 through SC-04 are implemented in source: immutable receipt/source audit; append-only correction relation journal; candidate/effective FIFO preview and normal replay integration; explicit correction operation with recovery and a read-only all-sheet preview probe.
 - SC-04 remains source-ready only. The mutating API `di3CorrectReceivedSupply()` is not exposed in the menu. It must not be used on a live/production supply until runtime acceptance on a restored disposable workbook.
 - Known SC limitation: a second correction of the same supply is blocked; correction-chain document hydration is not implemented.
@@ -356,3 +356,14 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 - [ ] Read-only all-sheet runtime probe on a restored disposable workbook.
 - [ ] SC-04 partial-failure/recovery acceptance on the disposable copy, after separate explicit authorization.
 - [!] N-02 runtime fault injection remains deferred.
+
+
+## 2026-11-28 — SC-04 preflight hardening
+
+- [x] Remove schema/FIFO bootstrap from `di3CorrectReceivedSupply()`; the mutating correction entrypoint now performs only a read-only v4/FIFO readiness audit before any operation registration or business write.
+- [x] Fail closed if any core v4 sheet is missing, any core header differs, FIFO state version is absent/wrong, or FIFO cursor is behind the current StockLedger sequence.
+- [x] Add four regression cases for prerequisite readiness and the no-bootstrap contract.
+- [x] Exact source commit `7ea2989bb6f06a81ab5424594e9f869fdefa3773`: 69 Apps Script syntax files; snapshot 8/8; FIFO 46/46; order 22/22; supply/correction 153/153; catalog/order UX 14/14; system safety 39/39; Dashboard 11/11; Finance 4/4; Deployment Manager 57/57.
+- [x] Exact-head GitHub Actions: [quality gates 46100854031](https://github.com/brusvv/dots_inventory-/actions/runs/46100854031), [release pipeline 46100854106](https://github.com/brusvv/dots_inventory-/actions/runs/46100854106), [package 46100854083](https://github.com/brusvv/dots_inventory-/actions/runs/46100854083) — PASS.
+- [ ] Run the all-sheet preview probe on the restored disposable workbook.
+- [ ] Run SC-04 write-boundary failure/recovery acceptance on the disposable copy after separate explicit approval.
