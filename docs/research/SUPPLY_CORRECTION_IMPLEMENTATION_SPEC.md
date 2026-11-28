@@ -435,3 +435,11 @@ Latest source verification at commit `29b8f777035e017d9916bb545ae35d9f4f0d8264`:
 - [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46099338029).
 
 No workbook runtime probe has been run yet. The new probe is prepared for the restored-copy acceptance stage only.
+
+The runtime probe snapshots **all workbook sheets**, not a fixed table allowlist. It includes hidden/auxiliary sheets, sheet IDs and names, visibility, grid dimensions, last populated row/column, cell values and formulas. This reduces the chance that a future preview implementation writes to a newly introduced helper sheet without the probe detecting it.
+
+The all-sheet snapshot hardening passed the quality gates at source commit `ae963fc958991ae809453cf9551933f299e8c849`:
+- Apps Script syntax and all regression suites passed.
+- [GitHub Actions run 46100406477](https://github.com/brusvv/dots_inventory-/actions/runs/46100406477).
+
+This still verifies source/Node CI only. It does not replace the required read-only probe against a restored bound workbook.
