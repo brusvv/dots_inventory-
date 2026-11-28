@@ -240,13 +240,15 @@ module does not change schema, workbook, stock projections or runtime state.
 received supply. It verifies the committed receipt operation and payload hash,
 the current supply number/received timestamp, the current supply-item rows, and
 the exact one-to-one mapping from each original receipt line to StockLedger,
-StockMovementDetails and StockLots. It rejects missing, duplicate, extra or
-mismatched records without attempting repair.
+StockMovementDetails and StockLots. It also audits the active StockAllocations
+projection for those lots and reconciles per-lot CONSUME quantities and allocated
+cost against StockLots.remaining_quantity and total cost. It rejects missing,
+duplicate, extra or mismatched records without attempting repair.
 
-Nine regression tests were added in `48_DI3_SupplyCorrectionTests.gs` and
+Eleven regression tests were added in `48_DI3_SupplyCorrectionTests.gs` and
 wired into the consolidated supply test runner. Quality gates passed at
-`319c842d0d91d7e11f341dcba32da5a20c871b90`:
-- Supply domain/lifecycle: **98/98**.
+`e706decf31bd1d9cbd3a3e10e16328c0bb06ff8f`:
+- Supply domain/lifecycle: **100/100**.
 - FIFO replay: **46/46**.
 - Order domain: **22/22**.
 - Catalog/order UX: **14/14**.
