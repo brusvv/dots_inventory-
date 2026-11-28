@@ -1117,3 +1117,12 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - Added a runtime-probe regression test and a backup metadata/folder negative test. Snapshot auditor: 8/8 PASS; Release Pipeline: 57/57 Deployment Manager tests PASS. CI on HEAD `4aae90b` is green for Release Pipeline, Apps Script quality gates and package build.
 - Safety clarification: executing the probe function is read-only, but adding/removing the temporary probe file is a project-code write. Do not insert it into Dots beta 4 or any live project without separate explicit approval. No live Apps Script, Drive, Sheets, Script Properties, deployments or triggers were changed.
 - N-02 remains deferred and was not run.
+
+## 28.11.2026 — direct GitHub branch selection
+
+- Added operator-selected source branch mode to the in-project GitHub updater.
+- The menu lists supported `feature/*`, `release/*`, and `hotfix/*` branches; the chosen branch is resolved to a full immutable commit SHA.
+- The updater builds an in-memory manifest from the commit's Git tree and pinned source files, deriving schema/timezone metadata from the selected source.
+- The existing compatibility gate, checksum verification, read-only preview, verified source backup, explicit YES/NO confirmation, concurrency recheck and exact post-write verification remain in force.
+- Branch snapshots are visibly labeled BRANCH and are not treated as published Stable/Preview releases. A reset command returns to the configured release channel.
+- Source implementation and CI are pending review in `feature/github-branch-selector`; runtime acceptance is not yet performed. Do not use this path in production before D-07 acceptance.
