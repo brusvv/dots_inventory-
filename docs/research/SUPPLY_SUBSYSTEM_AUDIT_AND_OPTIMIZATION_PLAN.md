@@ -331,3 +331,19 @@ SC-03 read-only candidate FIFO preview passed its source quality gates in
 reported **264 passed, 0 failed** (snapshot 8, FIFO 46, order 22, supply 120,
 catalog/order UX 14, safety/operation 39, warehouse 11, finance 4). This is
 not a live workbook runtime acceptance.
+
+
+### SC-03 integration update — ordinary FIFO and downstream stock reads
+
+The correction-aware relation map is now wired into the normal FIFO rebuild path. A changed committed relation fingerprint forces a full replay even when there is no new ledger tail, and the replay scope includes both source and replacement products. The effective snapshot filters superseded source movements, details and lots without rewriting their immutable source rows. Original physical StockLots row numbers are retained through filtering.
+
+Read-side consumers were aligned:
+- product valuation and the warehouse dashboard exclude superseded lots;
+- product FIFO valuation history excludes superseded ledger movements;
+- the operational stock journal shows the effective ledger history;
+- valuation and stock-journal reads fail closed if active correction relations are not reflected in the committed FIFO projection;
+- pending `SUPPLY_CORRECTION` operations are included in the stock-operation guard.
+
+This closes the source-level gap described in S-02 for the ordinary replay/read path. It does not create or commit a correction operation. SC-04 write ordering, recovery, ProductCostHistory handling and bound-workbook runtime acceptance remain open. The existing received-supply edit guard must remain enabled.
+
+Source quality gates passed at `56f09f4fa335f0ac18e5408e1c13ebd7cb021751`: 63 Apps Script files syntax-checked; snapshot 8, FIFO 46, order 22, supply/correction/lifecycle 127, catalog/order UX 14, system safety 39, warehouse dashboard 11, finance schema 4; **271 passed, 0 failed**. [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46096055903). This is not runtime acceptance against the live workbook.
