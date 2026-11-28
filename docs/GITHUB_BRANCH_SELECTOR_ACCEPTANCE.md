@@ -200,6 +200,21 @@ GitHub Actions run #69: **success**; Git tree preflight/integrity fixtures: 9 te
 
 Отдельно ранее проведённый D-09 lifecycle probe в disposable Apps Script project подтвердил отмену обновления V2: после NO probe оставался на V1 и не менял исходный файл. Это runtime-доказательство именно probe-сценария; оно не подменяет полную runtime-проверку installer NO с проверкой project fingerprint.
 
+## 7I. D-09-N11 — сериализация подтверждённой установки
+
+Статус: **IMPLEMENTED; UNIT/CI PENDING; APPS SCRIPT RUNTIME NOT RUN**.
+
+После явного YES установщик получает `LockService.getScriptLock()` с коротким ожиданием. Блокировка удерживается на протяжении последней проверки fingerprint/совместимости, `projects.updateContent`, post-write read-back и фиксации установленного commit. Она освобождается через `finally`, включая ветки с неопределённым результатом записи и ошибками read-back.
+
+Если lock занят, установщик возвращает `LOCK_NOT_ACQUIRED`, сохраняет ссылку на уже проверенный backup и не вызывает `projects.updateContent`. При NO lock не запрашивается.
+
+Добавлены regression fixtures:
+- lock занят — запись не выполняется;
+- успешная установка — lock освобождён после read-back;
+- неопределённый результат update — lock освобождён, повторной записи нет.
+
+Ограничение: ScriptLock сериализует исполнения этого Apps Script project, использующие тот же lock. Он не является распределённой блокировкой между разными Script ID и не доказывает runtime-поведение до проверки в disposable project.
+
 ## 7H. Сводка N04–N10
 
 | Сценарий | Unit/CI | Apps Script runtime |
