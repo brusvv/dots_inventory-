@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-28  
 Working branch: `feature/github-preview-releases`  
-Branch HEAD at update: `4f4508ada61e175670c80467e86ed3357663da36`
+Branch HEAD at update: `2a33c5532e8bffcf7bef1a0458f8064f390111fd`
 
 > This is the execution checklist. Mark an item `[x]` only when the stated evidence exists. `[ ]` means not done or not evidenced; `[~]` means partially completed; `[!]` means blocked/deferred. Source implementation, CI, and live Google Apps Script acceptance are separate evidence classes.
 
@@ -31,7 +31,7 @@ Branch HEAD at update: `4f4508ada61e175670c80467e86ed3357663da36`
 
 - [x] Re-open and fully revalidate the selected rollback backup after YES: file identity, name, metadata, Script ID, folder membership, envelope/hash, and target fingerprint are checked again immediately before update.
 - [x] Regression tests: selected backup is re-read after confirmation; if it becomes unavailable before write, rollback fails closed and makes zero `projects.updateContent` calls.
-- [x] CI for source/test state `57327687990979594ed69aa7ee88cb7f6b132738`: Release Pipeline, Apps Script quality gates and package build all passed. Release Pipeline includes the corrected selected-backup revalidation tests.
+- [x] CI for source/test state `f818dc2dc72663f32579f3aee534abc8c2af294e`: Release Pipeline, Apps Script quality gates and package build all passed. Release Pipeline includes the corrected selected-backup revalidation tests (57/57).
 
 - [x] Source review + regression test: preview preserves exact target `appsscript.json`.
 - [x] Source review + regression test: preview preserves non-`SERVER_JS` files and unmanaged local `SERVER_JS` modules.
@@ -47,7 +47,7 @@ Branch HEAD at update: `4f4508ada61e175670c80467e86ed3357663da36`
 - [x] Regression coverage before selected-backup revalidation: 55 GitHub Deployment Manager tests. Added mocked integration-style installer and rollback tests for NO cancellation, uncertain update result (single call/no retry), unavailable post-write read-back, mismatched post-write file set, final fingerprint/concurrency guards, Drive metadata mismatch and backup moved outside the configured folder. Live Apps Script behavior remains unverified.
 - [x] Source: rollback reopens and fully revalidates the selected Drive backup after YES, rebuilds the rollback target and checks the target fingerprint before update.
 - [x] Tests: added successful post-confirmation re-read and fail-closed backup-unavailable-after-YES cases.
-- [~] First test run exposed a harness ReferenceError; corrected in commit `05a84fbc290543fe1684e264c477d1a3c4fbd02a`. Await CI for this corrected commit before accepting.
+- [x] Initial harness scoping and fixture issues were corrected; final source/test commit `f818dc2dc72663f32579f3aee534abc8c2af294e` passed all three CI workflows. GitHub Deployment Manager: 57/57.
 - [x] Limits documented in release pipeline and rollback confirmation.
 
 ### 1.3 Release governance
