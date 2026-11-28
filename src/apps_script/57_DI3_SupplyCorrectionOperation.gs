@@ -594,7 +594,6 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
   var replacementWrite = di3EnsureSupplyCorrectionSourceRows_(operationId, payload);
   di3EnsureSupplyCorrectionRelationStage_(payload.relations, operationId, "PREPARED");
   var document = di3ApplySupplyCorrectionDocumentProjection_(payload);
-  var costHistoryAdded = di3EnsureSupplyCorrectionCostHistory_(payload);
 
   // The relation is candidate-visible only to this pending operation. The
   // normal FIFO engine uses its F-06 archive protocol and full replay because
@@ -603,6 +602,9 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
     operation_id: operationId
   });
   if (!fifo || !fifo.run_id || !fifo.mode) throw new Error("Не подтверждён результат candidate FIFO replay.");
+  // Cost history becomes visible only after the new FIFO allocation projection
+  // has been durably committed; stable source keys make this retry-safe.
+  var costHistoryAdded = di3EnsureSupplyCorrectionCostHistory_(payload);
   di3EnsureSupplyCorrectionRelationStage_(payload.relations, operationId, "COMMITTED");
 
   var committedMap = di3ReadSupplyCorrectionEffectiveMovementMap_(operationId);
