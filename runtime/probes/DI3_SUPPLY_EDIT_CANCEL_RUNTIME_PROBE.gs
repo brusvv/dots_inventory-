@@ -87,7 +87,7 @@ function di3TmpSupplyEditCancelRuntimeProbe() {
   var headers = DI3_SUPPLY_REGISTER_HEADERS;
   report.register.header_count = headers.length;
   report.register.actual_headers = register.getRange(3, 1, 1, headers.length).getDisplayValues()[0];
-  check("supply_register_headers_match_current_13_column_layout",
+  check("supply_register_headers_match_current_14_column_layout",
     report.register.actual_headers.join("|") === headers.join("|"), report.register.actual_headers, headers);
 
   var supplyRows = di3ReadTableValues_("V3_Supplies");
