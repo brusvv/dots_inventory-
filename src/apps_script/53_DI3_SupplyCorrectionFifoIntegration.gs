@@ -87,14 +87,22 @@ function di3BuildSupplyCorrectionEffectiveFifoSnapshot_(ledgerRows, detailRows, 
   var effectiveDetails = (detailRows || []).filter(function (row) {
     return !!retained[String(row[0] || "")];
   });
-  var effectiveLots = [];
+  var allLots = [];
   (lotRows || []).forEach(function (row, index) {
-    if (!retained[String(row[2] || "")]) return;
     var copy = row.slice();
-    // The replay writer updates StockLots by physical sheet row. Filtering
-    // must retain the original row number instead of shifting later rows.
+    // Keep physical row identity for F-06 source archival and cache updates.
     copy._di3RowNumber = Number(row._di3RowNumber || index + 2);
-    effectiveLots.push(copy);
+    var movementId = String(copy[2] || "");
+    if (!ledgerByMovement[movementId]) {
+      throw new Error("StockLots: партия " + String(copy[0]) + " ссылается на отсутствующее StockLedger движение " + movementId + ".");
+    }
+    if (String(copy[1]) !== String(ledgerByMovement[movementId][3])) {
+      throw new Error("StockLots: product_id партии " + String(copy[0]) + " не совпадает с StockLedger.");
+    }
+    allLots.push(copy);
+  });
+  var effectiveLots = allLots.filter(function (row) {
+    return !!retained[String(row[2] || "")];
   });
 
   // Fail closed if any effective inbound ledger row has no corresponding lot;
@@ -119,6 +127,9 @@ function di3BuildSupplyCorrectionEffectiveFifoSnapshot_(ledgerRows, detailRows, 
     ledger_rows: effectiveLedger,
     detail_rows: effectiveDetails,
     lot_rows: effectiveLots,
+    // All source lot rows are returned separately: F-06 must archive their
+    // pre-correction remaining cache, including lots superseded by REMOVE or REPLACE.
+    all_lot_rows: allLots,
     affected_product_ids: Object.keys(affectedProducts).sort(),
     superseded_movement_ids: (effectiveMap.superseded_movement_ids || []).slice(),
     active_replacement_movement_ids: (effectiveMap.active_replacement_movement_ids || []).slice(),
