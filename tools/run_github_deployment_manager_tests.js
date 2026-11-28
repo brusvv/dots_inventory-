@@ -774,6 +774,35 @@ test("selected branch overrides Stable/Preview discovery using the persisted com
   }
 });
 
+test("branch Git tree preflight rejects symlinks and oversized source sets before fetching", () => {
+  const valid = {
+    path: "src/apps_script/01_Module.gs", type: "blob", mode: "100644",
+    size: 10, sha: "a".repeat(40)
+  };
+  assert.equal(vm.runInContext(
+    "di3ValidateGitHubBranchTreeEntries_(" + JSON.stringify([valid, { path: "README.md", type: "blob" }]) + ").length",
+    context
+  ), 1);
+  const symlink = { ...valid, mode: "120000" };
+  assert.throws(() => vm.runInContext(
+    "di3ValidateGitHubBranchTreeEntries_(" + JSON.stringify([symlink]) + ")",
+    context
+  ), /разрешены только обычные файлы/);
+  const tooMany = Array.from({ length: 201 }, (_, i) => ({
+    path: "src/apps_script/" + String(i).padStart(3, "0") + ".gs",
+    type: "blob", mode: "100644", size: 1, sha: "b".repeat(40)
+  }));
+  assert.throws(() => vm.runInContext(
+    "di3ValidateGitHubBranchTreeEntries_(" + JSON.stringify(tooMany) + ")",
+    context
+  ), /от 1 до 200/);
+  const tooLarge = [{ ...valid, size: 10000001 }];
+  assert.throws(() => vm.runInContext(
+    "di3ValidateGitHubBranchTreeEntries_(" + JSON.stringify(tooLarge) + ")",
+    context
+  ), /превышает 10 MB/);
+});
+
 test("branch manifest rejects symlink-mode Apps Script entries", () => {
   const branch = "feature/symlink-source";
   const commit = "d".repeat(40);
