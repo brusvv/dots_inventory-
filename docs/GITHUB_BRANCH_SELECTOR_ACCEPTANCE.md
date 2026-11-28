@@ -211,7 +211,8 @@ GitHub Actions run #69: **success**; Git tree preflight/integrity fixtures: 9 te
 Добавлены regression fixtures:
 - lock занят — запись не выполняется;
 - успешная установка — lock освобождён после read-back;
-- неопределённый результат update — lock освобождён, повторной записи нет.
+- неопределённый результат update — lock освобождён, повторной записи нет;
+- недоступен post-write read-back — lock также освобождён.
 
 Ограничение: ScriptLock сериализует исполнения этого Apps Script project, использующие тот же lock. Он не является распределённой блокировкой между разными Script ID и не доказывает runtime-поведение до проверки в disposable project.
 
