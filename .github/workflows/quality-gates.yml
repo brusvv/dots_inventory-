@@ -2,7 +2,7 @@ name: Apps Script quality gates
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/order-product-lifecycle-audit]
     paths:
       - "src/apps_script/**"
       - "runtime/probes/**"
