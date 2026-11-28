@@ -866,6 +866,29 @@ test("branch-selector-capable source cannot replace only part of the updater mod
   ), /полный согласованный набор updater-модулей/);
 });
 
+test("loads paginated GitHub branch lists beyond the first 100 entries", () => {
+  const requested = [];
+  context.di3FetchGitHubJson_ = url => {
+    requested.push(url);
+    const pageMatch = String(url).match(/[?&]page=(\\d+)/);
+    const page = pageMatch ? Number(pageMatch[1]) : 0;
+    if (page === 1) return { status: "OK", data: Array.from({ length: 100 }, (_, i) => ({ name: "branch-" + i })) };
+    if (page === 2) return { status: "OK", data: [{ name: "feature/paginated" }, { name: "feature/../unsafe" }] };
+    throw new Error("Unexpected page " + page);
+  };
+  try {
+    const names = Array.from(vm.runInContext("di3GetGitHubBranchNames_()", context));
+    assert.equal(names.length, 101);
+    assert.ok(names.includes("feature/paginated"));
+    assert.ok(!names.includes("feature/../unsafe"));
+    assert.equal(requested.length, 2);
+    assert.ok(requested[0].endsWith("?per_page=100&page=1"));
+    assert.ok(requested[1].endsWith("?per_page=100&page=2"));
+  } finally {
+    delete context.di3FetchGitHubJson_;
+  }
+});
+
 test("branch selector persists the exact selected commit and reset restores configured channel", () => {
   const stored = {};
   const commit = "6".repeat(40);
