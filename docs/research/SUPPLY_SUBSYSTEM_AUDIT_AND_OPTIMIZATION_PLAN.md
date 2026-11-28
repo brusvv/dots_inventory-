@@ -374,3 +374,12 @@ The handler currently permits only the first correction for a supply; another co
 Source CI at `a15c8ce7cf9d1700e9638558e8e4e37b4fe61789`: 66 Apps Script files syntax-checked; snapshot 7, FIFO 46, order 22, supply/correction/lifecycle 144, catalog/order UX 14, system safety/operation 39, warehouse dashboard 11, finance schema 4; **287 passed, 0 failed**. [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46098738440).
 
 No bound-workbook runtime test has been performed and no supply has been corrected. The received-supply edit guard remains enabled pending restored-copy runtime acceptance.
+
+
+### SC-04 pack-variant projection and latest CI
+
+The correction handler now recalculates current pack-variant flags for affected products from the newest still-received supply, rather than assuming the corrected historical receipt is the latest one. If no received supply remains for an affected product, stale current flags are cleared. This step runs after the corrected FIFO relation is active and is safe to repeat during recovery.
+
+Latest source CI at `76440457589cd3577913f517921d98ec36231520`: syntax 68/68; snapshot 7; FIFO 46; order 22; supply/correction/lifecycle 149; catalog/order UX 14; system safety/operation 39; warehouse dashboard 11; finance schema 4. **292 passed, 0 failed.** [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46099249735).
+
+No live workbook was changed. The correction API remains out of the menu, and the received-supply edit guard remains enabled until restored-copy runtime acceptance is completed.
