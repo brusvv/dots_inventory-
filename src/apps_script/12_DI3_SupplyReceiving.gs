@@ -176,11 +176,20 @@ function di3GetSupplyPreviousDate_(supply, nextStatus) {
   return null;
 }
 
+function di3SupplyStatusHistoryEventMatches_(row, supplyId, oldStatus, newStatus, effectiveAt, operationId) {
+  if (!row || String(row[1]) !== "SUPPLY" || String(row[2]) !== String(supplyId)) return false;
+  if (String(row[3] || "") !== String(oldStatus || "") || String(row[4]) !== String(newStatus)) return false;
+  if (String(row[7] || "") !== String(operationId || "")) return false;
+  if (!row[5] || !effectiveAt) return false;
+  return di3ToMillis_(row[5]) === di3ToMillis_(effectiveAt);
+}
+
 function di3EnsureSupplyStatusHistory_(supplyId, oldStatus, newStatus, effectiveAt, operationId, comment) {
   var matches = di3ReadRowsByColumnValue_("DocumentStatusHistory", 2, supplyId);
   var exists = matches.some(function (match) {
-    var row = match.values;
-    return String(row[1]) === "SUPPLY" && String(row[4]) === String(newStatus);
+    return di3SupplyStatusHistoryEventMatches_(
+      match.values, supplyId, oldStatus, newStatus, effectiveAt, operationId
+    );
   });
   if (exists) return false;
   di3AppendTableRows_("DocumentStatusHistory", [[
