@@ -284,6 +284,19 @@ function di3RunCatalogAndSupplyUnitTests() {
     }
   });
 
+  test("supply validation refresh reuses the supplied product index and one supply summary", function () {
+    var source = di3RefreshSupplyFormValidations.toString();
+    includes(source, "options.productIndex || di3GetProductFormOptionIndex_()");
+    includes(source, "options.supplySummary");
+    includes(source, 'di3SetSupplySelectorValidation_(sheet, "", selectableSupplies)');
+    equal(source.indexOf("di3GetSupplyDraftSummary()"), -1);
+  });
+  test("draft save does not rebuild unchanged product and numeric validations", function () {
+    var source = di3SaveSupplyDraft.toString();
+    equal(source.indexOf("di3RefreshSupplyFormValidations()"), -1);
+    includes(source, "skipSelectorValidation: !numberRecalculated");
+    includes(source, "di3RefreshSupplyDatePanel_(supplyRecord");
+  });
   test("supply form line snapshot is reused across validation and pack materialization", function () {
     var originals = {
       getSheet: di3GetSheetOrThrow_,
