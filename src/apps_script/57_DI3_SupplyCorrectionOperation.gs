@@ -215,6 +215,8 @@ function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, 
       source_map_fingerprint: sourceAudit.source_map.fingerprint
     }),
     source_receipt_fingerprint: String(sourceAudit.source_map.fingerprint),
+    source_fifo_allocation_fingerprint: String(sourceAudit.source_map.fifo_allocation_fingerprint),
+    source_fifo_allocation_count: Number(sourceAudit.source_map.fifo_allocation_count || 0),
     source_lines: sourceLines,
     source_movement_ids: sourceLines.map(function (line) { return String(line.movement_id); }),
     source_lot_ids: sourceLines.map(function (line) { return String(line.lot_id); }),
@@ -540,6 +542,8 @@ function di3AssertSupplyCorrectionImmutableSource_(operationId, payload) {
   if (ledgerMatches.length !== sourceLines.length || detailMatches.length !== sourceLines.length || lotMatches.length !== sourceLines.length) {
     throw new Error("Исходные StockLedger/StockMovementDetails/StockLots строки неполны.");
   }
+  var fifoReplayEvents = di3ReadRowsByColumnValue_("FifoReplayEvents", 5, operationId);
+  var fifoReplayAlreadyStarted = fifoReplayEvents.length > 0;
   var ledgerById = Object.create(null), detailById = Object.create(null), lotByMovement = Object.create(null);
   ledgerMatches.forEach(function (m) {
     var id = String(m.values[0]);
@@ -580,10 +584,20 @@ function di3AssertSupplyCorrectionImmutableSource_(operationId, payload) {
         Number(lot[8]) !== Number(line.initial_quantity) || Number(lot[9]) !== Number(line.unit_cost) ||
         String(lot[10]) !== String(line.cost_status) || Number(lot[14]) !== Number(line.total_cost_minor) ||
         new Date(lot[6]).getTime() !== new Date(line.effective_at).getTime() ||
-        new Date(lot[7]).getTime() !== new Date(line.recorded_at).getTime()) {
+        new Date(lot[7]).getTime() !== new Date(line.recorded_at).getTime() ||
+        (!fifoReplayAlreadyStarted && Number(lot[13]) !== Number(line.remaining_quantity))) {
       throw new Error("Исходный StockLots " + line.lot_id + " отличается от immutable receipt snapshot.");
     }
   });
+  if (!fifoReplayAlreadyStarted) {
+    var sourceAllocations = di3ReadRowsByColumnValues_("StockAllocations", 3,
+      sourceLines.map(function (line) { return String(line.lot_id); }));
+    var allocationAudit = di3BuildSupplyCorrectionAllocationAudit_(sourceLines, sourceAllocations);
+    if (allocationAudit.allocation_count !== Number(payload.source_fifo_allocation_count) ||
+        allocationAudit.fingerprint !== String(payload.source_fifo_allocation_fingerprint)) {
+      throw new Error("Исходная FIFO allocation projection изменилась после подготовки коррекции.");
+    }
+  }
   return true;
 }
 
