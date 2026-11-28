@@ -164,9 +164,11 @@ The following source changes have now been applied on the audit branch:
 1. **Read-only ordinary Preview.** `di3PreviewSupplyForm()` now calls `di3ResolveSupplyFormLines_(false, true)`. The read-only catalogue option index does not call `di3EnsureProductPublicCodes_()`; ordinary non-preview catalogue use retains the existing ensure behavior.
 2. **Full-edit item preflight is batched.** `di3ApplySupplyDocumentEditOperation_()` now resolves all target and removed item IDs in one `di3ReadRowsByColumnValues_()` call. A pure projection-plan helper validates duplicate IDs, target/removal overlap, database duplicate identities, and ownership for every target/removal before the parent supply row or item rows are written. Existing batch update/append and descending delete behavior is retained.
 3. **Supply selector status reads are batched.** `di3GetSupplyFormLoadSummary_()` and `di3GetSupplyDraftSummary()` now use one multi-key read per summary instead of repeated per-status lookups. De-duplication, user-facing status labels and chronology sorting remain in place.
+4. **Draft and full-edit form/catalogue snapshots are reused.** New `di3LoadSupplyFormLineSnapshot_()` loads the 20-line form range, product option index and PackVariants index once. Draft save and full-edit save now reuse that operation-local snapshot for validation and subsequent variant materialization, preserving the validate-before-create order. Preview/full-edit preview continue to request read-only catalogue mode. The snapshot is not persisted or cached across executions.
 
 Regression coverage added:
 - read-only product option index does not allocate public codes;
+- one operation-local form/catalogue snapshot is reused for validation and variant materialization;
 - ordinary Preview passes read-only catalogue mode;
 - selector and draft summaries use one multi-key lookup and preserve de-duplication/sorting/labels;
 - full-edit projection planning handles updates, appends, removals, foreign ownership, duplicate identities and target/removal conflicts;
@@ -174,11 +176,11 @@ Regression coverage added:
 
 Validation:
 - Apps Script syntax check: 69 modules passed.
-- Supply domain regression runner: 180 passed, 0 failed. Sub-suites: catalog/supply 18; receipt 19; historical supply 12; full edit 32; correction source audit 15; relations 15; FIFO preview 7; FIFO integration 11; execution core 18; PackVariants 15; workspace UX 18.
+- Supply domain regression runner: 182 passed, 0 failed. Sub-suites: catalog/supply 19; receipt 19; historical supply 12; full edit 33; correction source audit 15; relations 15; FIFO preview 7; FIFO integration 11; execution core 18; PackVariants 15; workspace UX 18.
 - Additional CI suites in the same job: FIFO replay 46/46, order domain 22/22, catalog/order UX 14/14, system safety 39/39, warehouse dashboard 11/11, finance schema 4/4, deployment manager 57/57, snapshot audit 8/8.
 - Release-contract and installation package jobs: PASS.
 
-CI ran for the branch PR merge result containing head `17547abe4bb2cd94f768cc60ad8f8efa1addc025`; package artifact was produced successfully. Runtime Apps Script measurements on a disposable workbook have not been run.
+CI ran for the branch PR merge result containing head `5f890d46f0484468930ceec1eb874115afa45386`; package artifact was produced successfully. Runtime Apps Script measurements on a disposable workbook have not been run.
 
 ## CI / repository state
 
