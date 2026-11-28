@@ -14,6 +14,7 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
   });
   var receivedSupplies = (supplyRows || []).filter(function (row) {
     if (di3NormalizeSupplyStatus_(row[15]) !== DI3_SUPPLY_STATUS.RECEIVED) return false;
+    if (row[18] === "" || row[18] == null) return false;
     return Number.isFinite(new Date(row[18]).getTime());
   }).map(function (row) {
     return {
