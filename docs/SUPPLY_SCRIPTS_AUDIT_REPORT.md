@@ -272,6 +272,7 @@ The source review followed the complete lifecycle rather than isolated functions
 ### Remaining candidates — deliberately not changed in this batch
 
 - `di3RefreshSupplyRegister` still reads/sorts all supplies, clears/rebuilds the whole visible range, reapplies formatting/banding/filter/frozen rows and compacts the sheet. This is a candidate for incremental row projection, but must be benchmarked and tested with filters/sorts before replacing the canonical rebuild.
+- `di3SaveSupplyDraft` does not automatically rebuild `Реестр поставок v3`; the menu has an explicit `Обновить реестр` command. This avoids a full register rebuild on every draft save, but means a newly created/edited draft may not appear in that view until the user refreshes it. Treat this as a UX choice to confirm before changing it.
 - Receipt preparation and receipt completion each load PackVariants data. A selective identity/current-variant read may reduce this, but recovery must retain global variant-ID ownership guarantees.
 - Historical entry refreshes the register after moving the draft to AWAITING and again after receipt. The first refresh is intentionally retained for the interrupted-between-stages recovery case; removing it safely needs an explicit failure-path design.
 - Full-edit planning can read the current supply items more than once while building the baseline and projection. Reuse is possible, but should be paired with tests for partial retries and identity reconciliation.
