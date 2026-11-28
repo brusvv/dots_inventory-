@@ -1396,7 +1396,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
   var storedCorrectionFingerprint = String(di3GetAppMetaValue_("fifo_supply_correction_fingerprint") || "");
   if (!isFullReplay && storedCorrectionFingerprint !== correctionMap.fingerprint) isFullReplay = true;
 
-  var ledgerRows = null, detailRows = null, lotRows = null, newLedgerRows = [];
+  var ledgerRows = null, detailRows = null, lotRows = null, allLotRows = null, newLedgerRows = [];
   var productIds = [], candidateReplay = null, effectiveSnapshot = null;
   if (isFullReplay) {
     ledgerRows = di3ReadTableValues_("StockLedger");
@@ -1408,6 +1408,7 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
     ledgerRows = effectiveSnapshot.ledger_rows;
     detailRows = effectiveSnapshot.detail_rows;
     lotRows = effectiveSnapshot.lot_rows;
+    allLotRows = effectiveSnapshot.all_lot_rows;
     productIds = Array.from(new Set(
       ledgerRows.map(function (row) { return String(row[3] || ""); })
         .concat(effectiveSnapshot.affected_product_ids).filter(Boolean)
@@ -1458,7 +1459,19 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
       var fullRows = di3BuildFifoAllocationRows_(run.run_id, candidateReplay.allocations, run.replay_id);
       var remaining = {};
       candidateReplay.remaining_lots.forEach(function (lot) { remaining[String(lot.lot_id)] = Number(lot.remaining_quantity); });
-      lotRows.forEach(function (row) { if (!Object.prototype.hasOwnProperty.call(remaining, String(row[0]))) remaining[String(row[0])] = Number(row[8]); });
+      var supersededLotMovements = Object.create(null);
+      (effectiveSnapshot.superseded_movement_ids || []).forEach(function (id) { supersededLotMovements[String(id)] = true; });
+      (allLotRows || []).forEach(function (row) {
+        var lotId = String(row[0]), movementId = String(row[2] || "");
+        if (Object.prototype.hasOwnProperty.call(remaining, lotId)) return;
+        if (supersededLotMovements[movementId]) {
+          // Superseded source lots remain immutable records, but their active
+          // remaining cache is zeroed only after F-06 archives the source value.
+          remaining[lotId] = 0;
+          return;
+        }
+        throw new Error("StockLots: эффективная партия " + lotId + " отсутствует в candidate FIFO replay.");
+      });
       var fullReplayContext = {
         replay_id: run.replay_id,
         fifo_run_id: String(run.run_id),
@@ -1473,15 +1486,15 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
         archived_at: run.created_at,
         target_rows: fullRows,
         target_remaining: remaining,
-        lot_rows: lotRows
+        lot_rows: allLotRows
       };
-      var fullReplace = di3ReplaceFifoProjectionSafely_(function () { return true; }, fullRows, lotRows, remaining, null, fullReplayContext);
-      updatedLots = lotRows.filter(function (row) { return Object.prototype.hasOwnProperty.call(remaining, String(row[0])); }).length;
+      var fullReplace = di3ReplaceFifoProjectionSafely_(function () { return true; }, fullRows, allLotRows, remaining, null, fullReplayContext);
+      updatedLots = (allLotRows || []).filter(function (row) { return Object.prototype.hasOwnProperty.call(remaining, String(row[0])); }).length;
       created = fullRows.length;
       replaced = fullReplace.allocations_removed;
       replayedMovements = candidateReplay.movement_count;
-      fullReplayStateRows = di3BuildFifoProductStateRows_(productIds, ledgerRows, lotRows.map(function (row) {
-        var copy = row.slice(); copy[13] = Object.prototype.hasOwnProperty.call(remaining, String(row[0])) ? remaining[String(row[0])] : row[8];
+      fullReplayStateRows = di3BuildFifoProductStateRows_(productIds, ledgerRows, (allLotRows || []).map(function (row) {
+        var copy = row.slice(); copy[13] = remaining[String(row[0])];
         if (row._di3RowNumber) copy._di3RowNumber = row._di3RowNumber;
         return copy;
       }));
