@@ -134,7 +134,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     var date = "2026-01-02T09:00:00Z";
     var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date)];
     var details = [detail("SRC", "IN"), detail("REPL", "IN")];
-    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 10, "2026-01-03T09:00:00Z", date)];
+    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 10, date, date)];
     var relations = [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")];
     var before = JSON.stringify({ rows: rows, details: details, lots: lots, relations: relations });
     snapshot(rows, details, lots, relations, [operation("OP-1")]);
