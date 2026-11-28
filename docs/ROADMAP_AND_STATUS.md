@@ -5,24 +5,21 @@
 ## GitHub / Release Pipeline
 
 - Ветка: `feature/github-preview-releases`.
-- Текущий HEAD: `2a33c5532e8bffcf7bef1a0458f8064f390111fd` (документационные коммиты).
-- Последний проверенный source/test commit: `f818dc2dc72663f32579f3aee534abc8c2af294e`.
-- На source/test commit `f818dc2` все три проверки прошли:
-  - [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084544027) — PASS; GitHub Deployment Manager **57/57**.
-  - [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084543985) — PASS.
-  - [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084544017) — PASS.
-- На текущем документационном HEAD `2a33c5532e8bffcf7bef1a0458f8064f390111fd` также прошли:
-  - [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084559513) — PASS.
-  - [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084559564) — PASS.
-  - [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084559558) — PASS.
+- Текущий HEAD: `05d0fafe634f7bb7086faa2c46df0082468bf085`.
+- Последний проверенный source/test commit: `05d0fafe634f7bb7086faa2c46df0082468bf085`.
+- На текущем source/test HEAD `05d0fafe` все три проверки прошли:
+  - [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46086131557) — PASS; GitHub Deployment Manager **57/57**.
+  - [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46086131571) — PASS; snapshot auditor **8/8**.
+  - [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46086131632) — PASS.
 - Последний source/test diff включает повторную проверку выбранного rollback backup после YES и fail-closed тест при исчезновении backup до записи.
+- R0 probe теперь включает manifest/scopes, полный fingerprint, trigger/deployment inventory, Script Properties key names only, и проверку backup metadata/folder membership. OAuth API redirects отключены; probe tests 8/8.
 - D-03–D-06: source review/regression coverage выполнены; live Apps Script / Drive runtime acceptance не выполнена и остаётся отдельным этапом.
 - PR #7 остаётся Draft; merge, tags, Preview/Stable publication и production update не выполнялись.
 
 ## Приоритеты и ограничения
 
 1. Завершать безопасный source-side аудит и поддерживать CI/docs в согласованном состоянии.
-2. Подготовить read-only R0 evidence: точные расхождения source snapshot, manifest/scopes, deployments, trigger handlers, Script Properties key names/presence, project fingerprint и backup metadata. Секретные значения Script Properties не извлекать.
+2. Получить read-only R0 evidence: точные расхождения source snapshot, manifest/scopes, deployments, trigger handlers, Script Properties key names/presence, project fingerprint и backup metadata. Секретные значения Script Properties не извлекать. Вставка/удаление временного probe-файла — отдельная запись исходников и требует отдельного подтверждения.
 3. Затем — согласованная runtime-приёмка D-03–D-07 и функциональных направлений только на disposable project/workbook.
 4. Supply Workspace, Dashboard, FIFO/returns и Finance остаются source-ready/partially accepted в соответствии с исполняемым чек-листом; runtime evidence не подменять CI.
 
