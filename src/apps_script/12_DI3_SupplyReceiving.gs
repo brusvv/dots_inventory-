@@ -460,11 +460,17 @@ function di3SetCurrentPackVariantsFromReceipt_(payload) {
     latestByProduct[line.product_id] = { pack_variant_id: line.pack_variant_id, index: index };
   });
   var variants = di3LoadPackVariantIndex_();
+  var variantsByProduct = Object.create(null);
+  Object.keys(variants.byId).forEach(function (variantId) {
+    var record = variants.byId[variantId];
+    var productId = String(record.product_id);
+    if (!variantsByProduct[productId]) variantsByProduct[productId] = [];
+    variantsByProduct[productId].push(record);
+  });
   var updates = [];
   Object.keys(latestByProduct).forEach(function (productId) {
-    Object.keys(variants.byId).forEach(function (variantId) {
-      var record = variants.byId[variantId];
-      if (String(record.product_id) !== String(productId)) return;
+    (variantsByProduct[String(productId)] || []).forEach(function (record) {
+      var variantId = String(record.pack_variant_id);
       var shouldBeCurrent = variantId === String(latestByProduct[productId].pack_variant_id);
       var current = record.is_current === true || String(record.is_current).toLowerCase() === "true";
       if (shouldBeCurrent === current) return;
