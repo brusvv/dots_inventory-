@@ -1,5 +1,5 @@
 /**
- * Dots Inventory v4 — read-only source audit for a received-supply correction.
+ * Dots Inventory v3 — read-only source audit for a received-supply correction.
  *
  * SC-01 only: this module verifies the immutable receipt-to-ledger/detail/lot
  * mapping. It does not register an operation, create schemas, write rows or
