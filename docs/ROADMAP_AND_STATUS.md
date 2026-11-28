@@ -1,3 +1,39 @@
+# Актуальное состояние проекта — 28.11.2026
+
+> Этот блок является единственной актуальной сводкой. Более ранние записи ниже — исторический журнал; их статусы и HEAD не должны переопределять этот блок.
+
+## GitHub / Release Pipeline
+
+- Ветка: `feature/github-preview-releases`.
+- Текущий HEAD: `2a33c5532e8bffcf7bef1a0458f8064f390111fd` (документационные коммиты).
+- Последний проверенный source/test commit: `f818dc2dc72663f32579f3aee534abc8c2af294e`.
+- На source/test commit `f818dc2` все три проверки прошли:
+  - [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084544027) — PASS; GitHub Deployment Manager **57/57**.
+  - [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084543985) — PASS.
+  - [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084544017) — PASS.
+- На текущем документационном HEAD `2a33c5532e8bffcf7bef1a0458f8064f390111fd` также прошли:
+  - [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084559513) — PASS.
+  - [Apps Script quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084559564) — PASS.
+  - [Package build](https://github.com/brusvv/dots_inventory-/actions/runs/46084559558) — PASS.
+- Последний source/test diff включает повторную проверку выбранного rollback backup после YES и fail-closed тест при исчезновении backup до записи.
+- D-03–D-06: source review/regression coverage выполнены; live Apps Script / Drive runtime acceptance не выполнена и остаётся отдельным этапом.
+- PR #7 остаётся Draft; merge, tags, Preview/Stable publication и production update не выполнялись.
+
+## Приоритеты и ограничения
+
+1. Завершать безопасный source-side аудит и поддерживать CI/docs в согласованном состоянии.
+2. Подготовить read-only R0 evidence: точные расхождения source snapshot, manifest/scopes, deployments, trigger handlers, Script Properties key names/presence, project fingerprint и backup metadata. Секретные значения Script Properties не извлекать.
+3. Затем — согласованная runtime-приёмка D-03–D-07 и функциональных направлений только на disposable project/workbook.
+4. Supply Workspace, Dashboard, FIFO/returns и Finance остаются source-ready/partially accepted в соответствии с исполняемым чек-листом; runtime evidence не подменять CI.
+
+**N-02 runtime fault-injection явно отложен владельцем. Не запускать, не добавлять в текущую очередь исполнения и не трактовать как текущий блокер до отдельного возобновления.**
+
+Production RC8 и рабочую таблицу не использовать как тестовый полигон. Не выполнять Clean Start, schema migration, restore, FIFO rebuild/replay, складские операции, заказы/возвраты, release publication, PR merge или production deployment без отдельного явного разрешения.
+
+Исполняемый чек-лист: [RC9_WORK_PLAN_CHECKLIST.md](./RC9_WORK_PLAN_CHECKLIST.md).
+
+---
+
 # Обновление аудита Release Pipeline — 28.11.2026
 
 > Эта запись новее предыдущего сводного статуса и отражает аудит после redirect hardening.
