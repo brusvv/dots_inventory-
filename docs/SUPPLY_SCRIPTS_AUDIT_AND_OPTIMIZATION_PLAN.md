@@ -113,3 +113,12 @@ Implemented in source on `feature/supply-correction-fifo-replay`:
 - Full-edit cancel/commit reload uses `skipValidationRefresh` to avoid rebuilding the whole validation set. If the supply number changed, only the selector validation is refreshed.
 
 Regression tests cover the lightweight snapshot call contracts, preserved full audit default, clear-without-validation-rebuild behavior, and targeted reload behavior. Exact source CI passed on `8609e3c2c1b1a9aad97d51ba8ddae1688358afc8`: 69 Apps Script files syntax-checked; supply domain 189/189; FIFO 46/46; order 22/22; catalog/order UX 14/14; system safety 39/39; warehouse dashboard 11/11; finance 4/4; snapshot audit 8/8. Release pipeline and installation package also passed. Runtime timing has not been measured; no Apps Script workbook was opened or changed.
+
+
+## Follow-up — batched clearing and final regression guard
+
+- `di3NewSupplyForm()` now clears adjacent transient fields in two range operations (`M4:M9` and `N2:N7`) instead of separate calls for preview/reason and identity/mode cells.
+- Added a structural regression test ensuring `di3ReconcileCurrentPackVariantsForProducts_()` consumes the selective-read result and cannot retain the stale full-table call.
+- Final source/test commit for this batch: `7468c61f673f8748347066e1ab1061e06bdac708`.
+- Exact commit quality gates passed: 69 Apps Script syntax files; 192 supply-domain/lifecycle assertions; FIFO 46/46; Order 22/22; Catalog/Order UX 14/14; System Safety 39/39; Warehouse Dashboard 11/11; Finance 4/4; Snapshot Audit 8/8. Release pipeline and installation package passed on the same commit.
+- Runtime timing is still pending on a disposable restored workbook.
