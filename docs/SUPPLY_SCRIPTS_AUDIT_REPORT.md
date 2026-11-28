@@ -286,13 +286,14 @@ Implemented on `feature/supply-correction-fifo-replay`:
 - Reused the preloaded receipt operation/supply for lightweight receipt-payload integrity checks during full-edit commit.
 - Reused product and supply-summary snapshots in form validation refresh; removed unnecessary full validation rebuilds from draft save and status/receipt/cancellation/historical paths.
 - Removed the second register rebuild after register-driven transitions and resolved the target row by `supply_id`, not the stale pre-refresh row number.
+- Removed the second date-panel refresh after successful form-driven stage transitions; only idempotent fast paths refresh it in the caller.
 - Limited correction operation reads to IDs referenced by SupplyCorrectionEvents in FIFO rebuild and candidate preview.
 - Added regression assertions for each changed contract.
 
-Exact-head validation on `7e2ce3c785dd58eed4bcaef8b56504b2021188e4`:
+Exact-head validation on `55832cd17f67f2f158048d44fb5b42527f4de7ab`:
 
 - Apps Script syntax: 69 files.
-- Supply domain/lifecycle: 200 passed, 0 failed.
+- Supply domain/lifecycle: 201 passed, 0 failed.
 - FIFO replay: 46/46.
 - Order domain: 22/22.
 - Catalog/Order UX: 15/15.
