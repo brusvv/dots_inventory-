@@ -50,6 +50,14 @@ function di3RunSupplyCorrectionRelationUnitTests() {
     equal(candidate.superseded_movement_ids.join(","), "MOVE-A");
     equal(candidate.active_replacement_movement_ids.join(","), "MOVE-B");
   });
+  test("COMMITTED relation event remains candidate-visible until its operation commits", function () {
+    var rows = [event(1, "REL-1", "COMMITTED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1")];
+    var ops = [operation("OP-1", "PREPARED")];
+    equal(resolve(rows, ops).relations.length, 0);
+    var candidate = resolve(rows, ops, { include_operation_id: "OP-1" });
+    equal(candidate.superseded_movement_ids.join(","), "MOVE-A");
+    equal(candidate.active_replacement_movement_ids.join(","), "MOVE-B");
+  });
   test("pending relation cannot be included for a different operation", function () {
     var rows = [event(1, "REL-1", "PREPARED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1")];
     equal(resolve(rows, [operation("OP-1", "PREPARED")], { include_operation_id: "OP-OTHER" }).relations.length, 0);
