@@ -45,8 +45,9 @@ function di3BuildSupplyFullEditSnapshot_(supplyId, options) {
   var supply = options.supply || di3GetSupplyById_(id);
   if (!supply) throw new Error("Поставка не найдена по supply_id " + id + ".");
   var items = di3GetSupplyItems_(id);
-  var receiptOperation = Object.prototype.hasOwnProperty.call(options, "receiptOperation")
-    ? options.receiptOperation : di3GetSupplyReceiptOperation_(id);
+  var receiptOperation = options.includeReceiptOperation === false ? null
+    : (Object.prototype.hasOwnProperty.call(options, "receiptOperation")
+      ? options.receiptOperation : di3GetSupplyReceiptOperation_(id));
   var receiptPayload = null;
   var receiptPayloadIntegrity = receiptOperation ? "NOT_CHECKED" : "NOT_APPLICABLE";
   if (includeReceiptPayload && receiptOperation &&
@@ -661,6 +662,7 @@ function di3SaveFullSupplyEdit() {
     var snapshot = di3BuildSupplyFullEditSnapshot_(context.supply_id, {
       includeStockAudit: false,
       includeReceiptPayload: false,
+      includeReceiptOperation: false,
       supply: context.supply
     });
     if (snapshot.fingerprint !== context.baseline_hash) {
