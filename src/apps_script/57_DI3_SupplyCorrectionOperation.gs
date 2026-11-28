@@ -148,7 +148,9 @@ function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, 
   setSupplyField("final_amount", plan.final_amount);
   var priorNotes = String(supply.notes || "").trim();
   var correctionNote = "Исправление " + correctionId + " (" + now.toISOString() + "): " + reason;
-  setSupplyField("notes", priorNotes ? priorNotes + "\n" + correctionNote : correctionNote);
+  var nextNotes = priorNotes ? priorNotes + "\n" + correctionNote : correctionNote;
+  if (nextNotes.length > 45000) throw new Error("Поле примечаний слишком велико для безопасного добавления записи об исправлении.");
+  setSupplyField("notes", nextNotes);
   setSupplyField("updated_at", now);
 
   var beforeItemRows = oldItems.map(function (item) {
