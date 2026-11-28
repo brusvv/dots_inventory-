@@ -1004,6 +1004,52 @@ test("resolves a branch to one pinned commit and preflights the Git tree before 
   }
 });
 
+test("a pinned branch snapshot never follows a later moving branch HEAD", () => {
+  const branch = "feature/pinned-after-move";
+  const pinnedCommit = "b".repeat(40);
+  const movedHead = "c".repeat(40);
+  const treeSha = "d".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;"
+  };
+  const entries = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  const apiCalls = [];
+  context.di3FetchGitHubJson_ = url => {
+    apiCalls.push(url);
+    if (url.endsWith("/git/commits/" + pinnedCommit)) {
+      return { status: "OK", data: { sha: pinnedCommit, tree: { sha: treeSha } } };
+    }
+    if (url.includes("/branches/")) {
+      return { status: "OK", data: { name: branch, commit: { sha: movedHead } } };
+    }
+    if (url.endsWith("/git/trees/" + treeSha + "?recursive=1")) {
+      return { status: "OK", data: { tree: entries, truncated: false } };
+    }
+    throw new Error("Unexpected GitHub API URL: " + url);
+  };
+  context.UrlFetchApp = { fetch: url => {
+    const name = decodeURIComponent(String(url).split("/").pop());
+    const source = sources["src/apps_script/" + name];
+    if (source == null) throw new Error("Unexpected raw URL: " + url);
+    return { getResponseCode: () => 200, getContentText: () => source };
+  } };
+  try {
+    const result = vm.runInContext("di3GetGitHubBranchManifest_(" +
+      JSON.stringify(branch) + "," + JSON.stringify(pinnedCommit) + ")", context);
+    assert.equal(result.manifest.git_commit, pinnedCommit);
+    assert.notEqual(result.manifest.git_commit, movedHead);
+    assert.ok(apiCalls.some(url => url.endsWith("/git/commits/" + pinnedCommit)));
+    assert.ok(!apiCalls.some(url => url.includes("/branches/")));
+  } finally {
+    delete context.di3FetchGitHubJson_;
+    delete context.UrlFetchApp;
+  }
+});
+
 test("preserves installed updater modules for older branches without branch selector support", () => {
   const branch = "feature/older-business-change";
   const commit = "a".repeat(40);
