@@ -394,3 +394,10 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 - [ ] Run the read-only probe on a restored disposable workbook.
 - [ ] Obtain separate explicit approval before any mutating SC-04 failure/recovery test, even on the disposable copy.
 - [ ] Do not correct supply #17 or change the live workbook until all runtime gates pass and the exact mutation is separately approved.
+
+### SC-04 pack-variant reconciliation review — 2026-11-28
+
+- [x] Preserve `PackVariants.updated_at`: update only when `is_current` actually changes; use the reconciliation timestamp rather than copying a historical supply receipt timestamp.
+- [x] Fail closed on ambiguous latest received-supply source data for affected products: invalid `received_at`, invalid/duplicate `line_no`, or missing selected `pack_variant_id`.
+- [x] Exact source commit `1761f0a2d418825982a20f56724d8f40ba3aec3f`: quality gates [46101790363](https://github.com/brusvv/dots_inventory-/actions/runs/46101790363), release pipeline [46101795652](https://github.com/brusvv/dots_inventory-/actions/runs/46101795652), package [46101795713](https://github.com/brusvv/dots_inventory-/actions/runs/46101795713) — PASS; supply/correction/lifecycle 161/161, Deployment Manager 57/57.
+- [ ] Disposable-workbook runtime acceptance remains NOT RUN.
