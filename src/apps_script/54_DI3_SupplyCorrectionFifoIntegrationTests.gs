@@ -53,6 +53,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     equal(result.detail_rows[0][0], "REPL");
     equal(result.lot_rows.length, 1);
     equal(result.lot_rows[0][0], "LOT-REPL");
+    equal(result.lot_rows[0]._di3RowNumber, 3, "physical StockLots row must survive filtering");
     equal(result.affected_product_ids.join(","), "P1");
   });
 
