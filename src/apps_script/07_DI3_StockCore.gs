@@ -553,6 +553,7 @@ function di3AssertNoPendingStockOperations_() {
 function di3GetProductFifoValuation(productId) {
   di3AssertNoPendingStockOperations_();
   var correctionMap = di3ReadSupplyCorrectionEffectiveMovementMap_();
+  di3AssertSupplyCorrectionFifoProjectionCurrent_(correctionMap);
   var superseded = Object.create(null);
   correctionMap.superseded_movement_ids.forEach(function (id) { superseded[String(id)] = true; });
   var lots = di3ReadRowsByColumnValue_("StockLots", 1, productId).map(function (match) { return match.values; })
@@ -731,6 +732,7 @@ function di3GetWarehouseDashboardData(targetGrossMargin) {
   var productCodeMap = di3GetProductPublicCodeMap_();
   var active = di3GetActiveRunAllocations_();
   var correctionMap = di3ReadSupplyCorrectionEffectiveMovementMap_();
+  di3AssertSupplyCorrectionFifoProjectionCurrent_(correctionMap);
   var superseded = Object.create(null);
   correctionMap.superseded_movement_ids.forEach(function (id) { superseded[String(id)] = true; });
   var lots = di3ReadTableValues_("StockLots").filter(function (row) {
