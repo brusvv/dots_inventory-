@@ -280,8 +280,7 @@ function di3NewProductForm(options) {
   sheet.getRange("B4:B16").clearContent();
   sheet.getRange("B16").setValue("Появятся после выбора существующего товара");
   di3SetProductFormStateBaseline_(sheet);
-  // Clearing values does not remove data validations. Avoid reopening through
-  // di3OpenProductForm(), which would rebuild the product index and all rules.
+  // Clearing values does not remove data validations. Avoid reopening through the normal open path, which would rebuild the product index and all rules.
   ss.setActiveSheet(sheet);
   return { status: "READY", cleared: true, mode: "CREATE" };
 }
