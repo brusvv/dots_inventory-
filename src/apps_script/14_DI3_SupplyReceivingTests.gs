@@ -93,9 +93,9 @@ function di3RunSupplyReceivingUnitTests() {
   });
   test("register transition clears the refreshed row by supply_id and avoids a second full refresh", function () {
     var source = di3TransitionSelectedSupply_.toString();
-    includes(source, 'register.getRange(4, 12');
+    equal(source.indexOf('register.getRange(4, 12') >= 0, true);
     equal(source.indexOf("selected.row_number, 13"), -1);
-    includes(source, 'if (String(result.status) === "ALREADY_RECEIVED") di3RefreshSupplyRegister()');
+    equal(source.indexOf('if (String(result.status) === "ALREADY_RECEIVED") di3RefreshSupplyRegister()') >= 0, true);
   });
   test("receipt date parser accepts Russian date and time", function () {
     var date = di3ParseSupplyEffectiveDate_("20.11.2026 14:35", null);
