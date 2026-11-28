@@ -614,6 +614,20 @@ function di3AdvanceOrderStatus(orderNumber, nextStatus, effectiveAt) {
   });
 }
 
+function di3ResolveOrderFifoSnapshotStatus_(bucket) {
+  bucket = bucket || {};
+  var count = Number(bucket.count) || 0;
+  var dispatched = Number(bucket.dispatched) || 0;
+  var complete = Number(bucket.complete) || 0;
+  if (dispatched <= 0) return "NOT_DISPATCHED";
+  // A partially linked dispatch must never be reported as a complete cost.
+  if (dispatched !== count) return "PENDING";
+  if (complete === dispatched && !bucket.partial && !bucket.unknown) return "COMPLETE";
+  if (bucket.partial || (complete > 0 && bucket.unknown)) return "PARTIAL";
+  if (bucket.unknown) return "UNKNOWN";
+  return "PENDING";
+}
+
 function di3RefreshAllOrderFifoSnapshots_(reason, fifoRunId, affectedProductIds) {
   var orderSheet = di3GetSpreadsheet_().getSheetByName("V3_Orders");
   var itemSheet = di3GetSpreadsheet_().getSheetByName("V3_OrderItems");
@@ -785,15 +799,9 @@ function di3RefreshAllOrderFifoSnapshots_(reason, fifoRunId, affectedProductIds)
     var orderId = String(row[0] || "");
     var bucket = costsByOrder[orderId];
     if (!orderId || !bucket) return;
-    var status = "NOT_DISPATCHED", total = "", profit = "";
-    if (bucket.dispatched > 0) {
-      if (bucket.complete === bucket.dispatched && !bucket.partial && !bucket.unknown) {
-        status = "COMPLETE";
-        total = di3MoneyFromMinorUnits_(bucket.total_minor);
-      } else if (bucket.partial || (bucket.complete > 0 && bucket.unknown)) status = "PARTIAL";
-      else if (bucket.unknown) status = "UNKNOWN";
-      else status = "PENDING";
-    }
+    var status = di3ResolveOrderFifoSnapshotStatus_(bucket);
+    var total = "", profit = "";
+    if (status === "COMPLETE") total = di3MoneyFromMinorUnits_(bucket.total_minor);
     if (String(row[3]) === DI3_ORDER_STATUS.COMPLETED && status === "COMPLETE") {
       var sellerRevenueMinor = di3MoneyToMinorUnits_(Number(row[23]), "Выручка продавца", false);
       profit = di3MoneyFromMinorUnits_(sellerRevenueMinor - bucket.total_minor);
