@@ -705,7 +705,7 @@ test("builds a branch manifest pinned to one immutable commit and validates it",
     "src/apps_script/01_Module.gs": "function alpha() { return 1; }\\n"
   };
   const tree = Object.entries(sources).map(([path, source]) => ({
-    path, type: "blob", size: Buffer.byteLength(source),
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
     sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
   }));
   const manifest = vm.runInContext(
@@ -755,6 +755,25 @@ test("selected branch overrides Stable/Preview release discovery", () => {
     delete context.PropertiesService;
     delete context.di3GetGitHubBranchManifest_;
   }
+});
+
+test("branch manifest rejects symlink-mode Apps Script entries", () => {
+  const branch = "feature/symlink-source";
+  const commit = "d".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = { TIME_ZONE: "Europe/Moscow" };',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;"
+  };
+  const tree = Object.entries(sources).map(([path, content]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(content),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(content) + String.fromCharCode(0) + content, "utf8").digest("hex")
+  }));
+  tree[0].mode = "120000";
+  assert.throws(() => vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  ), /допустимый набор Apps Script/);
 });
 
 test("rejects branch source content that does not match its Git blob SHA", () => {
