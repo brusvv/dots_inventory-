@@ -136,3 +136,25 @@ D-09 runtime acceptance = PASS только после фактического 
 ## 9. Журнал
 
 Сохранять дату/время с timezone, spreadsheet ID, Script ID, branch, old/new commit SHA, execution IDs, backup file ID/URL/SHA-256, before/after project fingerprint, file counts, triggers/deployments inventory и ожидаемый/фактический результат. Не прикладывать OAuth token, GitHub token или Script Properties values.
+
+## 7B. D-09-N05 — source integrity fixture / CI evidence
+
+Статус: **UNIT/CI PASS; APPS SCRIPT RUNTIME NOT RUN**.
+
+Изолированный набор `tools/test_github_branch_tree_preflight.js` проверяет интеграцию Git tree metadata с фактически загруженным source:
+
+- размер raw source отличается от `size` в Git tree — manifest не собирается;
+- Git blob SHA-1 отличается от SHA скачанного source — manifest не собирается;
+- SHA-256 в branch manifest совпадает с SHA-256, вычисленным из того же проверенного source;
+- предыдущие пять Git tree preflight fixtures продолжают проходить.
+
+GitHub Actions run #68: **success**.
+- Apps Script syntax check — PASS.
+- GitHub deployment-manager regression suite: 72 tests — PASS.
+- Git tree preflight/integrity fixtures: 8 tests — PASS.
+- Commit: `a45d5cee2d89559389d205b4e432d4c50db69acb`.
+- Run: https://github.com/brusvv/dots_inventory-/actions/runs/46177983252
+
+Ограничение SHA-256: Git Trees API предоставляет SHA-1 Git blob и размер, но не отдельный SHA-256 каждого raw-файла. Поэтому branch flow вычисляет SHA-256 локально из скачанного source и включает его в manifest; тест подтверждает именно это поведение. Он не заявляет о сравнении с независимым SHA-256, полученным от GitHub. Для release assets отдельная проверка SHA-256 manifest asset уже покрыта regression suite.
+
+Эти тесты выполняются в Node VM с mock GitHub API/raw fetch. Они не являются Apps Script runtime acceptance и не меняют общий статус D-09 runtime.
