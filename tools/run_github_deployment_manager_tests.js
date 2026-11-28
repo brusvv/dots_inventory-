@@ -15,9 +15,9 @@ const runtimeState = {
 const context = vm.createContext({
   console, Date, JSON, Math, Number, String, Object, Array, RegExp, Error, isNaN,
   parseInt, parseFloat, Utilities: {
-    DigestAlgorithm: { SHA_256: "SHA-256" },
+    DigestAlgorithm: { SHA_256: "SHA-256", SHA_1: "SHA-1" },
     Charset: { UTF_8: "UTF-8" },
-    computeDigest: (_algorithm, value) => Array.from(crypto.createHash("sha256").update(String(value), "utf8").digest()).map((b) => b > 127 ? b - 256 : b),
+    computeDigest: (algorithm, value) => Array.from(crypto.createHash(algorithm === "SHA-1" ? "sha1" : "sha256").update(String(value), "utf8").digest()).map((b) => b > 127 ? b - 256 : b),
     newBlob: (value) => ({ getBytes: () => Array.from(Buffer.from(String(value), "utf8")).map((b) => b > 127 ? b - 256 : b) })
   },
   DI3_APP_CONFIG: { TIME_ZONE: "Europe/Moscow", GITHUB_RELEASE: { REPOSITORY: "brusvv/dots_inventory-" } },
@@ -485,6 +485,7 @@ function configureInstallerHarness(answer, outcome) {
     files[1]
   ];
   let readCount = 0, updateCalls = 0, alerts = [];
+  let lockAcquireCount = 0, lockReleaseCount = 0, lockWaitMs = null;
   let selectedBackupReadCount = 0, selectedBackupMode = "normal";
   context.di3PrepareGitHubInstallPreview = () => ({
     status: "PREVIEW_READY", summary: { removed: 0, target_file_count: 2, added: 0, changed: 1, unchanged: 1, preserved_unmanaged: 0, preserved_non_server: 1 },
@@ -511,13 +512,21 @@ function configureInstallerHarness(answer, outcome) {
     ButtonSet: { YES_NO: "YES_NO", OK: "OK" }
   }) };
   context.di3GetGitHubInstallCompatibilityReport_ = () => ({ status: "READY", issues: [] });
-  context.di3UpdateAppsScriptProjectContent_ = () => {
+  context.di3UpdateAppsScriptProjectContent_ = (_scriptId, targetFiles) => {
     updateCalls++;
     if (outcome === "update-uncertain") throw new Error("simulated transport timeout");
+    // Model the Apps Script API write so the subsequent getContent read-back
+    // observes the exact files submitted to updateContent.
+    project.content.files = targetFiles.map(file => ({ ...file }));
     return { updateTime: "2026-11-28T00:00:00Z" };
   };
   context.PropertiesService = { getScriptProperties: () => ({ setProperty: () => {} }) };
-  return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; }, alerts, backup };
+  context.LockService = { getScriptLock: () => ({
+    tryLock: (waitMs) => { lockAcquireCount++; lockWaitMs = waitMs; return outcome !== "lock-busy"; },
+    releaseLock: () => { lockReleaseCount++; }
+  }) };
+  return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; },
+    get lockAcquireCount() { return lockAcquireCount; }, get lockReleaseCount() { return lockReleaseCount; }, get lockWaitMs() { return lockWaitMs; }, alerts, backup };
 }
 
 test("installer NO cancellation preserves verified backup and never calls updateContent", () => {
@@ -529,8 +538,67 @@ test("installer NO cancellation preserves verified backup and never calls update
     assert.equal(result.backup.file_id, h.backup.file_id);
     assert.equal(h.updateCalls, 0);
     assert.equal(h.readCount, 1);
+    assert.equal(h.lockAcquireCount, 0);
+    assert.equal(h.lockReleaseCount, 0);
   } finally {
-    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
+test("installer does not write when the script lock is already held", () => {
+  const h = configureInstallerHarness("YES", "lock-busy");
+  try {
+    const result = vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context);
+    assert.equal(result.status, "LOCK_NOT_ACQUIRED");
+    assert.equal(result.write_performed, false);
+    assert.equal(h.updateCalls, 0);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
+    assert.equal(h.lockReleaseCount, 0);
+  } finally {
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
+test("installer releases script lock after a successful verified install", () => {
+  const h = configureInstallerHarness("YES", "normal");
+  try {
+    const result = vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context);
+    assert.equal(result.status, "INSTALLED_AND_VERIFIED");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
+test("installer releases script lock when update result is uncertain", () => {
+  const h = configureInstallerHarness("YES", "update-uncertain");
+  try {
+    const result = vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context);
+    assert.equal(result.status, "UPDATE_RESULT_UNCERTAIN");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
+test("installer releases script lock when post-write read-back is unavailable", () => {
+  const h = configureInstallerHarness("YES", "readback-unavailable");
+  try {
+    const result = vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context);
+    assert.equal(result.status, "POST_WRITE_VERIFICATION_UNAVAILABLE");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
   }
 });
 
@@ -543,7 +611,7 @@ test("installer classifies uncertain update result and does not retry", () => {
     assert.equal(h.updateCalls, 1);
     assert.equal(h.readCount, 2);
   } finally {
-    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
   }
 });
 
@@ -556,7 +624,7 @@ test("installer distinguishes accepted write with unavailable post-write read-ba
     assert.equal(h.updateCalls, 1);
     assert.equal(h.readCount, 3);
   } finally {
-    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
   }
 });
 
@@ -570,7 +638,7 @@ test("installer distinguishes accepted write with mismatched post-write files", 
     assert.equal(h.updateCalls, 1);
     assert.equal(h.readCount, 3);
   } finally {
-    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+    for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
   }
 });
 
@@ -581,7 +649,7 @@ function configureRollbackHarness(answer, outcome) {
   const selectedEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(oldProject) + ", 'sheet-123', '2026-11-27T00:00:00.000Z')", context);
   const currentEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(baseline) + ", 'sheet-123', '2026-11-28T00:00:00.000Z')", context);
   let readCount = 0, updateCalls = 0, alerts = [], selectedBackupReadCount = 0,
-    selectedBackupMode = "normal";
+    selectedBackupMode = "normal", lockAcquireCount = 0, lockReleaseCount = 0, lockWaitMs = null;
   context.SpreadsheetApp = { getUi: () => ({
     Button: { OK: "OK", CANCEL: "CANCEL", YES: "YES", NO: "NO" },
     ButtonSet: { OK_CANCEL: "OK_CANCEL", YES_NO: "YES_NO", OK: "OK" },
@@ -611,56 +679,128 @@ function configureRollbackHarness(answer, outcome) {
   context.di3ReadAndVerifyInstallBackup_ = () => ({ file_id: "current-backup-123456", file_name: "DI3_SOURCE_BACKUP_current.json", url: "https://drive.google.com/current" });
   context.di3UpdateAppsScriptProjectContent_ = () => { updateCalls++; if (outcome === "update-uncertain") throw new Error("simulated rollback transport timeout"); return { updateTime: "2026-11-28T00:00:00Z" }; };
   context.PropertiesService = { getScriptProperties: () => ({ deleteProperty: () => {} }) };
+  context.LockService = { getScriptLock: () => ({
+    tryLock: (waitMs) => { lockAcquireCount++; lockWaitMs = waitMs; return outcome !== "lock-busy"; },
+    releaseLock: () => { lockReleaseCount++; }
+  }) };
   return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; },
-    get selectedBackupReadCount() { return selectedBackupReadCount; }, set selectedBackupMode(value) { selectedBackupMode = value; }, alerts };
+    get selectedBackupReadCount() { return selectedBackupReadCount; },
+    get lockAcquireCount() { return lockAcquireCount; }, get lockReleaseCount() { return lockReleaseCount; }, get lockWaitMs() { return lockWaitMs; },
+    set selectedBackupMode(value) { selectedBackupMode = value; }, alerts };
 }
+
+test("rollback does not write when the shared script lock is already held", () => {
+  const h = configureRollbackHarness("YES", "lock-busy");
+  try {
+    const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
+    assert.equal(result.status, "LOCK_NOT_ACQUIRED");
+    assert.equal(result.write_performed, false);
+    assert.equal(h.updateCalls, 0);
+    assert.equal(h.selectedBackupReadCount, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
+    assert.equal(h.lockReleaseCount, 0);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
+test("rollback releases the shared script lock after verified restore", () => {
+  const h = configureRollbackHarness("YES", "restore-expected");
+  try {
+    const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
+    assert.equal(result.status, "ROLLED_BACK_AND_VERIFIED");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
 
 test("rollback NO cancellation never calls updateContent", () => {
   const h = configureRollbackHarness("NO", "normal");
-  try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "CANCELLED"); assert.equal(result.write_performed, false); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 1); }
-  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+  try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "CANCELLED"); assert.equal(result.write_performed, false); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 1); assert.equal(h.lockAcquireCount, 0); assert.equal(h.lockReleaseCount, 0); }
+  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
+});
+
+test("rollback releases the shared script lock when update result is uncertain", () => {
+  const h = configureRollbackHarness("YES", "update-uncertain");
+  try {
+    const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
+    assert.equal(result.status, "ROLLBACK_RESULT_UNCERTAIN");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
+});
+
+test("rollback releases the shared script lock when post-write read-back is unavailable", () => {
+  const h = configureRollbackHarness("YES", "readback-unavailable");
+  try {
+    const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context);
+    assert.equal(result.status, "ROLLBACK_VERIFICATION_UNAVAILABLE");
+    assert.equal(h.updateCalls, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
+    assert.equal(h.lockReleaseCount, 1);
+  } finally {
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
+  }
 });
 
 test("rollback classifies uncertain update and does not retry", () => {
   const h = configureRollbackHarness("YES", "update-uncertain");
   try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "ROLLBACK_RESULT_UNCERTAIN"); assert.equal(result.write_performed, "UNKNOWN"); assert.equal(h.updateCalls, 1); assert.equal(h.readCount, 2); }
-  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
 test("rollback distinguishes unavailable post-write verification", () => {
   const h = configureRollbackHarness("YES", "readback-unavailable");
   try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "ROLLBACK_VERIFICATION_UNAVAILABLE"); assert.equal(result.write_performed, true); assert.equal(h.updateCalls, 1); assert.equal(h.readCount, 3); }
-  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
 test("rollback distinguishes mismatched post-write file set", () => {
   const h = configureRollbackHarness("YES", "readback-mismatch");
   try { const result = vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context); assert.equal(result.status, "ROLLBACK_VERIFICATION_FAILED"); assert.equal(result.write_performed, true); assert.match(result.error, /отличается от подготовленного/); assert.equal(h.updateCalls, 1); assert.equal(h.readCount, 3); }
-  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
-test("installer final fingerprint guard blocks concurrent project edits", () => {
+test("installer final fingerprint guard blocks concurrent project edits and releases lock", () => {
   const h = configureInstallerHarness("YES", "concurrent-change");
-  try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /проект изменился после подтверждения/); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2); }
-  finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+  try {
+    assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /проект изменился после подтверждения/);
+    assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000); assert.equal(h.lockReleaseCount, 1);
+  } finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
-test("rollback final fingerprint guard blocks concurrent project edits", () => {
+test("rollback final fingerprint guard blocks concurrent project edits and releases lock", () => {
   const h = configureRollbackHarness("YES", "concurrent-change");
-  try { assert.throws(() => vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context), /проект изменился после создания резервной копии/); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2); }
-  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+  try {
+    assert.throws(() => vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context), /проект изменился после создания резервной копии/);
+    assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000); assert.equal(h.lockReleaseCount, 1);
+  } finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
 test("installer rejects Drive backup metadata that differs from verified payload", () => {
   const h = configureInstallerHarness("NO", "metadata-mismatch");
   try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /метаданные Drive source backup не совпадают/i); assert.equal(h.updateCalls, 0); }
-  finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "di3GetBackupFolder_", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+  finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "di3GetBackupFolder_", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
 test("installer rejects source backup moved outside configured backup folder", () => {
   const h = configureInstallerHarness("NO", "wrong-folder");
   try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /находится вне папки резервных копий/); assert.equal(h.updateCalls, 0); }
-  finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "di3GetBackupFolder_", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key]; }
+  finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "di3GetBackupFolder_", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
 test("rollback reopens the selected backup after YES before updateContent", () => {
@@ -671,7 +811,7 @@ test("rollback reopens the selected backup after YES before updateContent", () =
     assert.equal(h.selectedBackupReadCount, 2);
     assert.equal(h.updateCalls, 1);
   } finally {
-    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
   }
 });
 
@@ -683,8 +823,394 @@ test("rollback fails closed if selected backup becomes unavailable after YES", (
     assert.equal(h.selectedBackupReadCount, 2);
     assert.equal(h.updateCalls, 0);
   } finally {
-    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService"]) delete context[key];
+    for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
   }
+});
+
+
+test("validates safe GitHub branch names and rejects unsafe refs", () => {
+  assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('feature/my-change')", context), "feature/my-change");
+  assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('release/v4.1')", context), "release/v4.1");
+  assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('main')", context), "main");
+  assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('bugfix/branch-selector')", context), "bugfix/branch-selector");
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature/.hidden')", context), /Недопустимое имя GitHub-ветки/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature/../main')", context), /Недопустимое имя GitHub-ветки/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature//nested')", context), /Недопустимое имя GitHub-ветки/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature/branch.lock')", context), /Недопустимое имя GitHub-ветки/);
+});
+
+test("builds a branch manifest pinned to one immutable commit and validates it", () => {
+  const branch = "feature/branch-test";
+  const commit = "b".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });\n',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;\n",
+    "src/apps_script/01_Module.gs": "function alpha() { return 1; }\n"
+  };
+  const tree = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  const manifest = vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  );
+  assert.equal(manifest.release_channel, "branch");
+  assert.equal(manifest.source_branch, branch);
+  assert.equal(manifest.git_commit, commit);
+  assert.equal(manifest.git_tag, "branch:" + branch + "@" + commit.slice(0, 12));
+  assert.equal(manifest.target_schema_version, 4);
+  assert.equal(manifest.application_time_zone, "Europe/Moscow");
+  assert.ok(manifest.files.every(file => file.raw_url.includes("/" + commit + "/src/apps_script/")));
+  const checked = vm.runInContext(
+    "di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")",
+    context
+  );
+  assert.equal(checked.status, "VALID");
+  assert.equal(checked.file_count, 3);
+});
+
+test("branch manifest rejects unsafe branch metadata and a mismatched commit tag", () => {
+  const manifest = {
+    format: "dots-inventory-release/v1", git_tag: "branch:feature/work@cccccccccccc",
+    release_channel: "branch", source_branch: "feature/../work", git_commit: "c".repeat(40),
+    target_schema_version: 4, application_time_zone: "Europe/Moscow", minimum_updater_version: "0.2.0",
+    manifest_policy: "PRESERVE_TARGET_PROJECT_MANIFEST", source_policy: "PINNED_COMMIT_RAW_FILES",
+    files: [{ name: "01_Module.gs", type: "SERVER_JS", source_path: "src/apps_script/01_Module.gs",
+      raw_url: "https://raw.githubusercontent.com/brusvv/dots_inventory-/" + "c".repeat(40) + "/src/apps_script/01_Module.gs",
+      size_bytes: 1, sha256: "d".repeat(64) }]
+  };
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")", context), /Недопустимое имя GitHub-ветки/);
+  manifest.source_branch = "feature/work";
+  manifest.git_tag = "branch:feature/work@000000000000";
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")", context), /привязан к точному commit SHA/);
+});
+
+test("selected branch fails closed when its immutable commit SHA is missing", () => {
+  context.PropertiesService = { getScriptProperties: () => ({
+    getProperty: key => key === "DI3_GITHUB_SELECTED_BRANCH" ? "feature/branch-test" : null
+  }) };
+  try {
+    assert.throws(() => vm.runInContext("di3GetSelectedGitHubBranchSelection_()", context),
+      /не сохранён полный commit SHA/);
+  } finally {
+    delete context.PropertiesService;
+  }
+});
+
+test("selected branch overrides Stable/Preview discovery using the persisted commit SHA", () => {
+  const pinnedCommit = "9".repeat(40);
+  context.PropertiesService = { getScriptProperties: () => ({
+    getProperty: key => key === "DI3_GITHUB_SELECTED_BRANCH" ? "feature/branch-test" :
+      (key === "DI3_GITHUB_SELECTED_COMMIT" ? pinnedCommit : null)
+  }) };
+  context.di3GetGitHubBranchManifest_ = (branch, commit) => ({ status: "READY", selected: branch, commit });
+  try {
+    const result = vm.runInContext("di3GetLatestGitHubReleaseManifest_()", context);
+    assert.equal(result.status, "READY");
+    assert.equal(result.selected, "feature/branch-test");
+    assert.equal(result.commit, pinnedCommit);
+  } finally {
+    delete context.PropertiesService;
+    delete context.di3GetGitHubBranchManifest_;
+  }
+});
+
+test("branch Git tree preflight rejects symlinks and oversized source sets before fetching", () => {
+  const valid = {
+    path: "src/apps_script/01_Module.gs", type: "blob", mode: "100644",
+    size: 10, sha: "a".repeat(40)
+  };
+  assert.equal(vm.runInContext(
+    "di3ValidateGitHubBranchTreeEntries_(" + JSON.stringify([valid, { path: "README.md", type: "blob" }]) + ").length",
+    context
+  ), 1);
+  const symlink = { ...valid, mode: "120000" };
+  assert.throws(() => vm.runInContext(
+    "di3ValidateGitHubBranchTreeEntries_(" + JSON.stringify([symlink]) + ")",
+    context
+  ), /разрешены только обычные файлы/);
+  const tooMany = Array.from({ length: 201 }, (_, i) => ({
+    path: "src/apps_script/" + String(i).padStart(3, "0") + ".gs",
+    type: "blob", mode: "100644", size: 1, sha: "b".repeat(40)
+  }));
+  assert.throws(() => vm.runInContext(
+    "di3ValidateGitHubBranchTreeEntries_(" + JSON.stringify(tooMany) + ")",
+    context
+  ), /от 1 до 200/);
+  const tooLarge = [{ ...valid, size: 10000001 }];
+  assert.throws(() => vm.runInContext(
+    "di3ValidateGitHubBranchTreeEntries_(" + JSON.stringify(tooLarge) + ")",
+    context
+  ), /превышает 10 MB/);
+});
+
+test("branch manifest rejects symlink-mode Apps Script entries", () => {
+  const branch = "feature/symlink-source";
+  const commit = "d".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;"
+  };
+  const tree = Object.entries(sources).map(([path, content]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(content),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(content) + String.fromCharCode(0) + content, "utf8").digest("hex")
+  }));
+  tree[0].mode = "120000";
+  assert.throws(() => vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  ), /не является обычным файлом Apps Script/);
+});
+
+test("rejects branch source content that does not match its Git blob SHA", () => {
+  const branch = "feature/blob-integrity";
+  const commit = "e".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": "var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: \"Europe/Moscow\" });",
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;"
+  };
+  const tree = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  tree[0].sha = "f".repeat(40);
+  assert.throws(() => vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  ), /Git blob SHA-1/);
+});
+
+test("branch-selector-capable source cannot replace only part of the updater module set", () => {
+  const branch = "feature/partial-updater";
+  const commit = "c".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;",
+    "src/apps_script/43_DI3_GitHubDeploymentManager.gs":
+      'var DI3_GITHUB_UPDATER_VERSION = "0.2.0"; function di3SelectGitHubSourceBranch() {}',
+    "src/apps_script/44_DI3_GitHubInstallPreview.gs": "function preview() {}",
+    "src/apps_script/45_DI3_GitHubConfirmedInstaller.gs": "function install() {}"
+  };
+  const tree = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  assert.throws(() => vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  ), /полный согласованный набор updater-модулей/);
+});
+
+test("loads paginated GitHub branch lists beyond the first 100 entries", () => {
+  const requested = [];
+  context.di3FetchGitHubJson_ = url => {
+    requested.push(url);
+    const pageMatch = String(url).match(/[?&]page=(\d+)/);
+    const page = pageMatch ? Number(pageMatch[1]) : 0;
+    if (page === 1) return { status: "OK", data: Array.from({ length: 100 }, (_, i) => ({ name: "branch-" + i })) };
+    if (page === 2) return { status: "OK", data: [{ name: "feature/paginated" }, { name: "feature/../unsafe" }] };
+    throw new Error("Unexpected page " + page);
+  };
+  try {
+    const names = Array.from(vm.runInContext("di3GetGitHubBranchNames_()", context));
+    assert.equal(names.length, 101);
+    assert.ok(names.includes("feature/paginated"));
+    assert.ok(!names.includes("feature/../unsafe"));
+    assert.equal(requested.length, 2);
+    assert.ok(requested[0].endsWith("?per_page=100&page=1"));
+    assert.ok(requested[1].endsWith("?per_page=100&page=2"));
+  } finally {
+    delete context.di3FetchGitHubJson_;
+  }
+});
+
+test("fails closed when GitHub branch count exceeds the 1,000-entry selector limit", () => {
+  let requestedPages = 0;
+  context.di3FetchGitHubJson_ = url => {
+    const pageMatch = String(url).match(/[?&]page=(\d+)/);
+    const page = pageMatch ? Number(pageMatch[1]) : 0;
+    requestedPages++;
+    if (page >= 1 && page <= 10) {
+      return { status: "OK", data: Array.from({ length: 100 }, (_, i) => ({ name: "branch-" + page + "-" + i })) };
+    }
+    if (page === 11) return { status: "OK", data: [{ name: "branch-overflow" }] };
+    throw new Error("Unexpected page " + page);
+  };
+  try {
+    assert.throws(() => vm.runInContext("di3GetGitHubBranchNames_()", context), /более 1 000 веток/);
+    assert.equal(requestedPages, 11);
+  } finally {
+    delete context.di3FetchGitHubJson_;
+  }
+});
+
+test("branch selector persists the exact selected commit and reset restores configured channel", () => {
+  const stored = {};
+  const commit = "6".repeat(40);
+  const ui = {
+    ButtonSet: { OK_CANCEL: "OK_CANCEL", OK: "OK" },
+    Button: { OK: "OK", CANCEL: "CANCEL" },
+    prompt: () => ({ getSelectedButton: () => "OK", getResponseText: () => "main" }),
+    alert: () => {}
+  };
+  context.SpreadsheetApp = { getUi: () => ui };
+  context.PropertiesService = { getScriptProperties: () => ({
+    getProperty: key => stored[key] || null,
+    setProperties: values => Object.assign(stored, values),
+    deleteProperty: key => { delete stored[key]; }
+  }) };
+  context.di3FetchGitHubJson_ = () => ({ status: "OK", data: [{ name: "main" }, { name: "bugfix/test" }] });
+  context.di3GetGitHubBranchManifest_ = branch => ({
+    manifest: { git_commit: commit, target_schema_version: 4, application_time_zone: "Europe/Moscow" }
+  });
+  try {
+    const selected = vm.runInContext("di3SelectGitHubSourceBranch()", context);
+    assert.equal(selected.status, "SELECTED");
+    assert.equal(selected.branch, "main");
+    assert.equal(selected.commit, commit);
+    assert.equal(stored.DI3_GITHUB_SELECTED_BRANCH, "main");
+    assert.equal(stored.DI3_GITHUB_SELECTED_COMMIT, commit);
+    const cleared = vm.runInContext("di3ClearGitHubSourceBranchSelection()", context);
+    assert.equal(cleared.status, "CLEARED");
+    assert.equal(stored.DI3_GITHUB_SELECTED_BRANCH, undefined);
+    assert.equal(stored.DI3_GITHUB_SELECTED_COMMIT, undefined);
+  } finally {
+    delete context.SpreadsheetApp;
+    delete context.PropertiesService;
+    delete context.di3FetchGitHubJson_;
+    delete context.di3GetGitHubBranchManifest_;
+  }
+});
+
+test("resolves a branch to one pinned commit and preflights the Git tree before raw downloads", () => {
+  const branch = "feature/api-test";
+  const commit = "7".repeat(40);
+  const treeSha = "8".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });\n',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;\n",
+    "src/apps_script/01_Module.gs": "function alpha() { return 1; }\n"
+  };
+  const entries = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  const apiCalls = [];
+  let rawFetchCount = 0;
+  context.di3FetchGitHubJson_ = url => {
+    apiCalls.push(url);
+    if (url.endsWith("/branches/" + encodeURIComponent(branch))) {
+      return { status: "OK", data: { name: branch, commit: { sha: commit } } };
+    }
+    if (url.endsWith("/git/commits/" + commit)) {
+      return { status: "OK", data: { sha: commit, tree: { sha: treeSha } } };
+    }
+    if (url.endsWith("/git/trees/" + treeSha + "?recursive=1")) {
+      return { status: "OK", data: { tree: entries, truncated: false } };
+    }
+    throw new Error("Unexpected GitHub API URL: " + url);
+  };
+  context.UrlFetchApp = { fetch: url => {
+    rawFetchCount++;
+    const name = decodeURIComponent(String(url).split("/").pop());
+    const source = sources["src/apps_script/" + name];
+    if (source == null) throw new Error("Unexpected raw URL: " + url);
+    return { getResponseCode: () => 200, getContentText: () => source };
+  } };
+  try {
+    const result = vm.runInContext("di3GetGitHubBranchManifest_(" + JSON.stringify(branch) + ")", context);
+    assert.equal(result.status, "READY");
+    assert.equal(result.manifest.git_commit, commit);
+    assert.equal(result.manifest.source_branch, branch);
+    assert.equal(result.validation.status, "VALID");
+    assert.equal(rawFetchCount, 3);
+    assert.ok(apiCalls.some(url => url.endsWith("/branches/feature%2Fapi-test")));
+
+    rawFetchCount = 0;
+    const originalMode = entries[0].mode;
+    entries[0].mode = "120000";
+    assert.throws(() => vm.runInContext("di3GetGitHubBranchManifest_(" + JSON.stringify(branch) + ")", context),
+      /разрешены только обычные файлы/);
+    assert.equal(rawFetchCount, 0);
+    entries[0].mode = originalMode;
+  } finally {
+    delete context.di3FetchGitHubJson_;
+    delete context.UrlFetchApp;
+  }
+});
+
+test("a pinned branch snapshot never follows a later moving branch HEAD", () => {
+  const branch = "feature/pinned-after-move";
+  const pinnedCommit = "b".repeat(40);
+  const movedHead = "c".repeat(40);
+  const treeSha = "d".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;"
+  };
+  const entries = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  const apiCalls = [];
+  context.di3FetchGitHubJson_ = url => {
+    apiCalls.push(url);
+    if (url.endsWith("/git/commits/" + pinnedCommit)) {
+      return { status: "OK", data: { sha: pinnedCommit, tree: { sha: treeSha } } };
+    }
+    if (url.includes("/branches/")) {
+      return { status: "OK", data: { name: branch, commit: { sha: movedHead } } };
+    }
+    if (url.endsWith("/git/trees/" + treeSha + "?recursive=1")) {
+      return { status: "OK", data: { tree: entries, truncated: false } };
+    }
+    throw new Error("Unexpected GitHub API URL: " + url);
+  };
+  context.UrlFetchApp = { fetch: url => {
+    const name = decodeURIComponent(String(url).split("/").pop());
+    const source = sources["src/apps_script/" + name];
+    if (source == null) throw new Error("Unexpected raw URL: " + url);
+    return { getResponseCode: () => 200, getContentText: () => source };
+  } };
+  try {
+    const result = vm.runInContext("di3GetGitHubBranchManifest_(" +
+      JSON.stringify(branch) + "," + JSON.stringify(pinnedCommit) + ")", context);
+    assert.equal(result.manifest.git_commit, pinnedCommit);
+    assert.notEqual(result.manifest.git_commit, movedHead);
+    assert.ok(apiCalls.some(url => url.endsWith("/git/commits/" + pinnedCommit)));
+    assert.ok(!apiCalls.some(url => url.includes("/branches/")));
+  } finally {
+    delete context.di3FetchGitHubJson_;
+    delete context.UrlFetchApp;
+  }
+});
+
+test("preserves installed updater modules for older branches without branch selector support", () => {
+  const branch = "feature/older-business-change";
+  const commit = "a".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;",
+    "src/apps_script/43_DI3_GitHubDeploymentManager.gs": 'var DI3_GITHUB_UPDATER_VERSION = "0.1.0";',
+    "src/apps_script/44_DI3_GitHubInstallPreview.gs": "function oldPreview() {}",
+    "src/apps_script/45_DI3_GitHubConfirmedInstaller.gs": "function oldInstall() {}",
+    "src/apps_script/46_DI3_GitHubCodeRollback.gs": "function oldRollback() {}"
+  };
+  const tree = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  const manifest = vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  );
+  assert.ok(manifest.files.every(file => !/^4[3-6]_DI3_GitHub/.test(file.name)));
 });
 
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");

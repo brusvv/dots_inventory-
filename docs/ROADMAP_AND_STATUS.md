@@ -2,6 +2,15 @@
 
 > Этот блок является единственной актуальной сводкой. Более ранние записи ниже — исторический журнал; их статусы и HEAD не должны переопределять этот блок.
 
+## D-09 — probe создания / обновления / отмены установки
+
+- Рабочая ветка: `feature/github-branch-selector`; PR #10 остаётся Draft, не объединён.
+- Добавлен `src/apps_script/47_DI3_GitHubInstallLifecycleProbe.gs` (ревизия `D09-PROBE-V1`). Функция `di3RunGitHubInstallLifecycleProbe()` read-only: возвращает статус, ревизию, Script ID и время запуска.
+- Runbook расширен сценарием: YES впервые создаёт файл; NO при следующей версии V2 не меняет V1 и fingerprint; следующий YES обновляет существующий файл до V2.
+- Коммиты: fixture `dfffe5ab`, runbook `50ab49ca`, source index `77128e14`.
+- Runtime не запускался: Google Drive connector / Apps Script runtime недоступны из этой среды. CI результат для этих новых коммитов пока не подтверждён. Production RC8 не затронут.
+- Важно: probe намеренно входит в целевой набор Apps Script и после успешного YES останется в тестовом проекте. Не удалять его автоматически; очистка — отдельное действие после приёмки.
+
 ## GitHub / Release Pipeline
 
 - Ветка: `feature/github-preview-releases`.
@@ -1117,3 +1126,16 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 - Added a runtime-probe regression test and a backup metadata/folder negative test. Snapshot auditor: 8/8 PASS; Release Pipeline: 57/57 Deployment Manager tests PASS. CI on HEAD `4aae90b` is green for Release Pipeline, Apps Script quality gates and package build.
 - Safety clarification: executing the probe function is read-only, but adding/removing the temporary probe file is a project-code write. Do not insert it into Dots beta 4 or any live project without separate explicit approval. No live Apps Script, Drive, Sheets, Script Properties, deployments or triggers were changed.
 - N-02 remains deferred and was not run.
+
+## 28.11.2026 — direct GitHub branch selection
+
+- Added operator-selected source branch mode to the in-project GitHub updater.
+- The menu lists all safe branch names returned by GitHub (including `main`, `develop`, `feature/*`, `release/*` and `bugfix/*`); the chosen branch is resolved to a full immutable commit SHA.
+- The updater builds an in-memory manifest from the commit's Git tree and pinned source files, deriving schema/timezone metadata from the selected source.
+- The existing compatibility gate, checksum verification, read-only preview, verified source backup, explicit YES/NO confirmation, concurrency recheck and exact post-write verification remain in force.
+- Branch snapshots are visibly labeled BRANCH and are not treated as published Stable/Preview releases. A reset command returns to the configured release channel.
+- Implementation remains in Draft PR #10: https://github.com/brusvv/dots_inventory-/pull/10, branch `feature/github-branch-selector`; it is not merged. Runtime Apps Script/Drive acceptance has not been performed. Do not use this path in production before D-09 runtime acceptance.
+- D-09 hardening: branch selection requires a persisted full commit SHA; a missing/invalid SHA fails closed. Git-tree preflight rejects symlinks/non-regular files, duplicate names, malformed blob metadata, more than 200 source files and source sets above 10 MB before downloading.
+- Branch discovery now paginates the GitHub branches API up to 1,000 branches; if the repository exceeds that cap, selection fails closed instead of showing an incomplete list. Regression coverage includes page-2 discovery and the >1,000 branch boundary.
+- Focused CI path filters include AppConfig, menu, schema declarations, updater modules 43–46 and the deployment-manager test harness. Latest verified run #59 passed: 55/55 Apps Script syntax checks and 72/72 GitHub deployment-manager regression tests. Added a direct regression proving a pinned branch snapshot does not follow a later moving branch HEAD. Run: https://github.com/brusvv/dots_inventory-/actions/runs/46167062776.
+- Added the D-09 disposable-project runtime acceptance runbook: `docs/GITHUB_BRANCH_SELECTOR_ACCEPTANCE.md`; its bootstrap step includes menu module 22 and updater modules 43–46 from the same commit. Runtime acceptance remains **NOT RUN** pending a separate disposable spreadsheet/Apps Script Script ID and authorized scopes. No production workbook, Apps Script project, deployments or triggers were changed.

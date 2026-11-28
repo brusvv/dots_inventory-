@@ -9,6 +9,7 @@ on:
       - feature/github-deployment-manager
       - feature/github-release-pipeline
       - feature/github-preview-releases
+      - feature/github-branch-selector
     paths:
       - "src/apps_script/**"
       - "tools/build_release_manifest.js"
