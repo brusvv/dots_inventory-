@@ -101,7 +101,7 @@ function di3BuildSupplyCorrectionReceiptRows_(operationId, payload) {
     throw new Error("Некорректный operation_id или replacement_lines для SUPPLY_CORRECTION.");
   }
   var ledger = [], details = [], lots = [];
-  var actor = di3GetOperationInitiatorActor_(operationKey);
+  var actor = String(payload.created_by || di3GetOperationInitiatorActor_(operationKey));
   var seenMovements = Object.create(null), seenLots = Object.create(null), seenEvents = Object.create(null);
   payload.replacement_lines.forEach(function (line, index) {
     var label = "Replacement line " + (index + 1);
@@ -142,7 +142,7 @@ function di3BuildSupplyCorrectionReceiptRows_(operationId, payload) {
     lots.push([
       lotId, String(line.product_id), movementId, "SUPPLY", String(payload.supply_id),
       String(line.pack_variant_id), effectiveAt, recordedAt, quantity, unitCost,
-      String(line.cost_status), di3GetBaseCurrency_(),
+      String(line.cost_status), String(payload.currency || di3GetBaseCurrency_()),
       "Исправление поставки " + String(payload.supply_number) + "; позиция " + String(line.supply_item_id),
       "", totalCostMinor
     ]);
