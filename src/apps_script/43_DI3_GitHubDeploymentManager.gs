@@ -332,7 +332,7 @@ function di3GetGitHubSourceLabel_(channel) {
 function di3GitBlobSha1Hex_(source) {
   var size = Utilities.newBlob(String(source == null ? "" : source)).getBytes().length;
   var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1,
-    "blob " + size + "\\u0000" + String(source == null ? "" : source), Utilities.Charset.UTF_8);
+    "blob " + size + String.fromCharCode(0) + String(source == null ? "" : source), Utilities.Charset.UTF_8);
   return bytes.map(function (byte) {
     var normalized = byte < 0 ? byte + 256 : byte;
     return ("0" + normalized.toString(16)).slice(-2);
