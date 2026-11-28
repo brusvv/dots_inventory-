@@ -532,9 +532,21 @@ function di3AssertSupplyCorrectionImmutableSource_(operationId, payload) {
     throw new Error("Исходные StockLedger/StockMovementDetails/StockLots строки неполны.");
   }
   var ledgerById = Object.create(null), detailById = Object.create(null), lotByMovement = Object.create(null);
-  ledgerMatches.forEach(function (m) { ledgerById[String(m.values[0])] = m.values; });
-  detailMatches.forEach(function (m) { detailById[String(m.values[0])] = m.values; });
-  lotMatches.forEach(function (m) { lotByMovement[String(m.values[2])] = m.values; });
+  ledgerMatches.forEach(function (m) {
+    var id = String(m.values[0]);
+    if (ledgerById[id]) throw new Error("Исходный StockLedger содержит повторный movement_id " + id + ".");
+    ledgerById[id] = m.values;
+  });
+  detailMatches.forEach(function (m) {
+    var id = String(m.values[0]);
+    if (detailById[id]) throw new Error("Исходный StockMovementDetails содержит повторный movement_id " + id + ".");
+    detailById[id] = m.values;
+  });
+  lotMatches.forEach(function (m) {
+    var id = String(m.values[2]);
+    if (lotByMovement[id]) throw new Error("Исходный StockLots содержит повторный source_movement_id " + id + ".");
+    lotByMovement[id] = m.values;
+  });
   sourceLines.forEach(function (line) {
     var ledger = ledgerById[String(line.movement_id)];
     var detail = detailById[String(line.movement_id)];
