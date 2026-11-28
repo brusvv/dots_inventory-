@@ -427,22 +427,28 @@ function di3CreateSupplyReceiptOperation_(supply, effectiveAt) {
 }
 
 function di3EnsureSupplyCostHistory_(supply, payload) {
-  var existingSourceKeys = di3ReadTableColumnValues_("ProductCostHistory", 7);
-  var sourceKeys = {};
-  existingSourceKeys.forEach(function (value) { sourceKeys[String(value || "")] = true; });
+  var sourceKeys = payload.lines.map(function (line) {
+    return "SUPPLY_RECEIPT:" + payload.supply_id + ":" + line.supply_item_id;
+  });
+  var existingMatches = sourceKeys.length
+    ? di3ReadRowsByColumnValues_("ProductCostHistory", 7, sourceKeys) : [];
+  var existingSourceKeys = Object.create(null);
+  existingMatches.forEach(function (match) {
+    existingSourceKeys[String(match.values[7] || "")] = true;
+  });
   var rows = [];
   payload.lines.forEach(function (line) {
     var sourceKey = "SUPPLY_RECEIPT:" + payload.supply_id + ":" + line.supply_item_id;
-    if (sourceKeys[sourceKey]) return;
+    if (existingSourceKeys[sourceKey]) return;
     rows.push([
       di3MakeUuid_(), line.product_id, line.pack_variant_id, line.cost_per_pack,
       line.unit_cost, di3GetBaseCurrency_(), "SUPPLY_RECEIPT", sourceKey,
       new Date(payload.received_at), new Date(payload.recorded_at),
       "Фактическая приёмка поставки " + payload.supply_number
     ]);
-    sourceKeys[sourceKey] = true;
+    existingSourceKeys[sourceKey] = true;
   });
-  di3AppendTableRows_("ProductCostHistory", rows);
+  if (rows.length) di3AppendTableRows_("ProductCostHistory", rows);
   return rows.length;
 }
 
