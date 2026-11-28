@@ -313,6 +313,23 @@ function di3EnsureSupplyCorrectionRelationStage_(relations, operationId, targetE
   var missingPrepared = relations.filter(function (relation) {
     var row = latest[String(relation.relation_id)];
     if (!row) return true;
+    var expectedMetadata = [
+      String(relation.relation_id), String(relation.correction_id), String(operationId),
+      String(relation.supply_id), String(relation.relation_type),
+      String(relation.source_movement_id || ""), String(relation.replacement_movement_id || ""),
+      String(relation.source_product_id || ""), String(relation.replacement_product_id || ""),
+      String(relation.source_supply_item_id || ""), String(relation.replacement_supply_item_id || ""),
+      new Date(relation.effective_at).toISOString()
+    ];
+    var actualMetadata = [
+      String(row[1]), String(row[2]), String(row[3]), String(row[4]), String(row[7]),
+      String(row[8] || ""), String(row[9] || ""), String(row[10] || ""),
+      String(row[11] || ""), String(row[12] || ""), String(row[13] || ""),
+      new Date(row[14]).toISOString()
+    ];
+    if (JSON.stringify(actualMetadata) !== JSON.stringify(expectedMetadata)) {
+      throw new Error("SupplyCorrectionEvents relation " + relation.relation_id + " отличается от immutable operation payload.");
+    }
     if (String(row[3]) !== String(operationId)) throw new Error("Relation " + relation.relation_id + " уже принадлежит другой операции.");
     if (String(row[6]) === "QUARANTINED" || String(row[6]) === "ABORTED") throw new Error("Relation " + relation.relation_id + " находится в терминальном состоянии " + row[6] + ".");
     return false;
@@ -540,9 +557,18 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
     throw new Error("Некорректный immutable payload SUPPLY_CORRECTION.");
   }
   if (String(operationRecord.values[2]) !== "SUPPLY_CORRECTION" ||
-      String(operationRecord.values[3]) !== "SUPPLY") {
-    throw new Error("Операция не соответствует SUPPLY_CORRECTION/SUPPLY.");
+      String(operationRecord.values[3]) !== "SUPPLY" ||
+      String(operationRecord.values[1]) !== "SUPPLY_CORRECTION:" + String(payload.supply_id) + ":" + String(payload.correction_id)) {
+    throw new Error("Операция не соответствует SUPPLY_CORRECTION/SUPPLY или ключу идемпотентности.");
   }
+  var variantIndex = di3LoadPackVariantIndex_();
+  payload.replacement_lines.forEach(function (line, index) {
+    var variant = variantIndex.byId[String(line.pack_variant_id)];
+    if (!variant || String(variant.product_id) !== String(line.product_id) ||
+        Number(variant.units_per_pack) !== Number(line.units_per_pack)) {
+      throw new Error("Replacement line " + (index + 1) + ": pack variant больше не соответствует immutable payload.");
+    }
+  });
 
   di3AssertSupplyCorrectionImmutableSource_(operationId, payload);
   var replacementWrite = di3EnsureSupplyCorrectionSourceRows_(operationId, payload);
