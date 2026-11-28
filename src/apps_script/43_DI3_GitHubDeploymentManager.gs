@@ -349,7 +349,7 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
   var updaterSource = sourceTexts["src/apps_script/43_DI3_GitHubDeploymentManager.gs"];
   var branchSelectorCapable = typeof updaterSource === "string" && /function\s+di3SelectGitHubSourceBranch\s*\(/.test(updaterSource);
   var sourceFiles = treeEntries.filter(function (entry) {
-    if (!entry || entry.type !== "blob" || !/^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""))) return false;
+    if (!entry || entry.type !== "blob" || (entry.mode !== "100644" && entry.mode !== "100755") || !/^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""))) return false;
     // Older feature branches may contain an older updater. Preserve the installed
     // updater modules as local extras unless the branch explicitly carries this
     // branch-selector-aware manager and can safely replace the whole manager set.
