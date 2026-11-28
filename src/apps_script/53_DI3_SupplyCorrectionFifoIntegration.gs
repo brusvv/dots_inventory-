@@ -21,6 +21,13 @@ function di3BuildSupplyCorrectionEffectiveFifoSnapshot_(ledgerRows, detailRows, 
     if (detailByMovement[id]) throw new Error("StockMovementDetails: повторяется movement_id " + id + ".");
     detailByMovement[id] = row;
   });
+  var lotByMovement = Object.create(null);
+  (lotRows || []).forEach(function (row) {
+    var id = String(row[2] || "");
+    if (!id) throw new Error("StockLots: пустой source_movement_id при построении effective FIFO snapshot.");
+    if (lotByMovement[id]) throw new Error("StockLots: повторяется source_movement_id " + id + ".");
+    lotByMovement[id] = row;
+  });
 
   var affectedProducts = Object.create(null);
   (effectiveMap.relations || []).forEach(function (relation) {
@@ -31,11 +38,20 @@ function di3BuildSupplyCorrectionEffectiveFifoSnapshot_(ledgerRows, detailRows, 
       var ledger = ledgerByMovement[String(movementId)];
       var detail = detailByMovement[String(movementId)];
       if (!ledger || !detail) throw new Error("SupplyCorrectionEvents: " + role + " movement " + movementId + " отсутствует в FIFO snapshot.");
-      if (String(ledger[3]) !== String(productId)) {
-        throw new Error("SupplyCorrectionEvents: product_id " + role + " movement " + movementId + " не совпадает с relation journal.");
+      if (String(ledger[3]) !== String(productId) ||
+          String(ledger[4]) !== "SUPPLY" || String(ledger[5]) !== String(relation.supply_id)) {
+        throw new Error("SupplyCorrectionEvents: " + role + " movement " + movementId + " не принадлежит указанной поставке/товару.");
       }
-      if (String(detail[2]) !== "IN" || !(Number(ledger[6]) > 0)) {
-        throw new Error("SupplyCorrectionEvents: " + role + " movement " + movementId + " должен быть положительным приходом IN.");
+      if (String(detail[2]) !== "IN" || !(Number(ledger[6]) > 0) ||
+          ["SUPPLY_RECEIVE", "SUPPLY_CORRECTION"].indexOf(String(detail[3])) === -1 ||
+          String(detail[10]) !== "SUPPLY") {
+        throw new Error("SupplyCorrectionEvents: " + role + " movement " + movementId + " должен быть положительным приходом SUPPLY IN.");
+      }
+      var lot = lotByMovement[String(movementId)];
+      if (!lot || String(lot[1]) !== String(productId) ||
+          String(lot[3]) !== "SUPPLY" || String(lot[4]) !== String(relation.supply_id) ||
+          Number(lot[8]) !== Number(ledger[6])) {
+        throw new Error("SupplyCorrectionEvents: FIFO lot " + movementId + " не соответствует поставке/товару/количеству.");
       }
       var movementAt = di3ToDate_(ledger[7], "StockLedger.effective_at").getTime();
       var relationAt = new Date(relation.effective_at).getTime();
