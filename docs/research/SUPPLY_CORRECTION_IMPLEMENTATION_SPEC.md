@@ -1,6 +1,6 @@
 # SUPPLY_CORRECTION implementation specification
 
-Status: SC-01 read-only source mapping audit and SC-02 relation-journal foundation are implemented and CI-covered. The correction operation handler, FIFO replay integration and runtime execution remain disabled.
+Status: SC-01, SC-02 and SC-03 (including normal FIFO integration and correction-aware read projections) are implemented and source-CI-covered. The correction operation handler, SC-04 commit/recovery and bound-workbook runtime acceptance remain pending.
 Branch: `feature/supply-correction-fifo-replay`
 Date: 2026-11-28
 
@@ -309,3 +309,37 @@ source commit \`591020b6af15aecef8a24466c2251f17800933df\`.
 Total automated assertions: **264 passed, 0 failed**. The test run validates
 the read-only candidate preview only; it does not establish Apps Script
 runtime acceptance or enable live correction execution.
+
+
+## 13. SC-03 integration — ordinary FIFO and stock read models
+
+Implemented on `feature/supply-correction-fifo-replay`:
+
+- `53_DI3_SupplyCorrectionFifoIntegration.gs` builds a read-only effective FIFO snapshot from the immutable ledger/details/lots plus the resolved relation map.
+- The snapshot validates every referenced source and replacement movement: it must exist, be an inbound movement, match the relation's product, and retain the original receipt `effective_at`.
+- Superseded source movements, their details and their lots are excluded from the effective snapshot. Original rows remain untouched in the source tables.
+- `di3RebuildFifoAllocations_` now reads the correction relation map. A changed committed relation fingerprint forces a full replay even if the ledger cursor has no new rows; affected product scope includes source and replacement products, including REMOVE-only products.
+- The relation fingerprint participates in replay input fingerprints and is persisted only after a successful replay run. A candidate replay for a still-pending correction does not publish its pending fingerprint as the globally committed one.
+- Filtered StockLots rows retain their original physical sheet row numbers so projection writes cannot be shifted by filtering.
+- Product valuation, warehouse dashboard and stock journal use the effective receipt set. Valuation and journal reads fail closed when active correction relations do not match the last committed FIFO projection.
+- `SUPPLY_CORRECTION` is included in pending stock-operation detection, so normal stock valuation reads are blocked while a correction operation is pending.
+- Product FIFO valuation history excludes superseded source movements and therefore reconstructs the corrected event history rather than double-counting the original receipt.
+
+Regression coverage:
+- `54_DI3_SupplyCorrectionFifoIntegrationTests.gs`: REPLACE, REMOVE, ADD, correction chains, immutable input snapshots, invalid movement type, mismatched effective timestamp, and preservation of physical StockLots row identity.
+- Existing candidate-preview tests remain in place.
+
+Quality gates passed at source commit `56f09f4fa335f0ac18e5408e1c13ebd7cb021751`:
+- Apps Script syntax: **63/63**.
+- Snapshot auditor: **8/8**.
+- FIFO replay: **46/46**.
+- Order domain: **22/22**.
+- Supply/correction/lifecycle suites: **127/127**.
+- Catalog/order UX: **14/14**.
+- System safety/operation: **39/39**.
+- Warehouse dashboard: **11/11**.
+- Finance schema: **4/4**.
+- Total: **271 passed, 0 failed**.
+- [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46096055903).
+
+This is source/Node CI evidence only. It does not validate Apps Script execution against the bound workbook. No correction operation handler exists yet; no replacement movements have been written, no live FIFO projection has been rebuilt, and no supply has been corrected. SC-04 commit/recovery and runtime acceptance remain pending.
