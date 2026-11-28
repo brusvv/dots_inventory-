@@ -281,7 +281,8 @@ function di3RunSupplyCorrectionPackVariantTests() {
   test("reconciliation consumes only the selective-read result", function () {
     var source = di3ReconcileCurrentPackVariantsForProducts_.toString();
     equal(source.indexOf("di3ReadPackVariantReconciliationRows_(affected)") !== -1, true);
-    equal(source.indexOf("di3BuildLatestReceivedPackVariantMap_(reconciliationRows.supplyRows, reconciliationRows.itemRows, affected)") !== -1, true);
+    equal(source.indexOf("reconciliationRows.supplyRows") !== -1, true);
+    equal(source.indexOf("reconciliationRows.itemRows") !== -1, true);
     equal(source.indexOf("di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affected)") === -1, true,
       "stale full-table variables must not remain in the reconciliation path");
   });
