@@ -671,6 +671,7 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
       String(operationRecord.values[1]) !== "SUPPLY_CORRECTION:" + String(payload.supply_id) + ":" + String(payload.correction_id)) {
     throw new Error("Операция не соответствует SUPPLY_CORRECTION/SUPPLY или ключу идемпотентности.");
   }
+  di3AssertNoOtherPendingStockOperations_(String(operationRecord.values[1]));
   var variantIndex = di3LoadPackVariantIndex_();
   payload.replacement_lines.forEach(function (line, index) {
     var variant = variantIndex.byId[String(line.pack_variant_id)];
