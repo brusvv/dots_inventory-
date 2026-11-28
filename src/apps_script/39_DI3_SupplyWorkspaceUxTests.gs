@@ -72,7 +72,8 @@ function di3RunSupplyWorkspaceUxUnitTests() {
     equal(DI3_SUPPLY_REGISTER_HEADERS[13], "Время следующего этапа (HH:mm)");
     includes(di3GetSelectedSupplyRegisterRow_.toString(), "di3BuildEffectiveDateTime_");
     includes(di3RefreshSupplyRegister.toString(), "input.time");
-    includes(di3TransitionSelectedSupply_.toString(), "getRange(selected.row_number, 13, 1, 2).clearContent()");
+    includes(di3TransitionSelectedSupply_.toString(), "register.getRange(targetRow, 13, 1, 2).clearContent()");
+    includes(di3GetSelectedSupplyRegisterRow_.toString(), "supply_id: supplyId");
   });
 
   test("discard confirmation is requested for dirty forms unless an internal caller explicitly bypasses it", function () {
