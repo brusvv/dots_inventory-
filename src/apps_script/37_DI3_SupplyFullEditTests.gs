@@ -9,6 +9,9 @@ function di3RunSupplyFullEditUnitTests() {
   function equal(actual, expected, message) {
     if (actual !== expected) throw new Error((message || "Values differ") + ": expected " + JSON.stringify(expected) + ", got " + JSON.stringify(actual));
   }
+  function includes(source, fragment, message) {
+    equal(String(source).indexOf(fragment) !== -1, true, message || ("Expected source to contain: " + fragment));
+  }
   function throws(callback, pattern) {
     var error = null;
     try { callback(); } catch (caught) { error = caught; }
