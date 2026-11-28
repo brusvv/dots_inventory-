@@ -112,3 +112,18 @@ function di3ReadSupplyCorrectionEffectiveMovementMap_(includeOperationId) {
     include_operation_id: String(includeOperationId || "")
   });
 }
+
+/**
+ * Prevent read models from combining a newly committed correction map with
+ * stale FIFO allocations. Empty relation maps remain backward compatible for
+ * existing workbooks until their next normal FIFO rebuild.
+ */
+function di3AssertSupplyCorrectionFifoProjectionCurrent_(effectiveMap) {
+  var map = effectiveMap || di3ReadSupplyCorrectionEffectiveMovementMap_();
+  if (!(map.relations || []).length) return true;
+  var stored = String(di3GetAppMetaValue_("fifo_supply_correction_fingerprint") || "");
+  if (stored !== String(map.fingerprint || "")) {
+    throw new Error("FIFO-проекция ещё не пересчитана после исправления поставки. Чтение складской оценки и журнала временно заблокировано; выполни штатную полную перестройку FIFO и повтори запрос.");
+  }
+  return true;
+}
