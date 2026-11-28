@@ -433,10 +433,65 @@ function di3AssertSupplyCorrectionImmutableSource_(operationId, payload) {
   if (String(receiptPayload.supply_id) !== String(payload.supply_id)) throw new Error("Исходный receipt payload принадлежит другой поставке.");
 
   var sourceLines = payload.source_lines || [];
+  if (!sourceLines.length || sourceLines.length !== (receiptPayload.lines || []).length) {
+    throw new Error("Source snapshot не совпадает по количеству строк с immutable receipt payload.");
+  }
+  var receiptLineByMovement = Object.create(null);
+  (receiptPayload.lines || []).forEach(function (line) {
+    var movementId = String(line.movement_id || "");
+    if (!movementId || receiptLineByMovement[movementId]) throw new Error("В исходном receipt payload повторяется movement_id.");
+    receiptLineByMovement[movementId] = line;
+  });
+  sourceLines.forEach(function (line) {
+    var original = receiptLineByMovement[String(line.movement_id)];
+    if (!original || String(original.supply_item_id) !== String(line.supply_item_id) ||
+        String(original.lot_id) !== String(line.lot_id) ||
+        String(original.product_id) !== String(line.product_id) ||
+        String(original.pack_variant_id) !== String(line.pack_variant_id) ||
+        Number(original.quantity) !== Number(line.quantity) ||
+        Number(original.unit_cost) !== Number(line.unit_cost) ||
+        Number(original.total_cost_minor) !== Number(line.total_cost_minor) ||
+        String(original.event_key) !== String(line.event_key) ||
+        new Date(original.effective_at).getTime() !== new Date(line.effective_at).getTime() ||
+        new Date(original.recorded_at).getTime() !== new Date(line.recorded_at).getTime()) {
+      throw new Error("Source line " + line.movement_id + " не совпадает с immutable receipt payload.");
+    }
+  });
+  var beforeItemById = Object.create(null);
+  (payload.before_item_rows || []).forEach(function (row) {
+    var itemId = String(row[0] || "");
+    if (!itemId || beforeItemById[itemId]) throw new Error("before_item_rows содержит пустой или повторный supply_item_id.");
+    beforeItemById[itemId] = row;
+  });
+  sourceLines.forEach(function (line) {
+    var item = beforeItemById[String(line.supply_item_id)];
+    if (!item || String(item[1]) !== String(payload.supply_id) ||
+        String(item[3]) !== String(line.product_id) ||
+        String(item[5]) !== String(line.pack_variant_id) ||
+        Number(item[6]) !== Number(line.quantity) / Number(line.quantity / Number(item[6])) ||
+        Number(item[14]) !== Number(line.quantity) ||
+        Number(item[13]) !== Number(line.cost_per_pack) ||
+        Number(item[16]) !== Number(line.unit_cost) ||
+        di3MoneyToMinorUnits_(Number(item[15]), "before_item_rows.final_line_amount", false) !== Number(line.total_cost_minor)) {
+      throw new Error("before_item_rows не совпадает с исходной receipt line " + line.supply_item_id + ".");
+    }
+  });
+  var expectedSupplyFingerprint = di3SupplyFullEditHash_({
+    supply_row: (payload.before_supply_row || []).map(di3SupplyFullEditNormalizeValue_),
+    item_rows: (payload.before_item_rows || []).map(function (row) { return row.map(di3SupplyFullEditNormalizeValue_); }),
+    source_map_fingerprint: String(payload.source_receipt_fingerprint || "")
+  });
+  if (expectedSupplyFingerprint !== String(payload.source_supply_fingerprint || "")) {
+    throw new Error("Source supply fingerprint не совпадает с immutable before snapshot.");
+  }
   var movementIds = sourceLines.map(function (line) { return String(line.movement_id); });
   var ledgerMatches = movementIds.length ? di3ReadRowsByColumnValues_("StockLedger", 0, movementIds) : [];
   var detailMatches = movementIds.length ? di3ReadRowsByColumnValues_("StockMovementDetails", 0, movementIds) : [];
   var lotMatches = movementIds.length ? di3ReadRowsByColumnValues_("StockLots", 2, movementIds) : [];
+  var allSupplyLedger = di3ReadRowsByColumnValue_("StockLedger", 5, String(payload.supply_id)).filter(function (match) {
+    return String(match.values[1]) === String(payload.source_receipt_operation_id);
+  });
+  if (allSupplyLedger.length !== sourceLines.length) throw new Error("Исходная операция содержит лишние или отсутствующие StockLedger движения.");
   if (ledgerMatches.length !== sourceLines.length || detailMatches.length !== sourceLines.length || lotMatches.length !== sourceLines.length) {
     throw new Error("Исходные StockLedger/StockMovementDetails/StockLots строки неполны.");
   }
