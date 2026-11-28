@@ -349,7 +349,7 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
   var updaterSource = sourceTexts["src/apps_script/43_DI3_GitHubDeploymentManager.gs"];
   var branchSelectorCapable = typeof updaterSource === "string" && /function\s+di3SelectGitHubSourceBranch\s*\(/.test(updaterSource);
   var sourceFiles = treeEntries.filter(function (entry) {
-    if (!entry || entry.type !== "blob" || (entry.mode !== "100644" && entry.mode !== "100755") || !/^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""))) return false;
+    if (!entry || !/^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""))) return false;
     // Older feature branches may contain an older updater. Preserve the installed
     // updater modules as local extras unless the branch explicitly carries this
     // branch-selector-aware manager and can safely replace the whole manager set.
@@ -361,6 +361,9 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
   var files = [], seen = {};
   sourceFiles.forEach(function (entry) {
     var name = String(entry.path).slice("src/apps_script/".length);
+    if (entry.type !== "blob" || (entry.mode !== "100644" && entry.mode !== "100755")) {
+      throw new Error("Git tree entry " + name + " не является обычным файлом Apps Script.");
+    }
     if (!/^[A-Za-z0-9_.-]+\.gs$/.test(name) || name.indexOf("..") !== -1) throw new Error("В Git tree найдено недопустимое имя Apps Script файла: " + name);
     var key = name.toLowerCase();
     if (seen[key]) throw new Error("В Git tree найден повтор Apps Script файла: " + name);
