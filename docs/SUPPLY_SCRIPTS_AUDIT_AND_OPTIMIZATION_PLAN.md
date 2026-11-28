@@ -86,7 +86,7 @@ This document records the work plan and initial static observations. It is not a
 - S0–S4 and S6 are complete as a static repository audit; detailed findings are recorded in [SUPPLY_SCRIPTS_AUDIT_REPORT.md](SUPPLY_SCRIPTS_AUDIT_REPORT.md).
 - S5 has initial coverage for the first optimization batch; the broader invariant-to-test matrix remains open.
 - S7 has implemented four source optimization batches with regression coverage, including the end-to-end supply lifecycle fixes recorded below.
-- Exact-head source/regression, release-contract and package CI passed for lifecycle batch 4.
+- Exact-head source/regression, release-contract and package CI passed for lifecycle batch 4 (source head `55832cd17f67f2f158048d44fb5b42527f4de7ab`).
 - S5's broader invariant-to-test matrix remains open; the current Node suites still do not replace runtime failure/concurrency acceptance.
 - S8 runtime timing on a disposable workbook and S9 final report remain pending; static call-count observations are not runtime benchmarks.
 
