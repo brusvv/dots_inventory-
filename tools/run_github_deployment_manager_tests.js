@@ -688,12 +688,15 @@ test("rollback fails closed if selected backup becomes unavailable after YES", (
 });
 
 
-test("validates supported GitHub branch names and rejects unsafe refs", () => {
+test("validates safe GitHub branch names and rejects unsafe refs", () => {
   assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('feature/my-change')", context), "feature/my-change");
   assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('release/v4.1')", context), "release/v4.1");
-  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('main')", context), /Разрешены только ветки/);
-  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature/../main')", context), /Разрешены только ветки/);
-  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature//nested')", context), /Разрешены только ветки/);
+  assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('main')", context), "main");
+  assert.equal(vm.runInContext("di3ValidateGitHubBranchName_('bugfix/branch-selector')", context), "bugfix/branch-selector");
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature/.hidden')", context), /Недопустимое имя GitHub-ветки/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature/../main')", context), /Недопустимое имя GitHub-ветки/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature//nested')", context), /Недопустимое имя GitHub-ветки/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubBranchName_('feature/branch.lock')", context), /Недопустимое имя GitHub-ветки/);
 });
 
 test("builds a branch manifest pinned to one immutable commit and validates it", () => {
