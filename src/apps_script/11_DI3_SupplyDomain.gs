@@ -239,6 +239,20 @@ function di3GetProductFormOptionIndex_(skipPublicCodeEnsure) {
   return { products: products, byId: byId, codes: codes, byLabel: byLabel, options: Object.keys(byLabel).sort() };
 }
 
+/**
+ * Load the supply form/catalogue repositories once for a single validation +
+ * materialization transaction. The snapshot is operation-local and must not
+ * be persisted or reused across separate executions.
+ */
+function di3LoadSupplyFormLineSnapshot_(readOnlyCatalog) {
+  var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  return {
+    values: sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues(),
+    products: di3GetProductFormOptionIndex_(readOnlyCatalog === true),
+    variants: di3LoadPackVariantIndex_()
+  };
+}
+
 /** Build supply-form rows from one preloaded product index (no per-line repository reads). */
 function di3BuildSupplyLoadedLineRows_(items, productIndex) {
   productIndex = productIndex || {};
@@ -701,7 +715,8 @@ function di3SaveSupplyDraft(options) {
     var expectedReceivedDate = di3ParseSupplyCalendarDate_(planningDateValues[1][0], "Ожидаемая дата прибытия");
     di3ValidateSupplyPlanningDates_(orderCreatedInStoreDate, expectedReceivedDate);
 
-    var currentLines = di3ResolveSupplyFormLines_(false);
+    var lineSnapshot = di3LoadSupplyFormLineSnapshot_(false);
+    var currentLines = di3ResolveSupplyFormLines_(false, false, lineSnapshot);
     if (!currentLines.length) throw new Error("Добавь хотя бы одну товарную позицию.");
     // Validate every input and all money allocation before creating missing pack variants.
     di3BuildSupplyFinancialPlan_({
@@ -710,7 +725,7 @@ function di3SaveSupplyDraft(options) {
       partner_discount_amount: partnerDiscount,
       shipping_amount: shipping
     });
-    currentLines = di3ResolveSupplyFormLines_(true);
+    currentLines = di3ResolveSupplyFormLines_(true, false, lineSnapshot);
     var plan = di3BuildSupplyFinancialPlan_({
       lines: currentLines,
       seller_discount_amount: sellerDiscount,
@@ -935,11 +950,11 @@ function di3RenderSupplyFinancialPreview_(plan) {
   sheet.getRange("M4:M8").setNumberFormat("#,##0.00 ₽");
 }
 
-function di3ResolveSupplyFormLines_(createVariants, readOnlyCatalog) {
-  var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
-  var values = sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 4).getValues();
-  var products = di3GetProductFormOptionIndex_(readOnlyCatalog === true);
-  var variants = di3LoadPackVariantIndex_();
+function di3ResolveSupplyFormLines_(createVariants, readOnlyCatalog, lineSnapshot) {
+  var snapshot = lineSnapshot || di3LoadSupplyFormLineSnapshot_(readOnlyCatalog);
+  var values = snapshot.values;
+  var products = snapshot.products;
+  var variants = snapshot.variants;
   var lines = [];
   values.forEach(function (row, offset) {
     var label = String(row[0] || "").trim();
@@ -959,8 +974,8 @@ function di3ResolveSupplyFormLines_(createVariants, readOnlyCatalog) {
     });
   });
   if (createVariants && lines.length) {
-    // All product and variant reads are reused; missing variants are appended
-    // in one batch instead of reloading both repositories for every form line.
+    // The caller may pass a single operation-local snapshot through validation
+    // and materialization, avoiding duplicate form/catalogue repository reads.
     var resolved = di3GetOrCreatePackVariants_(lines, "SUPPLY_DRAFT", products.byId, variants);
     lines.forEach(function (line, index) {
       line.pack_variant_id = resolved[index].pack_variant_id;
