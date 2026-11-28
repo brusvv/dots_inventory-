@@ -181,3 +181,18 @@ The menu adds **Система → GitHub и обновления → Откат
 
 
 D-06 source/Node CI: [run 45884074434](https://github.com/brusvv/dots_inventory-/actions/runs/45884074434) passed — 54 Apps Script syntax files, 151 existing regression tests, 9 release-manifest tests and 24 deployment-manager tests (184 automated tests total). Live Drive backup selection and Apps Script write/read-back still require acceptance in a disposable test project.
+
+## Direct branch selection (operator-selected source)
+
+The Apps Script menu now supports selecting a supported source branch directly, without creating an annotated Preview tag or publishing a GitHub Release.
+
+1. **Выбрать ветку GitHub для Preview…** lists supported `feature/*`, `release/*` and `hotfix/*` branches and asks for the exact branch name.
+2. The updater resolves that branch to its current full commit SHA, reads the Git tree and fetches only direct `.gs` modules under `src/apps_script/`.
+3. It derives the target schema from `DI3_SCHEMA_VERSION` and timezone from `DI3_APP_CONFIG.TIME_ZONE`, computes each file's SHA-256/byte length, and builds an in-memory branch snapshot manifest.
+4. Every source URL is pinned to the resolved 40-character commit SHA. The branch name is never used as a moving source URL during preview or installation.
+5. The normal compatibility gate, read-only diff, verified Drive source backup, explicit YES/NO install confirmation, concurrency check and post-write verification remain mandatory.
+6. **Сбросить выбор ветки (Stable / Preview)** clears the selected branch. The configured Stable or Preview release channel is then used again.
+
+Branch snapshots are labeled **BRANCH**, not Stable or published Preview. They are not GitHub Releases and do not imply that CI has passed. Branch selection is stored in Script Properties for the current Apps Script project. The selector rejects branch names outside the supported prefixes, incomplete Git trees, missing schema/timezone metadata, malformed commits and updater downgrades. A branch with an older updater module is blocked rather than silently downgrading the update manager.
+
+This feature changes source selection only. It does not run setup, schema migration, FIFO rebuild, stock operations, deployment creation or deployment-pointer updates. Use it only on a restored disposable workbook and a separate Apps Script Script ID until D-07 runtime acceptance is complete.
