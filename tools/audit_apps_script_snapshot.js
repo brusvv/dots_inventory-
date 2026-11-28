@@ -64,7 +64,10 @@ function auditSnapshot(snapshot, sourceDir) {
       backup.payload_sha256_valid === true &&
       backup.file_hashes_valid === true &&
       backup.script_id_matches === true &&
-      backup.spreadsheet_id_matches === true
+      backup.spreadsheet_id_matches === true &&
+      backup.description_marker_present === true &&
+      backup.metadata_valid === true &&
+      backup.backup_folder_membership_matches === true
   }));
 
   return {
