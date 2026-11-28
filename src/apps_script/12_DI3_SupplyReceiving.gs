@@ -125,7 +125,11 @@ function di3ApplyNextSupplyStageFromForm() {
 
   var result = di3AdvanceSupplyStatus(supply.supply_number, config.next_status, effectiveAt);
   var updatedSupply = di3GetSupplyById_(supplyId);
-  di3RefreshSupplyDatePanel_(updatedSupply);
+  // Successful transitions refresh the date panel inside the domain/receipt
+  // handler. Only idempotent fast paths need the caller to restore the panel.
+  if (result && ["ALREADY_IN_STATUS", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1) {
+    di3RefreshSupplyDatePanel_(updatedSupply);
+  }
   if (config.requires_receipt_confirmation && result &&
       ["COMMITTED", "ALREADY_RECEIVED"].indexOf(String(result.status)) !== -1 &&
       typeof di3RefreshWarehouseViewsAfterCommit_ === "function") {
