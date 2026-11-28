@@ -16,6 +16,23 @@ function di3RunSupplyReceivingUnitTests() {
     if (pattern && !pattern.test(String(error.message || error))) throw new Error("Expected error matching " + pattern + ", got: " + String(error.message || error));
   }
 
+  test("status history idempotency is scoped to the exact transition event", function () {
+    var firstAt = new Date("2026-11-01T10:00:00.000Z");
+    var retryAt = new Date("2026-11-01T10:00:00.000Z");
+    var laterAt = new Date("2026-11-03T12:30:00.000Z");
+    var row = ["H1", "SUPPLY", "S1", DI3_SUPPLY_STATUS.CREATED, DI3_SUPPLY_STATUS.SENT,
+      firstAt, "actor@example.test", "", "sent"];
+    equal(di3SupplyStatusHistoryEventMatches_(row, "S1", DI3_SUPPLY_STATUS.CREATED,
+      DI3_SUPPLY_STATUS.SENT, retryAt, ""), true);
+    equal(di3SupplyStatusHistoryEventMatches_(row, "S1", DI3_SUPPLY_STATUS.CREATED,
+      DI3_SUPPLY_STATUS.SENT, laterAt, ""), false,
+      "a later transition to the same status must be recorded after a rollback");
+    equal(di3SupplyStatusHistoryEventMatches_(row, "S1", DI3_SUPPLY_STATUS.AWAITING,
+      DI3_SUPPLY_STATUS.SENT, retryAt, ""), false);
+    equal(di3SupplyStatusHistoryEventMatches_(row, "S1", DI3_SUPPLY_STATUS.CREATED,
+      DI3_SUPPLY_STATUS.SENT, retryAt, "different-operation"), false);
+  });
+
   test("supply state machine only permits the next transition", function () {
     equal(DI3_SUPPLY_STATUS_TRANSITIONS[DI3_SUPPLY_STATUS.CREATED], DI3_SUPPLY_STATUS.SENT);
     equal(DI3_SUPPLY_STATUS_TRANSITIONS[DI3_SUPPLY_STATUS.SENT], DI3_SUPPLY_STATUS.AWAITING);
