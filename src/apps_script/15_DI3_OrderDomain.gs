@@ -63,7 +63,9 @@ function di3BuildOrderFinancialPlan_(input) {
     seenProducts[productId] = true;
     if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Позиция " + (index + 1) + ": количество должно быть положительным целым числом.");
     if (!Number.isFinite(salePrice) || salePrice < 0) throw new Error("Позиция " + (index + 1) + ": цена продажи должна быть неотрицательной.");
-    var lineRevenue = di3OrderRoundMoney_(quantity * salePrice);
+    // The stored unit price and the line total must use the same cent-rounded price.
+    var normalizedSalePrice = di3OrderRoundMoney_(salePrice);
+    var lineRevenue = di3OrderRoundMoney_(quantity * normalizedSalePrice);
     var estimatedUnitCost = line.estimated_unit_cost === "" || line.estimated_unit_cost == null
       ? null : Number(line.estimated_unit_cost);
     var estimatedCostStatus = String(line.estimated_cost_status || (estimatedUnitCost == null ? "UNKNOWN" : "COMPLETE"));
@@ -75,7 +77,7 @@ function di3BuildOrderFinancialPlan_(input) {
       product_id: productId,
       product_label: String(line.product_label || ""),
       quantity: quantity,
-      sale_unit_price: di3OrderRoundMoney_(salePrice),
+      sale_unit_price: normalizedSalePrice,
       line_revenue: lineRevenue,
       estimated_unit_cost: estimatedUnitCost,
       estimated_line_cost: estimatedLineCost,
@@ -383,6 +385,7 @@ function di3BuildOrderDraftPayload_(command) {
   var products = di3LoadProductsIndex_();
   var normalizedLines = [];
   var quantitiesByProduct = {};
+  var valuationByProductId = Object.create(null);
   (command.lines || []).forEach(function (raw, index) {
     if (!raw || (!raw.product_id && !raw.product_label && (raw.quantity === "" || raw.quantity == null))) return;
     var productId = String(raw.product_id || "");
@@ -399,7 +402,11 @@ function di3BuildOrderDraftPayload_(command) {
     var price = hasPriceOverride ? Number(raw.sale_unit_price) : Number(product.current_sale_price);
     if (!Number.isFinite(price) || price < 0) throw new Error("Позиция " + (index + 1) + ": укажи корректную цену продажи или заполни её в карточке товара.");
     var label = di3GetProductLabel_(product);
-    var valuation = di3GetProductFifoValuation(productId);
+    var valuation = valuationByProductId[productId];
+    if (!valuation) {
+      valuation = di3GetProductFifoValuation(productId);
+      valuationByProductId[productId] = valuation;
+    }
     if (!historicalMode && valuation.total_quantity <= 0) throw new Error("«" + label + ": нет товара в наличии.");
     quantitiesByProduct[productId] = (quantitiesByProduct[productId] || 0) + quantity;
     normalizedLines.push({
@@ -414,7 +421,7 @@ function di3BuildOrderDraftPayload_(command) {
   if (!normalizedLines.length) throw new Error("Заказ пуст. Добавь хотя бы одну позицию.");
   Object.keys(quantitiesByProduct).forEach(function (productId) {
     if (historicalMode) return; // Historical availability is decided by FIFO at the actual dispatch timestamp.
-    var valuation = di3GetProductFifoValuation(productId);
+    var valuation = valuationByProductId[productId];
     if (quantitiesByProduct[productId] > valuation.total_quantity) {
       var product = products.byId[productId];
       throw new Error("Недостаточно товара: " + di3GetProductLabel_(product) + ". Нужно " + quantitiesByProduct[productId] + ", в наличии " + valuation.total_quantity + ".");
@@ -471,14 +478,60 @@ function di3ResumeOrderCreateOperation_(operationRecord, payloadOverride) {
   return di3ExecutePreparedOperation_(operationRecord);
 }
 
+function di3OrderCreateCellEquals_(actual, expected) {
+  if (actual instanceof Date || expected instanceof Date) {
+    var actualMillis = di3ToMillis_(actual);
+    var expectedMillis = di3ToMillis_(expected);
+    return actualMillis > 0 && actualMillis === expectedMillis;
+  }
+  if (actual === "" || actual == null) return expected === "" || expected == null;
+  if (expected === "" || expected == null) return false;
+  if (typeof actual === "number" || typeof expected === "number") {
+    return Number.isFinite(Number(actual)) && Number.isFinite(Number(expected)) &&
+      Number(actual) === Number(expected);
+  }
+  return String(actual) === String(expected);
+}
+
+function di3AssertOrderCreateImmutableRow_(actual, expected, columns, label) {
+  columns.forEach(function (column) {
+    if (!di3OrderCreateCellEquals_(actual[column], expected[column])) {
+      throw new Error("Существующая запись " + label + " не совпадает с неизменяемым payload в колонке " + (column + 1) + ".");
+    }
+  });
+}
+
 function di3ApplyOrderCreateOperation_(operationRecord, payload) {
   var operationId = String(operationRecord.values[0]);
-  if (!di3GetOrderById_(payload.order_id)) di3AppendTableRows_("V3_Orders", [payload.order_row]);
+  var immutableOrderColumns = [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 15, 16, 28, 29];
+  var existingOrder = di3GetOrderById_(payload.order_id);
+  if (!existingOrder) {
+    di3AppendTableRows_("V3_Orders", [payload.order_row]);
+  } else {
+    var existingOrderRow = DI3_TABLE_SCHEMAS.V3_Orders.map(function (header) { return existingOrder[header]; });
+    di3AssertOrderCreateImmutableRow_(existingOrderRow, payload.order_row, immutableOrderColumns, "заказа");
+  }
+
   var existingItems = di3ReadRowsByColumnValue_("V3_OrderItems", 1, payload.order_id);
-  var existingIds = {};
-  existingItems.forEach(function (match) { existingIds[String(match.values[0])] = true; });
-  var missingItems = payload.item_rows.filter(function (row) { return !existingIds[String(row[0])]; });
+  var existingById = Object.create(null);
+  existingItems.forEach(function (match) {
+    var id = String(match.values[0] || "");
+    if (existingById[id]) throw new Error("V3_OrderItems: повторяется order_item_id " + id + " при восстановлении заказа.");
+    existingById[id] = match.values;
+  });
+  var immutableItemColumns = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+  var missingItems = [];
+  payload.item_rows.forEach(function (expectedRow) {
+    var id = String(expectedRow[0] || "");
+    if (!id) throw new Error("Payload создания заказа содержит позицию без order_item_id.");
+    if (existingById[id]) {
+      di3AssertOrderCreateImmutableRow_(existingById[id], expectedRow, immutableItemColumns, "позиции заказа " + id);
+    } else {
+      missingItems.push(expectedRow);
+    }
+  });
   di3AppendTableRows_("V3_OrderItems", missingItems);
+
   var statusExists = di3ReadRowsByColumnValue_("DocumentStatusHistory", 2, payload.order_id).some(function (match) {
     var row = match.values;
     return String(row[1]) === "ORDER" && String(row[4]) === DI3_ORDER_STATUS.NEW;
@@ -488,9 +541,22 @@ function di3ApplyOrderCreateOperation_(operationRecord, payload) {
     new Date(payload.created_at), di3GetOperationInitiatorActor_(operationId), operationId, "Создание заказа"
   ]]);
   var savedOrder = di3GetOrderById_(payload.order_id);
-  var savedItems = di3GetOrderItems_(payload.order_id);
-  if (!savedOrder || savedItems.length !== payload.item_rows.length) throw new Error("Не удалось подтвердить сохранение заказа и всех позиций.");
-  if (typeof di3RefreshOrderRegister === "function") di3RefreshOrderRegister();
+  var savedItems = di3ReadRowsByColumnValue_("V3_OrderItems", 1, payload.order_id).map(function (match) { return match.values; });
+  if (!savedOrder || savedItems.length !== payload.item_rows.length) {
+    throw new Error("Не удалось подтвердить сохранение заказа и точного набора его позиций.");
+  }
+  var savedById = Object.create(null);
+  savedItems.forEach(function (row) {
+    var id = String(row[0] || "");
+    if (savedById[id]) throw new Error("V3_OrderItems: повторяется order_item_id " + id + " после сохранения заказа.");
+    savedById[id] = row;
+  });
+  payload.item_rows.forEach(function (expectedRow) {
+    var actualRow = savedById[String(expectedRow[0])];
+    if (!actualRow) throw new Error("Не найдена сохранённая позиция заказа " + expectedRow[0] + ".");
+    di3AssertOrderCreateImmutableRow_(actualRow, expectedRow, immutableItemColumns, "позиции заказа " + expectedRow[0]);
+  });
+  if (typeof di3RefreshOrderRegister === "function") di3RefreshOrderRegister(null, { refreshFifoSnapshots: false });
   return {
     status: "CREATED", order_id: payload.order_id, order_number: payload.order_number,
     items: savedItems.length, payable_total: savedOrder.payable_total,
