@@ -175,6 +175,36 @@ function di3RunSupplyCorrectionExecutionCoreTests() {
     }, /принадлежит другой поставке/);
   });
 
+  test("committed correction FIFO run is selected only with its final matching FULL event", function () {
+    var run = ["RUN-1", 1, "COMMITTED", "SUPPLY_CORRECTION", date, date, 10, 5, 2, "", "OP-1", "OP:OP-1", "FULL", "FULL", "INPUT-1"];
+    var events = [
+      ["EV-1", "OP:OP-1", 1, "PREPARED", "RUN-1", "OP-1", "FULL", "FULL", "INPUT-1", "SOURCE-A", "TARGET-A", "SOURCE-L", "TARGET-L", date, "{}"],
+      ["EV-2", "OP:OP-1", 2, "COMMITTED", "RUN-1", "OP-1", "FULL", "FULL", "INPUT-1", "SOURCE-A", "TARGET-A", "SOURCE-L", "TARGET-L", date, "{}"]
+    ];
+    var selected = di3BuildCommittedSupplyCorrectionFifoRunSelection_([run], events, "OP-1");
+    equal(selected.run[0], "RUN-1");
+    equal(selected.replay_event[3], "COMMITTED");
+  });
+
+  test("committed correction FIFO selection rejects mismatched run/event and nonterminal replay", function () {
+    var run = ["RUN-1", 1, "COMMITTED", "SUPPLY_CORRECTION", date, date, 10, 5, 2, "", "OP-1", "OP:OP-1", "FULL", "FULL", "INPUT-1"];
+    var prepared = [["EV-1", "OP:OP-1", 1, "PREPARED", "RUN-1", "OP-1", "FULL", "FULL", "INPUT-1", "SOURCE-A", "TARGET-A", "SOURCE-L", "TARGET-L", date, "{}"]];
+    throws(function () { di3BuildCommittedSupplyCorrectionFifoRunSelection_([run], prepared, "OP-1"); }, /не образуют согласованную FULL projection/);
+    var mismatched = [["EV-1", "OP:OP-1", 1, "COMMITTED", "OTHER-RUN", "OP-1", "FULL", "FULL", "INPUT-1", "SOURCE-A", "TARGET-A", "SOURCE-L", "TARGET-L", date, "{}"]];
+    throws(function () { di3BuildCommittedSupplyCorrectionFifoRunSelection_([run], mismatched, "OP-1"); }, /не образуют согласованную FULL projection/);
+  });
+
+  test("committed correction FIFO selection fails closed on duplicate runs or broken event sequence", function () {
+    var run = ["RUN-1", 1, "COMMITTED", "SUPPLY_CORRECTION", date, date, 10, 5, 2, "", "OP-1", "OP:OP-1", "FULL", "FULL", "INPUT-1"];
+    var second = run.slice(); second[0] = "RUN-2"; second[1] = 2; second[11] = "OP:OP-1:SECOND";
+    throws(function () { di3BuildCommittedSupplyCorrectionFifoRunSelection_([run, second], [], "OP-1"); }, /несколько COMMITTED FIFO runs/);
+    var broken = [
+      ["EV-1", "OP:OP-1", 1, "PREPARED", "RUN-1", "OP-1", "FULL", "FULL", "INPUT-1", "SOURCE-A", "TARGET-A", "SOURCE-L", "TARGET-L", date, "{}"],
+      ["EV-3", "OP:OP-1", 3, "COMMITTED", "RUN-1", "OP-1", "FULL", "FULL", "INPUT-1", "SOURCE-A", "TARGET-A", "SOURCE-L", "TARGET-L", date, "{}"]
+    ];
+    throws(function () { di3BuildCommittedSupplyCorrectionFifoRunSelection_([run], broken, "OP-1"); }, /нарушена последовательность/);
+  });
+
   test("SUPPLY_CORRECTION is registered for operation recovery", function () {
     var registry = di3GetOperationHandlerRegistry_();
     if (typeof registry.SUPPLY_CORRECTION !== "function") {
