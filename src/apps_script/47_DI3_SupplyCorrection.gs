@@ -89,8 +89,19 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
     var quantity = Number(line.quantity);
     if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new Error(prefix + ": некорректное количество в payload.");
     var units = Number(line.units_per_pack);
+    var packs = Number(line.packs);
     if (!Number.isSafeInteger(units) || units <= 0) throw new Error(prefix + ": некорректный размер упаковки.");
-    if (Number(line.quantity) !== Number(line.quantity)) throw new Error(prefix + ": некорректное количество.");
+    if (!Number.isSafeInteger(packs) || packs <= 0 || quantity !== packs * units) {
+      throw new Error(prefix + ": quantity не совпадает с packs × units_per_pack.");
+    }
+    di3SupplyCorrectionSameInstant_(line.effective_at, receiptPayload.received_at, prefix + " effective_at");
+    di3SupplyCorrectionSameInstant_(line.recorded_at, receiptPayload.recorded_at, prefix + " recorded_at");
+    if (!Number.isFinite(Number(line.unit_cost)) || Number(line.unit_cost) < 0) {
+      throw new Error(prefix + ": некорректная unit_cost в payload.");
+    }
+    if (["KNOWN", "FREE"].indexOf(String(line.cost_status)) === -1) {
+      throw new Error(prefix + ": недопустимый cost_status в исходном payload.");
+    }
     if (Number(line.total_cost_minor) < 0 || !Number.isSafeInteger(Number(line.total_cost_minor))) {
       throw new Error(prefix + ": некорректная полная себестоимость в копейках.");
     }
