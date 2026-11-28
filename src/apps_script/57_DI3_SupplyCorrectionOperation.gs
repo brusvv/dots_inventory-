@@ -810,6 +810,81 @@ function di3AssertSupplyCorrectionFifoSourceArchive_(fifoRunId, payload) {
   };
 }
 
+/**
+ * Select the already committed FIFO replay for a correction operation.
+ * A correction retry must never create a second run after its replay committed:
+ * the replay ID is operation-stable and its F-06 archive is the original source.
+ */
+function di3BuildCommittedSupplyCorrectionFifoRunSelection_(runRows, eventRows, operationId) {
+  var id = String(operationId || "");
+  if (!id) throw new Error("SUPPLY_CORRECTION: пустой operation_id при поиске committed FIFO run.");
+  var runs = (runRows || []).filter(function (row) {
+    return String(row[10] || "") === id && String(row[2] || "") === "COMMITTED";
+  });
+  if (!runs.length) return null;
+  if (runs.length !== 1) {
+    throw new Error("SUPPLY_CORRECTION: найдено несколько COMMITTED FIFO runs для операции " + id + "; требуется ручная сверка.");
+  }
+  var run = runs[0];
+  var replayId = String(run[11] || "");
+  if (!replayId) throw new Error("SUPPLY_CORRECTION: committed FIFO run не содержит replay_id.");
+  var events = (eventRows || []).filter(function (row) { return String(row[1] || "") === replayId; });
+  if (!events.length) throw new Error("SUPPLY_CORRECTION: committed FIFO run не имеет FifoReplayEvents.");
+  events.sort(function (a, b) { return Number(a[2]) - Number(b[2]); });
+  for (var i = 0; i < events.length; i++) {
+    if (!Number.isSafeInteger(Number(events[i][2])) || Number(events[i][2]) !== i + 1) {
+      throw new Error("SUPPLY_CORRECTION: нарушена последовательность FifoReplayEvents для " + replayId + ".");
+    }
+    if (i && Number(events[i - 1][2]) === Number(events[i][2])) {
+      throw new Error("SUPPLY_CORRECTION: повторный event_sequence для " + replayId + ".");
+    }
+  }
+  var latest = events[events.length - 1];
+  if (String(latest[3]) !== "COMMITTED" ||
+      String(latest[4]) !== String(run[0]) ||
+      String(latest[5] || "") !== id ||
+      String(latest[6] || "") !== "FULL" ||
+      String(latest[7] || "") !== "FULL" ||
+      String(run[12] || "") !== "FULL" ||
+      String(run[13] || "") !== "FULL" ||
+      String(latest[8] || "") !== String(run[14] || "")) {
+    throw new Error("SUPPLY_CORRECTION: committed FIFO run и последний replay event не образуют согласованную FULL projection.");
+  }
+  return { run: run, replay_event: latest };
+}
+
+function di3FindCommittedSupplyCorrectionFifoRun_(operationId, payload) {
+  var runRows = di3ReadTableValues_("FifoAllocationRuns");
+  var eventRows = di3ReadTableValues_("FifoReplayEvents");
+  var selected = di3BuildCommittedSupplyCorrectionFifoRunSelection_(runRows, eventRows, operationId);
+  if (!selected) return null;
+
+  // A COMMITTED journal entry is not sufficient by itself: verify that the
+  // current active projections still match the exact target fingerprints.
+  var activeAllocations = di3ReadTableValues_("StockAllocations");
+  var allLots = di3ReadTableValues_("StockLots");
+  var allocationFingerprint = di3BuildFifoAllocationSnapshotFingerprint_(activeAllocations);
+  var lotFingerprint = di3BuildFifoFingerprint_(di3BuildFifoLotCacheSnapshot_(allLots, null, null));
+  if (allocationFingerprint !== String(selected.replay_event[10]) ||
+      lotFingerprint !== String(selected.replay_event[12])) {
+    throw new Error("SUPPLY_CORRECTION: committed FIFO projection больше не совпадает с target fingerprints; повторный replay запрещён до сверки.");
+  }
+
+  // Also prove that F-06 still contains the original pre-correction allocation
+  // and lot-cache snapshots required by the correction's source audit.
+  di3AssertSupplyCorrectionFifoSourceArchive_(String(selected.run[0]), payload);
+  return {
+    run_id: String(selected.run[0]),
+    mode: "ALREADY_COMMITTED",
+    replay_id: String(selected.run[11]),
+    allocations_created: 0,
+    allocations_replaced: 0,
+    movements_replayed: 0,
+    products_replayed: 0,
+    lots_updated: 0
+  };
+}
+
 function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
   var operationId = String(operationRecord.values[0] || "");
   if (!payload || Number(payload.schema_version) !== 1 ||
@@ -842,10 +917,16 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
   // The relation is candidate-visible only to this pending operation. The
   // normal FIFO engine uses its F-06 archive protocol and full replay because
   // the relation fingerprint changed, including products affected by REMOVE.
-  var fifo = di3RebuildFifoAllocations_("SUPPLY_CORRECTION", payload.affected_product_ids, {
-    operation_id: operationId
-  });
-  if (!fifo || !fifo.run_id || !fifo.mode) throw new Error("Не подтверждён результат candidate FIFO replay.");
+  // If a prior attempt already committed the operation-backed FULL replay,
+  // reuse it only after checking the active target fingerprints and F-06 source
+  // archive. Re-running would reuse the stable replay_id with a different run_id.
+  var fifo = di3FindCommittedSupplyCorrectionFifoRun_(operationId, payload);
+  if (!fifo) {
+    fifo = di3RebuildFifoAllocations_("SUPPLY_CORRECTION", payload.affected_product_ids, {
+      operation_id: operationId
+    });
+    if (!fifo || !fifo.run_id || !fifo.mode) throw new Error("Не подтверждён результат candidate FIFO replay.");
+  }
   var sourceArchive = di3AssertSupplyCorrectionFifoSourceArchive_(fifo.run_id, payload);
   // Cost history becomes visible only after the new FIFO allocation projection
   // has been durably committed; stable source keys make this retry-safe.
