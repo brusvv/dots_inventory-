@@ -160,18 +160,37 @@ function di3BuildSupplyCorrectionEffectiveMovementMap_(relationRows, operationRo
     if (latest.event_type === "QUARANTINED" || operation.status === "QUARANTINED") {
       throw new Error("SupplyCorrectionEvents: relation_id " + relationId + " находится в карантине.");
     }
-    if (latest.event_type === "ABORTED" || operation.status === "REJECTED") return;
-    if (latest.event_type === "COMMITTED" && operation.status === "COMMITTED") {
-      activeRelations.push(metadata);
+    if (latest.event_type === "ABORTED") {
+      if (operation.status === "COMMITTED") {
+        throw new Error("SupplyCorrectionEvents: ABORTED relation_id " + relationId + " ссылается на уже COMMITTED operation.");
+      }
       return;
     }
-    if ((latest.event_type === "PREPARED" || latest.event_type === "COMMITTED") &&
-        includeOperationId === metadata.operation_id &&
-        (operation.status === "PREPARED" || operation.status === "RETRYABLE")) {
-      // Recovery may have durably appended COMMITTED relation events before the
-      // enclosing operation status write. Only that operation may see them
-      // until Operations itself is COMMITTED.
-      activeRelations.push(metadata);
+    if (latest.event_type === "COMMITTED") {
+      if (operation.status === "COMMITTED") {
+        activeRelations.push(metadata);
+        return;
+      }
+      if (includeOperationId === metadata.operation_id &&
+          (operation.status === "PREPARED" || operation.status === "RETRYABLE")) {
+        // Recovery may have durably appended COMMITTED relation events before the
+        // enclosing operation status write. Only that operation may see them
+        // until Operations itself is COMMITTED.
+        activeRelations.push(metadata);
+        return;
+      }
+      throw new Error("SupplyCorrectionEvents: relation_id " + relationId +
+        " COMMITTED, но связанная Operations operation не имеет статуса COMMITTED.");
+    }
+    if (latest.event_type === "PREPARED") {
+      if (operation.status === "COMMITTED" || operation.status === "REJECTED") {
+        throw new Error("SupplyCorrectionEvents: relation_id " + relationId +
+          " остался PREPARED при финальном статусе Operations " + operation.status + ".");
+      }
+      if (includeOperationId === metadata.operation_id &&
+          (operation.status === "PREPARED" || operation.status === "RETRYABLE")) {
+        activeRelations.push(metadata);
+      }
     }
   });
 
