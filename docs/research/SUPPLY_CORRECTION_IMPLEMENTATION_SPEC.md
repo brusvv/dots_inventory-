@@ -1,6 +1,6 @@
 # SUPPLY_CORRECTION implementation specification
 
-Status: SC-01 read-only source mapping audit is implemented and CI-covered. The correction operation, event schema, FIFO replay integration and runtime execution remain disabled.
+Status: SC-01 read-only source mapping audit and SC-02 relation-journal foundation are implemented and CI-covered. The correction operation handler, FIFO replay integration and runtime execution remain disabled.
 Branch: `feature/supply-correction-fifo-replay`
 Date: 2026-11-28
 
@@ -238,3 +238,22 @@ does **not** yet consume the resolved map; no \`SUPPLY_CORRECTION\` operation
 handler is registered; no replacement movements/lots are created; no order
 snapshots or product cost-history projections are changed. SC-03/SC-04 remain
 disabled. The received-supply stock-affecting edit guard remains mandatory.
+
+
+### SC-02 quality-gate verification
+
+The latest source CI run for commit
+\`4364355461999ef2e4c25fe8678a17d6e22673b0\` passed:
+[GitHub Actions #46095111648](https://github.com/brusvv/dots_inventory-/actions/runs/46095111648).
+
+- Apps Script syntax: **59/59** modules.
+- Snapshot auditor: **8/8**.
+- FIFO replay: **46/46**.
+- Order domain: **22/22**.
+- Supply domain/lifecycle/correction suites: **113/113** (including 13 relation-journal tests).
+- Catalog/order UX: **14/14**.
+- System safety/operation: **39/39**.
+- Warehouse dashboard: **11/11**.
+- Finance schema: **4/4**.
+
+All reported assertions passed. This is source/Node CI evidence, not a bound-workbook runtime acceptance.
