@@ -23,7 +23,7 @@ function di3RunSupplyCorrectionFifoPreviewTests() {
       new Date(effectiveAt), new Date(recordedAt || effectiveAt), "", "", "", sequence];
   }
   function detail(id, type) {
-    return [id, "MOV-" + id, type, "SUPPLY_RECEIVE", "", "", "KNOWN", "", "test", "", "SUPPLY_CORRECTION_TEST"];
+    return [id, "MOV-" + id, type, "SUPPLY_RECEIVE", "", "", "KNOWN", "", "test", "", "SUPPLY"];
   }
   function lot(id, productId, movementId, quantity, unitCost, effectiveAt, recordedAt) {
     var row = [id, productId, movementId, "SUPPLY", "S1", "PV-" + productId,
