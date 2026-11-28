@@ -195,6 +195,64 @@ function di3RunSupplyFullEditUnitTests() {
     equal(handler.indexOf("di3RefreshSupplyFullEditFinancialPreview_") !== -1, true);
   });
 
+  test("full edit item projection batches identity resolution and plans updates, appends and removals", function () {
+    var plan = di3BuildSupplyFullEditItemProjectionPlan_([
+      ["I1", "S1", "P1", "V1"],
+      ["I3", "S1", "P3", "V3"]
+    ], ["I2"], [
+      { row_number: 10, values: ["I1", "S1", "P1", "V1"] },
+      { row_number: 11, values: ["I2", "S1", "P2", "V2"] }
+    ], "S1");
+    equal(plan.item_updates.length, 1);
+    equal(plan.item_updates[0].row_number, 10);
+    equal(plan.item_appends.length, 1);
+    equal(plan.item_appends[0][0], "I3");
+    equal(plan.remove_row_numbers.length, 1);
+    equal(plan.remove_row_numbers[0], 11);
+  });
+  test("full edit item projection rejects target IDs owned by another supply", function () {
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["I1", "S1"]], [], [
+        { row_number: 10, values: ["I1", "S2"] }
+      ], "S1");
+    }, /принадлежит другой поставке/);
+  });
+  test("full edit item projection rejects removal IDs owned by another supply", function () {
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([], ["I1"], [
+        { row_number: 10, values: ["I1", "S2"] }
+      ], "S1");
+    }, /удалить товарную строку другой поставки/);
+  });
+  test("full edit item projection rejects target/removal overlap and duplicate database identities", function () {
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["I1", "S1"]], ["I1"], [], "S1");
+    }, /одновременно добавлена и помечена к удалению/);
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["I1", "S1"]], [], [
+        { row_number: 10, values: ["I1", "S1"] },
+        { row_number: 11, values: ["I1", "S1"] }
+      ], "S1");
+    }, /повторяющийся supply_item_id/);
+  });
+  test("full edit item projection rejects duplicate and empty payload identities", function () {
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["I1", "S1"], ["I1", "S1"]], [], [], "S1");
+    }, /повторяется или не согласован supply_item_id/);
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([["", "S1"]], [], [], "S1");
+    }, /повторяется или не согласован supply_item_id/);
+    throws(function () {
+      di3BuildSupplyFullEditItemProjectionPlan_([], [""], [], "S1");
+    }, /удаляемый supply_item_id/);
+  });
+  test("full edit handler resolves all item IDs in one batch before parent projection write", function () {
+    var source = di3ApplySupplyDocumentEditOperation_.toString();
+    equal(source.indexOf("di3ReadRowsByColumnValues_(\"V3_SupplyItems\", 0, lookupIds)") !== -1, true);
+    equal(/di3FindRowByFirstColumn_\s*\(\s*[\"']V3_SupplyItems/.test(source), false);
+    equal(source.indexOf("di3BuildSupplyFullEditItemProjectionPlan_") < source.indexOf("di3ApplyContiguousRowUpdates_(\"V3_Supplies\""), true);
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply full editing tests failed: " + JSON.stringify(failed));
   return report;
