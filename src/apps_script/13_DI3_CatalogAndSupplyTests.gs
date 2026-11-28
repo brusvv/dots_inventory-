@@ -11,6 +11,9 @@ function di3RunCatalogAndSupplyUnitTests() {
       throw new Error((message || "Values differ") + ": " + JSON.stringify(actual) + " !== " + JSON.stringify(expected));
     }
   }
+  function includes(source, expected) {
+    if (String(source).indexOf(expected) === -1) throw new Error("Expected source to contain: " + expected);
+  }
   function close(actual, expected, epsilon) {
     if (Math.abs(Number(actual) - Number(expected)) > (epsilon || 0.000001)) {
       throw new Error(String(actual) + " is not close to " + String(expected));
