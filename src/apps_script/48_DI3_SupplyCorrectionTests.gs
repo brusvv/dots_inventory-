@@ -136,12 +136,13 @@ function di3RunSupplyCorrectionUnitTests() {
     throws(function () { audit(data); }, /товар, тип, количество/);
 
     data = fixture();
+    data.lots[0].values[13] = 20;
     data.allocations = [{ row_number: 7, values: [
       "ALLOC-1", "RUN-1", "OUT-1", "LOT-1", "P1", "CONSUME", 20, 4.5,
-      "KNOWN", 90, new Date("2026-11-21T12:00:00.000Z"),
+      "KNOWN", 89.99, new Date("2026-11-21T12:00:00.000Z"),
       new Date("2026-11-21T12:00:01.000Z"), "", 8999
     ] }];
-    throws(function () { audit(data); }, /сумма CONSUME и remaining_quantity/);
+    throws(function () { audit(data); }, /сумма allocated_cost_minor/);
   });
   test("source audit rejects duplicate allocation IDs and uninitialized lot remaining cache", function () {
     var data = fixture();
