@@ -871,6 +871,7 @@ test("branch selector persists the exact selected commit and reset restores conf
   const commit = "6".repeat(40);
   const ui = {
     ButtonSet: { OK_CANCEL: "OK_CANCEL", OK: "OK" },
+    Button: { OK: "OK", CANCEL: "CANCEL" },
     prompt: () => ({ getSelectedButton: () => "OK", getResponseText: () => "main" }),
     alert: () => {}
   };
