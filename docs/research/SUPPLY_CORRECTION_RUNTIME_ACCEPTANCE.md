@@ -87,8 +87,8 @@ Review the returned values independently:
 The operation's intended write order is:
 
 1. immutable operation registration and payload;
-2. replacement StockLedger, StockMovementDetails and StockLots rows;
-3. PREPARED relation journal events;
+2. PREPARED relation journal events (appended immediately after registration, before the executor starts);
+3. replacement StockLedger, StockMovementDetails and StockLots rows;
 4. supply document/item projection;
 5. F-06 archive and full FIFO replay/projection;
 6. ProductCostHistory append;
