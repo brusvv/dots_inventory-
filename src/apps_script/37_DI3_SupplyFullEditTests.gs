@@ -253,6 +253,16 @@ function di3RunSupplyFullEditUnitTests() {
     equal(source.indexOf("di3BuildSupplyFullEditItemProjectionPlan_") < source.indexOf("di3ApplyContiguousRowUpdates_(\"V3_Supplies\""), true);
   });
 
+  test("full edit validation and materialization share one form/catalogue snapshot", function () {
+    var planSource = di3BuildSupplyFullEditPlan_.toString();
+    var saveSource = di3SaveFullSupplyEdit.toString();
+    equal(planSource.indexOf("di3ResolveSupplyFormLines_(false, false, lineSnapshot)") !== -1, true);
+    equal(planSource.indexOf("di3ResolveSupplyFormLines_(true, false, lineSnapshot)") !== -1, true);
+    equal(saveSource.indexOf("var lineSnapshot = di3LoadSupplyFormLineSnapshot_(false)") !== -1, true);
+    equal(saveSource.indexOf("di3BuildSupplyFullEditPlan_(context, false, lineSnapshot)") !== -1, true);
+    equal(saveSource.indexOf("di3BuildSupplyFullEditPlan_(context, true, lineSnapshot)") !== -1, true);
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply full editing tests failed: " + JSON.stringify(failed));
   return report;
