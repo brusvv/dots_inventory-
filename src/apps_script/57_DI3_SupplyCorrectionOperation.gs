@@ -697,7 +697,6 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
   // Cost history becomes visible only after the new FIFO allocation projection
   // has been durably committed; stable source keys make this retry-safe.
   var costHistoryAdded = di3EnsureSupplyCorrectionCostHistory_(payload);
-  var currentPackVariantsUpdated = di3ReconcileCurrentPackVariantsForProducts_(payload.affected_product_ids);
   di3EnsureSupplyCorrectionRelationStage_(payload.relations, operationId, "COMMITTED");
 
   var committedMap = di3ReadSupplyCorrectionEffectiveMovementMap_(operationId);
@@ -707,6 +706,7 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
     throw new Error("Не все relation events стали частью candidate effective movement map.");
   }
   di3SetAppMetaValue_("fifo_supply_correction_fingerprint", committedMap.fingerprint);
+  var currentPackVariantsUpdated = di3ReconcileCurrentPackVariantsForProducts_(payload.affected_product_ids);
   di3RefreshSupplyRegister();
   di3RefreshSupplyFormValidations();
   return {
