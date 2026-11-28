@@ -776,4 +776,27 @@ test("rejects branch source content that does not match its Git blob SHA", () =>
   ), /Git blob SHA-1/);
 });
 
+test("preserves installed updater modules for older branches without branch selector support", () => {
+  const branch = "feature/older-business-change";
+  const commit = "a".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = { TIME_ZONE: "Europe/Moscow" };',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;",
+    "src/apps_script/43_DI3_GitHubDeploymentManager.gs": 'var DI3_GITHUB_UPDATER_VERSION = "0.1.0";',
+    "src/apps_script/44_DI3_GitHubInstallPreview.gs": "function oldPreview() {}",
+    "src/apps_script/45_DI3_GitHubConfirmedInstaller.gs": "function oldInstall() {}",
+    "src/apps_script/46_DI3_GitHubCodeRollback.gs": "function oldRollback() {}"
+  };
+  const tree = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  const manifest = vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  );
+  assert.ok(manifest.files.every(file => !/^4[3-6]_DI3_GitHub/.test(file.name)));
+});
+
 console.log("\n" + passed + " GitHub deployment-manager tests passed.");
