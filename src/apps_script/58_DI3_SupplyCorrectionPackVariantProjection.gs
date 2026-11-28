@@ -44,7 +44,29 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
   });
 
   var latest = Object.create(null);
+  var latestRank = Object.create(null);
   receivedSupplies.forEach(function (supply) {
+    var productsInSupply = Object.create(null);
+    supply.relevant_rows.forEach(function (row) {
+      var productId = String(row[3] || "");
+      if (productId) productsInSupply[productId] = true;
+    });
+    Object.keys(productsInSupply).forEach(function (productId) {
+      var prior = latestRank[productId];
+      if (!prior) {
+        latestRank[productId] = {
+          received_at: supply.received_at.getTime(),
+          created_at: supply.created_at.getTime(),
+          supply_id: supply.supply_id
+        };
+      } else if (prior.received_at === supply.received_at.getTime() &&
+          prior.created_at === supply.created_at.getTime() &&
+          prior.supply_id !== supply.supply_id) {
+        throw new Error("Невозможно однозначно выбрать текущую фасовку товара " + productId +
+          ": полученные поставки " + prior.supply_id + " и " + supply.supply_id +
+          " имеют одинаковые received_at и created_at.");
+      }
+    });
     var rows = supply.relevant_rows.filter(function (row) {
       return !latest[String(row[3] || "")];
     });
