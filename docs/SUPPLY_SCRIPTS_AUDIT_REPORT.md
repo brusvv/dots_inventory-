@@ -200,3 +200,28 @@ The normal reconciliation path no longer transfers every full row from `V3_Suppl
 This reduces full-row transfers while retaining the necessary scan of the lookup key column provided by the shared repository helper. A compatibility fallback reads all parent supply rows only when a matched item has a blank `supply_id`, preserving the previous detection of a received parent with a missing identity. Empty affected-item results do not read the parent table.
 
 Three regression tests cover the selective query plan, blank-ID fallback, and empty-match short circuit. CI for this exact source revision is pending, and no runtime benchmark has been performed. The optimization has not been exercised against any workbook.
+
+
+## Form clearing and full-edit launch performance — 2026-11-28
+
+The code review found two avoidable sources of latency:
+
+1. Full-edit entry called the comprehensive audit snapshot, which also queried StockLedger, StockMovementDetails, StockLots, StockAllocations and ProductCostHistory even though the editor's baseline fingerprint contains only the supply header and supply items. The same path also reloaded the supply and receipt operation already read by the caller.
+2. `di3NewSupplyForm()` called `di3RefreshSupplyFormValidations()` after clearing values. That function rebuilds product and money validations, reads draft and selectable-supply summaries, and refreshes the stage panel. Clearing cell contents does not remove existing validations.
+
+Changes:
+
+- The full audit snapshot remains comprehensive by default for `di3AuditSupplyForFullEdit()`. Interactive full-edit entry now reuses the preloaded supply/receipt operation, reads and validates the immutable receipt payload only for received supplies, and skips unrelated stock/FIFO audit tables.
+- Full-edit save now computes the baseline fingerprint from the already-loaded supply plus current supply items, without loading receipt-operation/payload or stock audit tables.
+- New-supply clearing preserves installed validations and refreshes only the stage/date panel. “Обновить списки формы” remains available as the explicit validation refresh/repair action.
+- Cancel/commit reload skips full validation rebuilding; selector validation is refreshed only when the document number changed.
+- Fixed the stale legacy `di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affected)` invocation left after the selective PackVariants refactor; the selective read result is now the sole input to the chronology selector.
+
+Exact-head validation on `8609e3c2c1b1a9aad97d51ba8ddae1688358afc8`:
+
+- Apps Script syntax: 69/69 files.
+- Supply domain/lifecycle suites: 189 passed, 0 failed (including 35 full-edit tests, 20 workspace UX tests, 18 PackVariants tests).
+- FIFO 46/46; Order 22/22; Catalog/Order UX 14/14; System Safety 39/39; Warehouse Dashboard 11/11; Finance 4/4; Snapshot Audit 8/8.
+- Release pipeline and installation package: PASS.
+
+These are source/Node CI results, not runtime latency measurements. Full-edit launch, form clearing, and cancel/commit reload have not yet been timed in Apps Script. No workbook or supply data was changed.
