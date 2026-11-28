@@ -475,6 +475,78 @@ function di3SupplyCorrectionRowEquals_(left, right) {
     JSON.stringify((right || []).map(di3SupplyFullEditNormalizeValue_));
 }
 
+/**
+ * Read-only preflight for the mutable supply-document projection.
+ *
+ * Validate every current row against the immutable before/after snapshots
+ * before replacement ledger/detail/lot rows are appended. This prevents a
+ * stale or manually edited document from being discovered only after stock
+ * source rows have already been staged.
+ */
+function di3BuildSupplyCorrectionDocumentProjectionAudit_(currentSupplyRow, currentItemRows, payload) {
+  if (!payload || !Array.isArray(payload.before_supply_row) ||
+      !Array.isArray(payload.after_supply_row) ||
+      !Array.isArray(payload.before_item_rows) ||
+      !Array.isArray(payload.after_item_rows)) {
+    throw new Error("SUPPLY_CORRECTION: отсутствуют before/after snapshots документа.");
+  }
+  if (!di3SupplyCorrectionRowEquals_(currentSupplyRow, payload.before_supply_row) &&
+      !di3SupplyCorrectionRowEquals_(currentSupplyRow, payload.after_supply_row)) {
+    throw new Error("V3_Supplies уже отличается и от source, и от target snapshot. Коррекция остановлена до складских записей.");
+  }
+
+  function indexSnapshot(rows, label) {
+    var byId = Object.create(null);
+    rows.forEach(function (row) {
+      var id = String(row && row[0] || "");
+      if (!id || byId[id]) throw new Error(label + ": пустой или повторный supply_item_id " + id + ".");
+      if (String(row[1] || "") !== String(payload.supply_id)) {
+        throw new Error(label + ": строка " + id + " принадлежит другой поставке.");
+      }
+      byId[id] = row;
+    });
+    return byId;
+  }
+  var beforeById = indexSnapshot(payload.before_item_rows, "before_item_rows");
+  var afterById = indexSnapshot(payload.after_item_rows, "after_item_rows");
+  var currentById = Object.create(null);
+  (currentItemRows || []).forEach(function (rowOrMatch) {
+    var row = rowOrMatch && Array.isArray(rowOrMatch.values) ? rowOrMatch.values : rowOrMatch;
+    var id = String(row && row[0] || "");
+    if (!id || currentById[id]) throw new Error("V3_SupplyItems: пустой или повторный supply_item_id " + id + ".");
+    if (!beforeById[id] && !afterById[id]) {
+      throw new Error("V3_SupplyItems: обнаружена посторонняя строка " + id + "; коррекция остановлена до складских записей.");
+    }
+    var isBefore = !!beforeById[id] && di3SupplyCorrectionRowEquals_(row, beforeById[id]);
+    var isAfter = !!afterById[id] && di3SupplyCorrectionRowEquals_(row, afterById[id]);
+    if (!isBefore && !isAfter) {
+      throw new Error("V3_SupplyItems " + id + " отличается от source и target snapshots; коррекция остановлена до складских записей.");
+    }
+    currentById[id] = row;
+  });
+
+  Object.keys(beforeById).forEach(function (id) {
+    if (afterById[id] && !currentById[id]) {
+      throw new Error("V3_SupplyItems " + id + " отсутствует до завершения обновления документа.");
+    }
+  });
+  return {
+    status: "READY",
+    before_item_count: Object.keys(beforeById).length,
+    after_item_count: Object.keys(afterById).length,
+    current_item_count: Object.keys(currentById).length
+  };
+}
+
+function di3AssertSupplyCorrectionDocumentProjectionReady_(payload) {
+  var supplyId = String(payload && payload.supply_id || "");
+  var supply = di3GetSupplyById_(supplyId);
+  if (!supply) throw new Error("Не найдена поставка для проверки document projection.");
+  var currentSupplyRow = di3SupplyCorrectionRowFromRecord_("V3_Supplies", supply);
+  var currentItems = di3ReadRowsByColumnValue_("V3_SupplyItems", 1, supplyId);
+  return di3BuildSupplyCorrectionDocumentProjectionAudit_(currentSupplyRow, currentItems, payload);
+}
+
 /** Idempotent before-or-after document projection writer with fail-closed conflict detection. */
 function di3ApplySupplyCorrectionDocumentProjection_(payload) {
   var supplyId = String(payload.supply_id);
@@ -762,6 +834,7 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
   });
 
   di3AssertSupplyCorrectionImmutableSource_(operationId, payload);
+  di3AssertSupplyCorrectionDocumentProjectionReady_(payload);
   var replacementWrite = di3EnsureSupplyCorrectionSourceRows_(operationId, payload);
   di3EnsureSupplyCorrectionRelationStage_(payload.relations, operationId, "PREPARED");
   var document = di3ApplySupplyCorrectionDocumentProjection_(payload);
