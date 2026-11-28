@@ -760,16 +760,22 @@ test("rollback distinguishes mismatched post-write file set", () => {
   finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
-test("installer final fingerprint guard blocks concurrent project edits", () => {
+test("installer final fingerprint guard blocks concurrent project edits and releases lock", () => {
   const h = configureInstallerHarness("YES", "concurrent-change");
-  try { assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /проект изменился после подтверждения/); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2); }
-  finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
+  try {
+    assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /проект изменился после подтверждения/);
+    assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2);
+    assert.equal(h.lockAcquireCount, 1); assert.equal(h.lockReleaseCount, 1);
+  } finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
-test("rollback final fingerprint guard blocks concurrent project edits", () => {
+test("rollback final fingerprint guard blocks concurrent project edits and releases lock", () => {
   const h = configureRollbackHarness("YES", "concurrent-change");
-  try { assert.throws(() => vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context), /проект изменился после создания резервной копии/); assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2); }
-  finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
+  try {
+    assert.throws(() => vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context), /проект изменился после создания резервной копии/);
+    assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2);
+    assert.equal(h.lockAcquireCount, 1); assert.equal(h.lockReleaseCount, 1);
+  } finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
 test("installer rejects Drive backup metadata that differs from verified payload", () => {
