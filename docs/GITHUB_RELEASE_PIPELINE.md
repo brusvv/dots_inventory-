@@ -186,7 +186,7 @@ D-06 source/Node CI: [run 45884074434](https://github.com/brusvv/dots_inventory-
 
 The Apps Script menu now supports selecting a supported source branch directly, without creating an annotated Preview tag or publishing a GitHub Release.
 
-1. **Выбрать ветку GitHub для обновления…** lists supported `feature/*`, `release/*` and `hotfix/*` branches and asks for the exact branch name.
+1. **Выбрать ветку GitHub для обновления…** lists supported any safe branch name returned by GitHub branches and asks for the exact branch name.
 2. The updater resolves that branch to its current full commit SHA, reads the Git tree and fetches only direct `.gs` modules under `src/apps_script/`.
 3. It derives the target schema from `DI3_SCHEMA_VERSION` and timezone from `DI3_APP_CONFIG.TIME_ZONE`, computes each file's SHA-256/byte length, and builds an in-memory branch snapshot manifest.
 4. Every source URL is pinned to the resolved 40-character commit SHA. The branch name is never used as a moving source URL during preview or installation. The selected commit SHA is persisted with the branch name, so moving the branch later does not silently change the pending source. Each fetched source is also checked against the Git tree's Git blob SHA-1, in addition to the generated SHA-256 and byte length.
