@@ -171,7 +171,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     throws(function () {
       snapshot([ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, "2026-01-03T09:00:00Z", date)],
         [detail("SRC", "IN"), detail("REPL", "IN")],
-        [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10)],
+        [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 10, "2026-01-03T09:00:00Z", date)],
         [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")], [operation("OP-1")]);
     }, /не совпадает с исходной датой приёмки/);
   });
