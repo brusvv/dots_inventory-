@@ -90,6 +90,13 @@ function di3RunHistoricalSupplyUnitTests() {
     input.expected_date = new Date(future.getTime() - 1 * 24 * 60 * 60 * 1000);
     throws(function () { di3ValidateHistoricalSupplyDates_(input); }, /не может быть в будущем/);
   });
+  test("historical start and finalization do not rebuild unchanged form validations", function () {
+    var start = di3StartHistoricalSupplyEntry.toString();
+    var finish = di3FinalizeHistoricalSupplyReceipt_.toString();
+    equal(start.indexOf("di3RefreshSupplyFormValidations()"), -1);
+    equal(finish.indexOf("di3RefreshSupplyFormValidations()"), -1);
+    includes(finish, 'receiptResult.status === "ALREADY_RECEIVED"');
+  });
   test("historical mode routes receipt through the standard idempotent SUPPLY_RECEIVE pipeline", function () {
     // The public entry point performs preflight/confirmation; the locked worker
     // performs the actual receipt, so assert against the worker rather than wrapper.
