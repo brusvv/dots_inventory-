@@ -741,7 +741,7 @@ test("branch manifest rejects unsafe branch metadata and a mismatched commit tag
       raw_url: "https://raw.githubusercontent.com/brusvv/dots_inventory-/" + "c".repeat(40) + "/src/apps_script/01_Module.gs",
       size_bytes: 1, sha256: "d".repeat(64) }]
   };
-  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")", context), /Разрешены только ветки/);
+  assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")", context), /Недопустимое имя GitHub-ветки/);
   manifest.source_branch = "feature/work";
   manifest.git_tag = "branch:feature/work@000000000000";
   assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")", context), /привязан к точному commit SHA/);
