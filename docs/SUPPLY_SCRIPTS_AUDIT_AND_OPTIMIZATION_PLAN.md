@@ -122,3 +122,19 @@ Regression tests cover the lightweight snapshot call contracts, preserved full a
 - Final source/test commit for this batch: `7468c61f673f8748347066e1ab1061e06bdac708`.
 - Exact commit quality gates passed: 69 Apps Script syntax files; 192 supply-domain/lifecycle assertions; FIFO 46/46; Order 22/22; Catalog/Order UX 14/14; System Safety 39/39; Warehouse Dashboard 11/11; Finance 4/4; Snapshot Audit 8/8. Release pipeline and installation package passed on the same commit.
 - Runtime timing is still pending on a disposable restored workbook.
+
+
+
+## End-to-end supply lifecycle review — 2026-11-28
+
+The static review was extended beyond the earlier optimization batch to trace the complete user-visible supply lifecycle:
+
+1. New form / selector state and preview.
+2. Draft creation and subsequent draft updates.
+3. Dispatch and awaiting-receipt transitions from the form or supply register.
+4. Receipt operation preparation, immutable payload, idempotent execution, stock source rows, FIFO projection, cost history and current pack-variant projection.
+5. Historical supply entry and recovery.
+6. Cancellation of pre-receipt supplies.
+7. Full document edit and received-supply correction operation paths.
+
+The review found one full-edit commit blocker and additional repeated refresh/read work. Batch 4 below implements the safe source-level fixes. Runtime Apps Script measurements and write-boundary acceptance remain pending on a disposable restored workbook.
