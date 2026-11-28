@@ -185,7 +185,9 @@ function di3RunSupplyFullEditUnitTests() {
     equal(source.indexOf("di3ResolveSupplyFormLines_(false, true)") !== -1, true);
     equal(source.indexOf("di3GetOrCreatePackVariant_") === -1, true);
     var resolverSource = di3ResolveSupplyFormLines_.toString();
-    equal(resolverSource.indexOf("di3GetProductFormOptionIndex_(readOnlyCatalog === true)") !== -1, true);
+    equal(resolverSource.indexOf("di3LoadSupplyFormLineSnapshot_(readOnlyCatalog)") !== -1, true);
+    var snapshotSource = di3LoadSupplyFormLineSnapshot_.toString();
+    equal(snapshotSource.indexOf("di3GetProductFormOptionIndex_(readOnlyCatalog === true)") !== -1, true);
     var indexSource = di3GetProductFormOptionIndex_.toString();
     equal(indexSource.indexOf("if (skipPublicCodeEnsure !== true)") !== -1, true);
     equal(source.indexOf("di3AppendTableRows_") === -1, true);
