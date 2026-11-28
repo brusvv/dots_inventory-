@@ -197,6 +197,14 @@ The expected behaviour is:
 
 This is a document preview only. For a received supply, the existing guard still blocks saving stock-affecting changes until the correction operation and FIFO replay are implemented and runtime-accepted.
 
+### Follow-up implementation: automatic full-edit recalculation
+
+The automatic full-edit preview was expanded to use an explicitly read-only product lookup path. This avoids invoking the product public-code ensure routine from the onEdit preview. The preview still reads the product and pack-variant catalogues, but it does not create variants or mutate stock/document data.
+
+The latest source CI run `46087315910` passed after these changes. The supply lifecycle suite now reports **89 passed, 0 failed**; Apps Script syntax remains **55/55**. See [GitHub Actions](https://github.com/brusvv/dots_inventory-/actions/runs/46087315910).
+
+The detailed next-stage correction design is in [SUPPLY_CORRECTION_IMPLEMENTATION_SPEC.md](SUPPLY_CORRECTION_IMPLEMENTATION_SPEC.md). It defines the immutable correction payload, append-only source-to-replacement relation, correction-aware FIFO event stream, operation phases and runtime acceptance matrix. This is a specification only; the correction handler, new event schema, and replay integration have not yet been implemented.
+
 ### Deferred pending measurements or design
 
 - S-11 (register refresh): defer structural formatting optimizations until Apps Script runtime measurements exist; avoid introducing stale presentation state.
