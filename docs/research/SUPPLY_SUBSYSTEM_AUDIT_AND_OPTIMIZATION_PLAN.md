@@ -247,7 +247,7 @@ duplicate, extra or mismatched records without attempting repair.
 
 Eleven regression tests were added in `48_DI3_SupplyCorrectionTests.gs` and
 wired into the consolidated supply test runner. Quality gates passed at
-`e706decf31bd1d9cbd3a3e10e16328c0bb06ff8f`:
+`7a98f3c9022a19f80993d02174edbf3f0f02206f`:
 - Supply domain/lifecycle: **100/100**.
 - FIFO replay: **46/46**.
 - Order domain: **22/22**.
