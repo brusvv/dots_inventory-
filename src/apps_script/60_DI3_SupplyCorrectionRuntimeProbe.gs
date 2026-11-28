@@ -7,35 +7,33 @@
  */
 function di3BuildSupplyCorrectionPreviewRuntimeSnapshot_() {
   var spreadsheet = di3GetSpreadsheet_();
-  var names = [
-    "Products", "ProductPublicCodes", "PackVariants", "_AppMeta", "SchemaMigrations",
-    "V3_Supplies", "V3_SupplyItems",
-    "StockLedger", "StockMovementDetails", "StockLots", "StockAllocations",
-    "ProductCostHistory", "Operations", "OperationPayloads",
-    "SupplyCorrectionEvents", "FifoAllocationRuns", "FifoAllocationArchive",
-    "FifoLotCacheArchive", "FifoReplayEvents", "FifoProductState"
-  ];
-  var snapshot = {};
-  names.forEach(function (name) {
-    var sheet = spreadsheet.getSheetByName(name);
-    if (!sheet) {
-      snapshot[name] = null;
-      return;
-    }
+  var snapshot = {
+    spreadsheet_id: spreadsheet.getId(),
+    sheets: []
+  };
+  // Snapshot every sheet, including hidden and auxiliary sheets. A fixed list
+  // can miss a side effect if the preview later starts touching a new table.
+  spreadsheet.getSheets().forEach(function (sheet) {
     var range = sheet.getDataRange();
     var values = range.getValues();
     var formulas = range.getFormulas();
-    snapshot[name] = {
+    snapshot.sheets.push({
+      sheet_id: sheet.getSheetId(),
+      name: sheet.getName(),
+      hidden: sheet.isSheetHidden(),
+      max_rows: sheet.getMaxRows(),
+      max_columns: sheet.getMaxColumns(),
+      last_row: sheet.getLastRow(),
+      last_column: sheet.getLastColumn(),
       values: values.map(function (row) {
         return row.map(function (value) {
           return value instanceof Date ? value.toISOString() : value;
         });
       }),
       formulas: formulas
-    };
+    });
   });
   return snapshot;
-}
 
 function di3RunSupplyCorrectionPreviewRuntimeProbe(supplyId, correctionSpec) {
   return di3WithLock_(function () {
