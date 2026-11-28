@@ -198,8 +198,8 @@ build a correction candidate or authorize a correction. The existing
 stock-affecting full-edit guard remains in place.
 
 Latest CI for source commit
-`e706decf31bd1d9cbd3a3e10e16328c0bb06ff8f`:
-[quality gates run 46088065273](https://github.com/brusvv/dots_inventory-/actions/runs/46088065273)
+`7a98f3c9022a19f80993d02174edbf3f0f02206f`:
+[quality gates run 46088102384](https://github.com/brusvv/dots_inventory-/actions/runs/46088065273)
 passed, including Apps Script syntax, all supply lifecycle suites (98/98),
 FIFO replay (46/46), order domain (22/22), catalog/order UX (14/14), system
 safety (39/39), warehouse dashboard (11/11), finance schema (4/4), and snapshot
