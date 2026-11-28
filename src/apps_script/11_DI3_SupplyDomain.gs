@@ -223,13 +223,34 @@ function di3BuildSupplyFinancialPlan_(input) {
 
 function di3GetProductFormOptionIndex_() {
   di3EnsureProductPublicCodes_();
-  var products = di3ListActiveProductsForWarehouse_();
+  // Load the catalogue once. Active products feed the selector; byId retains
+  // inactive products so an existing historical supply still renders its label.
+  var allProducts = di3ListAllProductsForWarehouse_();
+  var products = allProducts.filter(function (product) {
+    return product.active !== false && String(product.active).toLowerCase() !== "false";
+  });
   var codes = di3GetProductPublicCodeMap_();
   var byLabel = {};
+  var byId = Object.create(null);
+  allProducts.forEach(function (product) { byId[String(product.product_id)] = product; });
   products.forEach(function (product) {
     byLabel[di3GetProductOptionLabelWithMap_(product, codes)] = product;
   });
-  return { products: products, byLabel: byLabel, options: Object.keys(byLabel).sort() };
+  return { products: products, byId: byId, codes: codes, byLabel: byLabel, options: Object.keys(byLabel).sort() };
+}
+
+/** Build supply-form rows from one preloaded product index (no per-line repository reads). */
+function di3BuildSupplyLoadedLineRows_(items, productIndex) {
+  productIndex = productIndex || {};
+  var productsById = productIndex.byId || Object.create(null);
+  var codes = productIndex.codes || {};
+  return (items || []).map(function (item) {
+    var product = productsById[String(item.product_id)] || null;
+    var label = product
+      ? di3GetProductOptionLabelWithMap_(product, codes)
+      : (item.product_label_snapshot || "Неизвестный товар");
+    return [label, item.units_per_pack, item.packs, item.purchase_price_per_pack];
+  });
 }
 
 /** Parse a date-only input into a stable local calendar date (stored at noon). */
@@ -1313,13 +1334,8 @@ function di3LoadSelectedSupplyDraft(options) {
   sheet.getRange("G2:G3").setValues([[supply.supplier_order_date || ""], [supply.expected_received_date || ""]]);
   di3RefreshSupplyDatePanel_(supply);
   sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent();
-  var products = di3GetProductFormOptionIndex_();
-  var codes = di3GetProductPublicCodeMap_();
-  var output = items.map(function (item) {
-    var product = di3LoadProductById_(String(item.product_id));
-    var label = product ? di3GetProductOptionLabelWithMap_(product, codes) : (item.product_label_snapshot || "Неизвестный товар");
-    return [label, item.units_per_pack, item.packs, item.purchase_price_per_pack];
-  });
+  var productIndex = di3GetProductFormOptionIndex_();
+  var output = di3BuildSupplyLoadedLineRows_(items, productIndex);
   if (output.length) sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, output.length, 4).setValues(output);
   di3RenderSupplyFinancialPreview_({
     lines: items.map(function (item) {
