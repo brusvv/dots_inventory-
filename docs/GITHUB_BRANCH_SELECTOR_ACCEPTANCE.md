@@ -236,3 +236,9 @@ GitHub Actions run #69: **success**; Git tree preflight/integrity fixtures: 9 te
 
 
 Проверка CI после исправления installer harness: run #83 — PASS (syntax check 56 `.gs`, deployment-manager regression suite, Git tree preflight fixtures). В harness mock теперь имитирует успешный `projects.updateContent`, заменяя содержимое тестового проекта перед post-write read-back. Это устранило ложный `POST_WRITE_VERIFICATION_FAILED`; production-код установщика для исправления теста не менялся. Run: https://github.com/brusvv/dots_inventory-/actions/runs/46181968966. Runtime concurrency test в disposable Apps Script project остаётся невыполненным.
+
+### N11 runtime procedure
+
+Подробная пошаговая инструкция для проверки блокировки в реальном Apps Script runtime, включая временный lock-holder helper, N11-A (installer), N11-B (rollback), N11-C (проверка освобождения), cleanup и критерии PASS: [GITHUB_BRANCH_SELECTOR_N11_RUNTIME_TEST.md](GITHUB_BRANCH_SELECTOR_N11_RUNTIME_TEST.md).
+
+Статус остаётся **RUNTIME NOT RUN** до фактического выполнения инструкции в изолированном disposable project и сохранения execution logs/fingerprints.
