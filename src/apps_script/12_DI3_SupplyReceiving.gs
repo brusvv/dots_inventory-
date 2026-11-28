@@ -292,7 +292,7 @@ function di3ValidateSupplyReceiptLineIdentities_(items) {
     if (!productId || !variantId) throw new Error("Позиция " + (index + 1) + ": не указан товар или вариант упаковки.");
     if (!Number.isInteger(units) || units <= 0) throw new Error("Позиция " + (index + 1) + ": фасовка должна быть положительным целым числом.");
     if (!Number.isInteger(packs) || packs <= 0) throw new Error("Позиция " + (index + 1) + ": количество упаковок должно быть положительным целым числом.");
-    var pairKey = productId + "\\u001f" + variantId;
+    var pairKey = productId + "\u001f" + variantId;
     if (seenProductVariants[pairKey]) {
       throw new Error("Позиции поставки повторяют товар и фасовку: " + productId + " / " + variantId + ".");
     }
