@@ -41,12 +41,12 @@ This document records the work plan and initial static observations. It is not a
 ## Work stages
 
 - [x] S0 — Record scope, branch baseline, safety constraints and audit sequence.
-- [ ] S1 — Complete source inventory and call/dependency map (menus, triggers, UI, repositories, operations, projections, tests).
-- [ ] S2 — Static I/O audit: Sheets reads/writes, repeated range access, TextFinder scans, whole-table reads, row-by-row mutations, formatting/chart rebuilds.
-- [ ] S3 — Lifecycle audit: draft, edit, historical entry, status transitions, receipt, cancellation, recovery, full edit, received-supply correction.
-- [ ] S4 — Integrity audit: schema/header indexing, idempotency keys, immutable payloads, operation locking, retry behavior, status history, FIFO and PackVariants projections.
+- [x] S1 — Complete source inventory and call/dependency map (menus, triggers, UI, repositories, operations, projections, tests).
+- [x] S2 — Static I/O audit: Sheets reads/writes, repeated range access, TextFinder scans, whole-table reads, row-by-row mutations, formatting/chart rebuilds.
+- [x] S3 — Lifecycle audit: draft, edit, historical entry, status transitions, receipt, cancellation, recovery, full edit, received-supply correction (static source review).
+- [x] S4 — Integrity audit: schema/header indexing, idempotency keys, immutable payloads, operation locking, retry behavior, status history, FIFO and PackVariants projections (static source review).
 - [ ] S5 — Test-coverage audit: map invariants to tests; identify gaps and add pure regression tests before changing behavior.
-- [ ] S6 — Optimization proposal: rank candidates by expected benefit, risk, scope and measurable acceptance criteria.
+- [x] S6 — Optimization proposal: rank candidates by expected benefit, risk, scope and measurable acceptance criteria.
 - [ ] S7 — Implement approved low-risk optimizations in small commits; no live workbook actions.
 - [ ] S8 — Run quality gates and exact-head CI; compare code-level I/O counts and, where possible, runtime benchmarks on a disposable workbook.
 - [ ] S9 — Final report: changed files, measured results, residual risks and deferred runtime acceptance.
@@ -83,4 +83,7 @@ This document records the work plan and initial static observations. It is not a
 
 ## Status
 
-Only S0 is complete at document creation. The initial observations are leads for the full audit, not approved code changes.
+- S0–S4 and S6 are complete as a static repository audit; detailed findings are recorded in [SUPPLY_SCRIPTS_AUDIT_REPORT.md](SUPPLY_SCRIPTS_AUDIT_REPORT.md).
+- S5 remains open for a deeper invariant-to-test matrix and the additional regression cases listed in the report.
+- S7–S9 remain pending. No production source optimization has been applied yet.
+- Runtime timing and disposable-workbook acceptance are still outstanding; static call-count observations are not runtime benchmarks.
