@@ -347,3 +347,12 @@ Read-side consumers were aligned:
 This closes the source-level gap described in S-02 for the ordinary replay/read path. It does not create or commit a correction operation. SC-04 write ordering, recovery, ProductCostHistory handling and bound-workbook runtime acceptance remain open. The existing received-supply edit guard must remain enabled.
 
 Source quality gates passed at `56f09f4fa335f0ac18e5408e1c13ebd7cb021751`: 63 Apps Script files syntax-checked; snapshot 8, FIFO 46, order 22, supply/correction/lifecycle 127, catalog/order UX 14, system safety 39, warehouse dashboard 11, finance schema 4; **271 passed, 0 failed**. [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46096055903). This is not runtime acceptance against the live workbook.
+
+
+### SC-03 lifecycle hardening and latest verification
+
+The relation resolver now rejects inconsistent terminal states between `SupplyCorrectionEvents` and `Operations`. A pending operation's COMMITTED relation event remains invisible to ordinary replay but may be seen by the exact pending operation during recovery. Committed relations cannot be silently aborted, and quarantined relations cannot be reactivated by appending another lifecycle event.
+
+Latest source quality gates passed at `8ddf13e6021c7a8e091d246971d34fe000779b5e`: syntax 63/63; snapshot auditor 8; FIFO 46; order domain 22; supply/correction/lifecycle 130; catalog/order UX 14; system safety/operation 39; warehouse dashboard 11; finance schema 4. **274 passed, 0 failed.** [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46096260507).
+
+This remains source-level verification. The Apps Script project and workbook have not been runtime-tested or changed. SC-04 operation/commit/recovery is still open, so the received-supply edit guard remains in force.
