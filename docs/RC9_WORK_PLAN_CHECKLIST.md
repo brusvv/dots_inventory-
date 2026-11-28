@@ -385,3 +385,12 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 - [ ] External/code review approval.
 - [ ] Disposable-workbook read-only preview probe.
 - [ ] Disposable-workbook SC-04 failure/recovery acceptance after separate authorization.
+
+## SC-04 runtime acceptance runbook — 2026-11-28
+
+- [x] Expand the all-sheet preview snapshot to include notes, number formats, backgrounds, font colors/weights, data validations and frozen panes in addition to values/formulas and sheet/grid identity.
+- [x] Add [Supply correction runtime acceptance runbook](research/SUPPLY_CORRECTION_RUNTIME_ACCEPTANCE.md) covering SC-01 source audit, SC-02/03 relation/FIFO cases, read-only preview, SC-04 write-boundary recovery, finance/order assertions and evidence capture.
+- [x] Exact source commit `549fe463564213ed81d507b39fc1abde4d02da8b`: Apps Script syntax 69/69; snapshot audit 8/8; FIFO 46/46; order 22/22; supply/correction/lifecycle 153/153; catalog/order UX 14/14; system safety 39/39; warehouse 11/11; finance 4/4. Quality gates [46101506552](https://github.com/brusvv/dots_inventory-/actions/runs/46101506552), release pipeline [46101506580](https://github.com/brusvv/dots_inventory-/actions/runs/46101506580), package [46101506563](https://github.com/brusvv/dots_inventory-/actions/runs/46101506563): PASS.
+- [ ] Run the read-only probe on a restored disposable workbook.
+- [ ] Obtain separate explicit approval before any mutating SC-04 failure/recovery test, even on the disposable copy.
+- [ ] Do not correct supply #17 or change the live workbook until all runtime gates pass and the exact mutation is separately approved.
