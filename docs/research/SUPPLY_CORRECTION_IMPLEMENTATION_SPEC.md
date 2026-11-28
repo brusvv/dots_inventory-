@@ -183,9 +183,13 @@ Implemented on `feature/supply-correction-fifo-replay`:
 - It verifies operation ownership, event key, product, variant, quantity,
   effective/recorded timestamps, ledger sequence, cost status, unit cost and
   total cost in minor units.
+- It reads the active StockAllocations projection for the source lots, validates
+  each CONSUME row and its cost, and reconciles allocated quantity plus
+  StockLots.remaining_quantity to initial_quantity. The active allocation rows
+  and lot-cache values are included in the source fingerprint.
 - Missing, duplicate, extra or mismatched source records return BLOCKED; the
   audit does not repair or quarantine them.
-- `src/apps_script/48_DI3_SupplyCorrectionTests.gs` adds 9 regression tests and
+- `src/apps_script/48_DI3_SupplyCorrectionTests.gs` adds 11 regression tests and
   `tools/run_supply_domain_tests.js` includes the new suite.
 
 The source audit is read-only: no schema creation, operation registration,
@@ -194,8 +198,8 @@ build a correction candidate or authorize a correction. The existing
 stock-affecting full-edit guard remains in place.
 
 Latest CI for source commit
-`319c842d0d91d7e11f341dcba32da5a20c871b90`:
-[quality gates run 46087880782](https://github.com/brusvv/dots_inventory-/actions/runs/46087880782)
+`e706decf31bd1d9cbd3a3e10e16328c0bb06ff8f`:
+[quality gates run 46088065273](https://github.com/brusvv/dots_inventory-/actions/runs/46088065273)
 passed, including Apps Script syntax, all supply lifecycle suites (98/98),
 FIFO replay (46/46), order domain (22/22), catalog/order UX (14/14), system
 safety (39/39), warehouse dashboard (11/11), finance schema (4/4), and snapshot
