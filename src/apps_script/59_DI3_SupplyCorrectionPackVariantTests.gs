@@ -278,6 +278,14 @@ function di3RunSupplyCorrectionPackVariantTests() {
     }
   });
 
+  test("reconciliation consumes only the selective-read result", function () {
+    var source = di3ReconcileCurrentPackVariantsForProducts_.toString();
+    equal(source.indexOf("di3ReadPackVariantReconciliationRows_(affected)") !== -1, true);
+    equal(source.indexOf("di3BuildLatestReceivedPackVariantMap_(reconciliationRows.supplyRows, reconciliationRows.itemRows, affected)") !== -1, true);
+    equal(source.indexOf("di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affected)") === -1, true,
+      "stale full-table variables must not remain in the reconciliation path");
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply correction pack variant tests failed: " + JSON.stringify(failed));
   return report;
