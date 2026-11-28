@@ -169,6 +169,15 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
     return { status: "CANCELLED", write_performed: false, backup: verifiedBackup, release_tag: preview.release_tag };
   }
 
+  // Serialize confirmed installs within this Apps Script project. The lock is
+  // acquired only after YES and is held through the final guard, write and read-back.
+  var installLock = LockService.getScriptLock();
+  if (!installLock.tryLock(1000)) {
+    return { status: "LOCK_NOT_ACQUIRED", write_performed: false, backup: verifiedBackup,
+      release_tag: preview.release_tag,
+      error: "Другой процесс установки или отката уже выполняется. Повтори preview после его завершения." };
+  }
+  try {
   // Last-moment concurrency guard: do not overwrite edits made while the dialog
   // was open, and do not proceed if the project identity changed.
   var immediatelyBeforeWrite = di3GetAppsScriptProjectContent_();
@@ -255,6 +264,9 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
       "\n\nНикакое развёртывание или изменение данных таблицы не выполнялось.", ui.ButtonSet.OK);
   } catch (ignoreSuccessAlert) {}
   return result;
+  } finally {
+    installLock.releaseLock();
+  }
 }
 
 function di3InstallLatestGitHubReleaseFromMenu() {
