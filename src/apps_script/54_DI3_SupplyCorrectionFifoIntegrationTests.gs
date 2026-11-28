@@ -19,10 +19,12 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
       new Date(effectiveAt), new Date(recordedAt || effectiveAt), "", "", "", 1];
   }
   function detail(id, type) { return [id, "MOV-" + id, type, "SUPPLY_RECEIVE", "", "", "KNOWN", "", "test", "", "SUPPLY"]; }
-  function lot(id, productId, movementId, quantity) {
+  function lot(id, productId, movementId, quantity, unitCost, effectiveAt, recordedAt) {
+    var effective = effectiveAt || "2026-01-02T09:00:00Z";
     return [id, productId, movementId, "SUPPLY", "S1", "PV-" + productId,
-      new Date("2026-01-02T09:00:00Z"), new Date("2026-01-02T09:00:00Z"),
-      quantity, 10, "KNOWN", "RUB", "", quantity, quantity * 1000];
+      new Date(effective), new Date(recordedAt || effective),
+      quantity, unitCost == null ? 10 : unitCost, "KNOWN", "RUB", "", quantity,
+      Math.round(quantity * (unitCost == null ? 10 : unitCost) * 100)];
   }
   function operation(id) {
     return [id, "SUPPLY_CORRECTION:" + id, "SUPPLY_CORRECTION", "SUPPLY", "S1",
@@ -42,9 +44,9 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
 
   test("REPLACE excludes source ledger, detail and lot while retaining replacement", function () {
     var date = "2026-01-02T09:00:00Z";
-    var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date, "2026-01-04T09:00:00Z")];
+    var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date, date)];
     var details = [detail("SRC", "IN"), detail("REPL", "IN")];
-    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10)];
+    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 10, date, changedRecordedAt)];
     var result = snapshot(rows, details, lots,
       [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")], [operation("OP-1")]);
     equal(result.ledger_rows.length, 1);
@@ -132,7 +134,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     var date = "2026-01-02T09:00:00Z";
     var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date)];
     var details = [detail("SRC", "IN"), detail("REPL", "IN")];
-    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10)];
+    var lots = [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 10, "2026-01-03T09:00:00Z", "2026-01-03T09:00:00Z")];
     var relations = [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")];
     var before = JSON.stringify({ rows: rows, details: details, lots: lots, relations: relations });
     snapshot(rows, details, lots, relations, [operation("OP-1")]);
@@ -146,7 +148,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
         [detail("SRC", "IN"), detail("REPL", "OUT")],
         [lot("LOT-SRC", "P1", "SRC", 10)],
         [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")], [operation("OP-1")]);
-    }, /должен быть положительным приходом IN/);
+    }, /должен быть положительным приходом SUPPLY IN/);
   });
 
   test("stale committed correction projection is rejected by stock read guards", function () {
