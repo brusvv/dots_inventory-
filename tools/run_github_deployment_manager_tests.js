@@ -744,6 +744,18 @@ test("branch manifest rejects unsafe branch metadata and a mismatched commit tag
   assert.throws(() => vm.runInContext("di3ValidateGitHubReleaseManifest_(" + JSON.stringify(manifest) + "," + JSON.stringify(manifest.git_tag) + ")", context), /привязан к точному commit SHA/);
 });
 
+test("selected branch fails closed when its immutable commit SHA is missing", () => {
+  context.PropertiesService = { getScriptProperties: () => ({
+    getProperty: key => key === "DI3_GITHUB_SELECTED_BRANCH" ? "feature/branch-test" : null
+  }) };
+  try {
+    assert.throws(() => vm.runInContext("di3GetSelectedGitHubBranchSelection_()", context),
+      /не сохранён полный commit SHA/);
+  } finally {
+    delete context.PropertiesService;
+  }
+});
+
 test("selected branch overrides Stable/Preview release discovery", () => {
   context.PropertiesService = { getScriptProperties: () => ({ getProperty: key => key === "DI3_GITHUB_SELECTED_BRANCH" ? "feature/branch-test" : null }) };
   context.di3GetGitHubBranchManifest_ = branch => ({ status: "READY", selected: branch });
