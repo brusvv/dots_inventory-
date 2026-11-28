@@ -152,6 +152,7 @@ function di3RunSupplyFullEditUnitTests() {
     includes(enableSource, "receiptOperation: receipt");
     includes(saveSource, "includeStockAudit: false");
     includes(saveSource, "includeReceiptPayload: false");
+    includes(saveSource, "includeReceiptOperation: false");
     // The public audit entry point deliberately keeps the default, complete snapshot.
     includes(di3AuditSupplyForFullEdit.toString(), "di3BuildSupplyFullEditSnapshot_(id)");
   });
