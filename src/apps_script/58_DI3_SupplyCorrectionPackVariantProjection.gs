@@ -50,6 +50,16 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
   return latest;
 }
 
+function di3BuildPackVariantCurrentFlagUpdate_(record, targetVariantId, updatedAt) {
+  var shouldBeCurrent = !!targetVariantId && String(record.pack_variant_id) === String(targetVariantId);
+  var isCurrent = record.is_current === true || String(record.is_current).toLowerCase() === "true";
+  if (shouldBeCurrent === isCurrent) return null;
+  var row = DI3_TABLE_SCHEMAS.PackVariants.map(function (header) { return record[header]; });
+  row[4] = shouldBeCurrent;
+  row[8] = updatedAt instanceof Date ? new Date(updatedAt.getTime()) : new Date(updatedAt || Date.now());
+  return { row_number: record.row_number, values: row };
+}
+
 function di3ReconcileCurrentPackVariantsForProducts_(productIds) {
   var affected = (productIds || []).map(String).filter(Boolean);
   if (!affected.length) return 0;
@@ -58,24 +68,19 @@ function di3ReconcileCurrentPackVariantsForProducts_(productIds) {
   var latest = di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affected);
   var variants = di3LoadPackVariantIndex_();
   var updates = [];
+  var updatedAt = new Date();
   Object.keys(variants.byId).forEach(function (variantId) {
     var record = variants.byId[variantId];
     var productId = String(record.product_id);
+    if (affected.indexOf(productId) === -1) return;
     var target = latest[productId] || null;
     if (target && (!variants.byId[target.pack_variant_id] ||
         String(variants.byId[target.pack_variant_id].product_id) !== productId)) {
       throw new Error("Последняя полученная поставка указывает на отсутствующую/чужую фасовку " + target.pack_variant_id + ".");
     }
-    var shouldBeCurrent = !!target && String(variantId) === String(target.pack_variant_id);
-    var isCurrent = record.is_current === true || String(record.is_current).toLowerCase() === "true";
-    var currentUpdatedAt = record.updated_at instanceof Date
-      ? record.updated_at.getTime() : new Date(record.updated_at || 0).getTime();
-    var targetUpdatedAt = target ? new Date(target.received_at).getTime() : null;
-    if (shouldBeCurrent === isCurrent && (!target || currentUpdatedAt === targetUpdatedAt)) return;
-    var row = DI3_TABLE_SCHEMAS.PackVariants.map(function (header) { return record[header]; });
-    row[4] = shouldBeCurrent;
-    row[8] = target ? new Date(target.received_at) : new Date();
-    updates.push({ row_number: record.row_number, values: row });
+    var update = di3BuildPackVariantCurrentFlagUpdate_(record,
+      target ? target.pack_variant_id : "", updatedAt);
+    if (update) updates.push(update);
   });
   if (updates.length) di3ApplyContiguousRowUpdates_("PackVariants", updates);
   return updates.length;
