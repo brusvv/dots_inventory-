@@ -104,7 +104,7 @@ Latest completed validation on source commit `02669ce851066af75881e1b00c21698573
 - Warehouse Dashboard: 11/11
 - Finance Schema: 4/4
 
-All 182 source regression assertions passed. Release-pipeline checks and installation-package build also completed successfully. The current branch head adds only a CI workflow comment after the tested source commit.
+All 182 source regression assertions passed. Release-pipeline checks and installation-package build also completed successfully. After the tested source commit, the branch advanced only with a CI workflow comment and this documentation update; no application source or regression-test code changed.
 
 ## Remaining review items
 
