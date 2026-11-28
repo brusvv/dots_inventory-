@@ -318,8 +318,8 @@ function di3BuildSupplyCorrectionAllocationAudit_(sourceLines, allocationMatches
       throw new Error("FIFO-партия " + lotId + ": сумма CONSUME и remaining_quantity не совпадает с initial_quantity.");
     }
     if (line.cost_status !== "UNKNOWN") {
-      var expectedAllocatedMinor = di3MoneyAllocateLotCostMinor_(
-        Number(line.total_cost_minor), Number(line.initial_quantity), 0, consumed);
+      var expectedAllocatedMinor = consumed > 0 ? di3MoneyAllocateLotCostMinor_(
+        Number(line.total_cost_minor), Number(line.initial_quantity), 0, consumed) : 0;
       if (costMinorByLot[lotId] !== expectedAllocatedMinor) {
         throw new Error("FIFO-партия " + lotId + ": сумма allocated_cost_minor не совпадает с накопленной себестоимостью.");
       }
