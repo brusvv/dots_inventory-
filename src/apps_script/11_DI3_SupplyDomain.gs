@@ -1366,8 +1366,14 @@ function di3InstallSupplyFormTrigger_() {
 
 function di3SupplyFormOnEdit(e) {
   if (!e || !e.range || !e.range.getSheet) return;
-  if (e.range.getSheet().getName() !== DI3_SUPPLY_FORM_SHEET || e.range.getA1Notation() !== DI3_SUPPLY_FORM.selector) return;
+  if (e.range.getSheet().getName() !== DI3_SUPPLY_FORM_SHEET) return;
   var sheet = e.range.getSheet();
+  var fullEdit = String(sheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === "FULL_EDIT";
+  if (fullEdit && di3IsSupplyFullEditFinancialInputRange_(
+      e.range.getRow(), e.range.getColumn(), e.range.getNumRows(), e.range.getNumColumns())) {
+    return di3RefreshSupplyFullEditFinancialPreview_(sheet);
+  }
+  if (e.range.getA1Notation() !== DI3_SUPPLY_FORM.selector) return;
   var attemptedNumber = String(e.value == null ? sheet.getRange(DI3_SUPPLY_FORM.selector).getValue() || "" : e.value).trim();
   var previousNumber = typeof e.oldValue === "undefined" ? di3GetCurrentSupplyFormSelector_(sheet) : String(e.oldValue || "");
   if (!attemptedNumber) {
@@ -1375,7 +1381,6 @@ function di3SupplyFormOnEdit(e) {
     sheet.getRange(DI3_SUPPLY_FORM.pendingSelector + ":" + DI3_SUPPLY_FORM.previousSelector).clearContent();
     return { status: "IGNORED_EMPTY_SELECTOR" };
   }
-  var fullEdit = String(sheet.getRange(DI3_SUPPLY_FORM.fullEditMode).getValue() || "") === "FULL_EDIT";
   if (fullEdit) {
     sheet.getRange(DI3_SUPPLY_FORM.selector).setValue(di3GetCurrentSupplyFormSelector_(sheet) || previousNumber);
     sheet.getRange(DI3_SUPPLY_FORM.pendingSelector + ":" + DI3_SUPPLY_FORM.previousSelector).clearContent();
