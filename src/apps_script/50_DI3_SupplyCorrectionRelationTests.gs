@@ -126,6 +126,7 @@ function di3RunSupplyCorrectionRelationUnitTests() {
   test("duplicate event sequence and unknown operation are rejected", function () {
     var first = event(1, "REL-1", "COMMITTED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1");
     var second = event(1, "REL-2", "COMMITTED", "ADD", "", "MOVE-C", "", "P1", "OP-1");
+    second[0] = "EVENT-2"; // Keep the event ID unique so this specifically exercises sequence validation.
     throws(function () { resolve([first, second], [operation("OP-1", "COMMITTED")]); }, /повторяется event_sequence/);
     throws(function () { resolve([event(2, "REL-1", "COMMITTED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1", "OP-MISSING")], []); }, /не найдена операция/);
   });
