@@ -299,7 +299,7 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 
 - Working branch: `feature/supply-correction-fifo-replay`.
 - Branch HEAD at this update: `a763a36cbe714a4f0cd9849d50152b2a649c8e16`.
-- It is 190 commits ahead of `feature/github-preview-releases`, with no commits behind; the incremental comparison contains 34 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
+- It is 192 commits ahead of `feature/github-preview-releases`, with no commits behind; the incremental comparison contains 35 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
 - SC-01 through SC-04 are implemented in source: immutable receipt/source audit; append-only correction relation journal; candidate/effective FIFO preview and normal replay integration; explicit correction operation with recovery and a read-only all-sheet preview probe.
 - SC-04 remains source-ready only. The mutating API `di3CorrectReceivedSupply()` is not exposed in the menu. It must not be used on a live/production supply until runtime acceptance on a restored disposable workbook.
 - Known SC limitation: a second correction of the same supply is blocked; correction-chain document hydration is not implemented.
@@ -326,7 +326,7 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 
 1. Keep the foundational chain #1 → #2 → #3 → #4 → #5 → #6 → #7 intact. Do not merge a child PR before its base is accepted.
 2. #8 and #10 are separate stacked follow-ups to #7; they are not prerequisites for the supply correction work.
-3. Open a new Draft PR for `feature/supply-correction-fifo-replay` targeting `feature/github-preview-releases`. This makes the 34-file incremental SC/supply delta reviewable without mixing it into the older D-02 PR. The new PR remains blocked from merge until source review and disposable-workbook runtime acceptance.
+3. Created Draft [PR #11](https://github.com/brusvv/dots_inventory-/pull/11) from `feature/supply-correction-fifo-replay` to `feature/github-preview-releases`. This makes the 34-file incremental SC/supply delta reviewable without mixing it into the older D-02 PR. The new PR remains blocked from merge until source review and disposable-workbook runtime acceptance.
 4. Run the complete quality-gates, release-pipeline and package workflows on the new PR head. The current green run is on its parent source commit.
 5. Do not run N-02 fault injection, production migration, received-supply correction, release publication, or deployment without separate explicit approval.
 
