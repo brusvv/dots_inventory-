@@ -107,6 +107,16 @@ function di3RunSupplyCorrectionRelationUnitTests() {
       ], [operation("OP-1", "COMMITTED")]);
     }, /событие после QUARANTINED/);
   });
+  test("relation and operation final states must agree", function () {
+    throws(function () {
+      resolve([event(1, "REL-1", "COMMITTED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1", "OP-1")],
+        [operation("OP-1", "REJECTED")]);
+    }, /связанная Operations operation не имеет статуса COMMITTED/);
+    throws(function () {
+      resolve([event(1, "REL-1", "PREPARED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1", "OP-1")],
+        [operation("OP-1", "COMMITTED")]);
+    }, /остался PREPARED при финальном статусе Operations/);
+  });
   test("cycle in correction chain is rejected", function () {
     throws(function () {
       resolve([
