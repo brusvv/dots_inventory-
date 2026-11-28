@@ -147,4 +147,20 @@ test("branch manifest records SHA-256 calculated from the verified downloaded so
   assert.equal(file.sha256, expected);
 });
 
+test("branch source without canonical timezone or schema declarations is rejected", () => {
+  const originalConfig = baseSources["src/apps_script/00_DI3_AppConfig.gs"];
+  const originalSchema = baseSources["src/apps_script/33_DI3_SchemaVersioning.gs"];
+  try {
+    baseSources["src/apps_script/00_DI3_AppConfig.gs"] = "var DI3_APP_CONFIG = {};\\n";
+    let run = runManifest(validTree(), false);
+    assert.match(run.error && run.error.message, /DI3_APP_CONFIG.TIME_ZONE и DI3_SCHEMA_VERSION/);
+    baseSources["src/apps_script/00_DI3_AppConfig.gs"] = originalConfig;
+    baseSources["src/apps_script/33_DI3_SchemaVersioning.gs"] = "var DI3_SCHEMA_VERSION = null;\\n";
+    run = runManifest(validTree(), false);
+    assert.match(run.error && run.error.message, /DI3_APP_CONFIG.TIME_ZONE и DI3_SCHEMA_VERSION/);
+  } finally {
+    baseSources["src/apps_script/00_DI3_AppConfig.gs"] = originalConfig;
+    baseSources["src/apps_script/33_DI3_SchemaVersioning.gs"] = originalSchema;
+  }
+});
 process.stdout.write("\n" + passed + " Git tree preflight fixture tests passed.\n");
