@@ -277,8 +277,10 @@ function di3NewProductForm(options) {
       "В карточке есть несохранённые изменения. Команда «Новый товар» очистит выбранный товар и поля B6:B15. Продолжить?");
     if (!confirmed) return { status: "CANCELLED_BY_USER", cleared: false };
   }
-  sheet.getRange("B4:B16").clearContent();
-  sheet.getRange("B16").setValue("Появятся после выбора существующего товара");
+  sheet.getRange("B4:B16").setValues([
+    [""], [""], [""], [""], [""], [""], [""], [""], [""], [""], [""], [""],
+    ["Появятся после выбора существующего товара"]
+  ]);
   di3SetProductFormStateBaseline_(sheet);
   // Clearing values does not remove data validations. Avoid reopening through the normal open path, which would rebuild the product index and all rules.
   ss.setActiveSheet(sheet);
