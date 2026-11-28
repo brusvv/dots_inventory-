@@ -225,3 +225,12 @@ Exact-head validation on `8609e3c2c1b1a9aad97d51ba8ddae1688358afc8`:
 - Release pipeline and installation package: PASS.
 
 These are source/Node CI results, not runtime latency measurements. Full-edit launch, form clearing, and cancel/commit reload have not yet been timed in Apps Script. No workbook or supply data was changed.
+
+
+## Follow-up — final regression guard and batched form clearing
+
+- Batched `di3NewSupplyForm()` transient clears into `M4:M9` and `N2:N7`, reducing individual Spreadsheet service calls while preserving the existing field reset scope.
+- Added a regression guard that the PackVariants reconciliation path consumes the selective-read result and does not retain the old undefined `supplyRows/itemRows` call.
+- Final source/test commit: `7468c61f673f8748347066e1ab1061e06bdac708`.
+- Exact commit CI: 69/69 Apps Script syntax; supply domain/lifecycle 192/192; FIFO 46/46; Order 22/22; Catalog/Order UX 14/14; System Safety 39/39; Warehouse Dashboard 11/11; Finance 4/4; Snapshot Audit 8/8. Release pipeline and installation package both PASS.
+- These are source/Node checks only. Apps Script runtime timing and UI responsiveness have not been measured.
