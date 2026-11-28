@@ -398,31 +398,9 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
     manifest_policy: "PRESERVE_TARGET_PROJECT_MANIFEST", source_policy: "PINNED_COMMIT_RAW_FILES", files: files };
 }
 
-function di3GetGitHubBranchManifest_(branch, pinnedCommit) {
-  var config = di3GetGitHubDeploymentConfig_();
-  branch = di3ValidateGitHubBranchName_(branch);
-  var apiBase = "https://api.github.com/repos/" + config.repository;
-  var commit = String(pinnedCommit || "").trim().toLowerCase();
-  if (!commit) {
-    var branchPath = encodeURIComponent(branch);
-    var branchResult = di3FetchGitHubJson_(apiBase + "/branches/" + branchPath);
-    if (branchResult.status !== "OK" || !branchResult.data || String(branchResult.data.name || "") !== branch) {
-      throw new Error("Ветка " + branch + " не найдена в GitHub или недоступна.");
-    }
-    commit = String(branchResult.data.commit && branchResult.data.commit.sha || "").toLowerCase();
-  }
-  if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error("GitHub вернул некорректный commit SHA для ветки " + branch + ".");
-  var commitResult = di3FetchGitHubJson_(apiBase + "/git/commits/" + commit);
-  if (commitResult.status !== "OK" || !commitResult.data || String(commitResult.data.sha || "").toLowerCase() !== commit) {
-    throw new Error("Не удалось проверить commit выбранной ветки.");
-  }
-  var treeSha = String(commitResult.data.tree && commitResult.data.tree.sha || "");
-  if (!/^[0-9a-f]{40}$/i.test(treeSha)) throw new Error("GitHub commit не содержит корректный tree SHA.");
-  var treeResult = di3FetchGitHubJson_(apiBase + "/git/trees/" + treeSha + "?recursive=1");
-  if (treeResult.status !== "OK" || !treeResult.data || !Array.isArray(treeResult.data.tree) || treeResult.data.truncated) {
-    throw new Error("Git tree выбранной ветки неполон или превышает лимит GitHub API; установка заблокирована.");
-  }
-  var entries = treeResult.data.tree.filter(function (entry) {
+function di3ValidateGitHubBranchTreeEntries_(treeEntries) {
+  if (!Array.isArray(treeEntries)) throw new Error("Git tree выбранной ветки не содержит массив файлов.");
+  var entries = treeEntries.filter(function (entry) {
     return entry && /^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""));
   });
   if (!entries.length || entries.length > 200) {
@@ -448,6 +426,34 @@ function di3GetGitHubBranchManifest_(branch, pinnedCommit) {
     totalSourceBytes += Number(entry.size);
     if (totalSourceBytes > 10000000) throw new Error("Общий размер исходников ветки превышает 10 MB; загрузка остановлена.");
   });
+  return entries;
+}
+
+function di3GetGitHubBranchManifest_(branch, pinnedCommit) {
+  var config = di3GetGitHubDeploymentConfig_();
+  branch = di3ValidateGitHubBranchName_(branch);
+  var apiBase = "https://api.github.com/repos/" + config.repository;
+  var commit = String(pinnedCommit || "").trim().toLowerCase();
+  if (!commit) {
+    var branchPath = encodeURIComponent(branch);
+    var branchResult = di3FetchGitHubJson_(apiBase + "/branches/" + branchPath);
+    if (branchResult.status !== "OK" || !branchResult.data || String(branchResult.data.name || "") !== branch) {
+      throw new Error("Ветка " + branch + " не найдена в GitHub или недоступна.");
+    }
+    commit = String(branchResult.data.commit && branchResult.data.commit.sha || "").toLowerCase();
+  }
+  if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error("GitHub вернул некорректный commit SHA для ветки " + branch + ".");
+  var commitResult = di3FetchGitHubJson_(apiBase + "/git/commits/" + commit);
+  if (commitResult.status !== "OK" || !commitResult.data || String(commitResult.data.sha || "").toLowerCase() !== commit) {
+    throw new Error("Не удалось проверить commit выбранной ветки.");
+  }
+  var treeSha = String(commitResult.data.tree && commitResult.data.tree.sha || "");
+  if (!/^[0-9a-f]{40}$/i.test(treeSha)) throw new Error("GitHub commit не содержит корректный tree SHA.");
+  var treeResult = di3FetchGitHubJson_(apiBase + "/git/trees/" + treeSha + "?recursive=1");
+  if (treeResult.status !== "OK" || !treeResult.data || !Array.isArray(treeResult.data.tree) || treeResult.data.truncated) {
+    throw new Error("Git tree выбранной ветки неполон или превышает лимит GitHub API; установка заблокирована.");
+  }
+  var entries = di3ValidateGitHubBranchTreeEntries_(treeResult.data.tree);
   var sourceTexts = {};
   entries.forEach(function (entry) {
     var name = String(entry.path).slice("src/apps_script/".length);
