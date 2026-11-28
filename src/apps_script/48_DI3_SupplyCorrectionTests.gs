@@ -25,7 +25,7 @@ function di3RunSupplyCorrectionUnitTests() {
         recorded_at: recorded.toISOString(), lines: [{
           supply_item_id: "ITEM-1", movement_id: "MOVE-1", lot_id: "LOT-1",
           event_key: "SUPPLY_RECEIVE:S1:ITEM-1", product_id: "P1", pack_variant_id: "VAR-20",
-          units_per_pack: 20, packs: 2, quantity: 40, unit_cost: 4.5,
+          units_per_pack: 20, packs: 2, quantity: 40, unit_cost: 4.5, cost_per_pack: 90,
           total_cost_minor: 18000, cost_status: "KNOWN",
           effective_at: effective.toISOString(), recorded_at: recorded.toISOString()
         }] },
@@ -34,11 +34,13 @@ function di3RunSupplyCorrectionUnitTests() {
       details: [{ row_number: 2, values: ["MOVE-1", "MOV-000101", "IN", "SUPPLY_RECEIVE", "", "", "KNOWN", "",
         "actor@example.test", "Приёмка поставки 26NR201", "SUPPLY"] }],
       lots: [{ row_number: 2, values: ["LOT-1", "P1", "MOVE-1", "SUPPLY", "S1", "VAR-20",
-        effective, recorded, 40, 4.5, "KNOWN", "RUB", "Поставка 26NR201", 40, 18000] }]
+        effective, recorded, 40, 4.5, "KNOWN", "RUB", "Поставка 26NR201", 40, 18000] }],
+      items: [{ supply_item_id: "ITEM-1", supply_id: "S1", product_id: "P1", pack_variant_id: "VAR-20",
+        units_per_pack: 20, packs: 2, received_units: 40, unit_cost: 4.5, final_pack_cost: 90, final_line_amount: 180 }]
     };
   }
   function audit(data) {
-    return di3BuildSupplyCorrectionSourceMap_(data.operation, data.payload, data.ledger, data.details, data.lots);
+    return di3BuildSupplyCorrectionSourceMap_(data.operation, data.payload, data.ledger, data.details, data.lots, data.items);
   }
 
   test("valid committed receipt maps each payload line to exactly one ledger, detail and lot", function () {
@@ -63,7 +65,8 @@ function di3RunSupplyCorrectionUnitTests() {
       duplicate.supply_item_id = "ITEM-2";
       duplicate[field] = data.payload.lines[0][field];
       data.payload.lines.push(duplicate);
-      throws(function () { audit(data); }, /повторяется идентификатор/);
+      data.items.push(Object.assign({}, data.items[0], { supply_item_id: "ITEM-2" }));
+      throws(function () { audit(data); }, /повторяется идентификатор|повторяется supply_item_id/);
     });
   });
   test("source audit rejects missing and duplicate ledger, detail and lot records", function () {
@@ -98,8 +101,8 @@ function di3RunSupplyCorrectionUnitTests() {
     throws(function () { audit(data); }, /total_cost_minor/);
   });
   test("source audit rejects quantity formula and date/sequence mismatches", function () {
-    var data = fixture(); data.payload.lines[0].packs = 3;
-    throws(function () { audit(data); }, /packs × units_per_pack/);
+    var data = fixture(); data.items[0].packs = 3;
+    throws(function () { audit(data); }, /V3_SupplyItems/);
     data = fixture(); data.ledger[0].values[8] = new Date("2026-11-20T11:03:00.000Z");
     throws(function () { audit(data); }, /recorded_at/);
     data = fixture(); data.ledger[0].values[12] = 0;
