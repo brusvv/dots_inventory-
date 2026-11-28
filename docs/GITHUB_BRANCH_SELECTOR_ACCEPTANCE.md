@@ -214,7 +214,8 @@ GitHub Actions run #69: **success**; Git tree preflight/integrity fixtures: 9 te
 - успешная установка — lock освобождён после read-back;
 - успешный откат — lock освобождён после read-back;
 - неопределённый результат update — lock освобождён, повторной записи нет;
-- недоступен post-write read-back — lock также освобождён.
+- недоступен post-write read-back — lock также освобождён;
+- неопределённый update и недоступный read-back при откате — lock освобождён в обоих случаях.
 
 Ограничение: ScriptLock сериализует исполнения этого Apps Script project, использующие тот же lock. Он не является распределённой блокировкой между разными Script ID и не защищает сторонние скрипты, которые не используют этот lock. Runtime-поведение ещё нужно проверить в disposable project.
 
