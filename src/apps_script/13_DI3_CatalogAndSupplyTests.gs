@@ -284,6 +284,56 @@ function di3RunCatalogAndSupplyUnitTests() {
     }
   });
 
+  test("supply form line snapshot is reused across validation and pack materialization", function () {
+    var originals = {
+      getSheet: di3GetSheetOrThrow_,
+      getOptions: di3GetProductFormOptionIndex_,
+      loadVariants: di3LoadPackVariantIndex_,
+      label: di3GetProductLabel_,
+      createVariants: di3GetOrCreatePackVariants_
+    };
+    var sheetReads = 0, productReads = 0, variantReads = 0, createCalls = 0;
+    var values = Array.from({ length: DI3_SUPPLY_FORM.lineCount }, function () { return ["", "", "", ""]; });
+    values[0] = ["Product 1", 10, 2, 100];
+    var product = { product_id: "P1", active: true };
+    var snapshot = null;
+    try {
+      di3GetSheetOrThrow_ = function () {
+        return { getRange: function () { return { getValues: function () { sheetReads++; return values; } }; } };
+      };
+      di3GetProductFormOptionIndex_ = function () {
+        productReads++;
+        return { byLabel: { "Product 1": product }, byId: { P1: product } };
+      };
+      di3LoadPackVariantIndex_ = function () {
+        variantReads++;
+        return { byProductAndUnits: Object.create(null), byId: Object.create(null) };
+      };
+      di3GetProductLabel_ = function () { return "Product 1"; };
+      di3GetOrCreatePackVariants_ = function (lines) {
+        createCalls++;
+        return lines.map(function () { return { pack_variant_id: "V10" }; });
+      };
+
+      snapshot = di3LoadSupplyFormLineSnapshot_(true);
+      var validated = di3ResolveSupplyFormLines_(false, true, snapshot);
+      equal(validated.length, 1);
+      equal(validated[0].pack_variant_id.indexOf("PREVIEW:"), 0);
+      var materialized = di3ResolveSupplyFormLines_(true, true, snapshot);
+      equal(materialized[0].pack_variant_id, "V10");
+      equal(sheetReads, 1);
+      equal(productReads, 1);
+      equal(variantReads, 1);
+      equal(createCalls, 1);
+    } finally {
+      di3GetSheetOrThrow_ = originals.getSheet;
+      di3GetProductFormOptionIndex_ = originals.getOptions;
+      di3LoadPackVariantIndex_ = originals.loadVariants;
+      di3GetProductLabel_ = originals.label;
+      di3GetOrCreatePackVariants_ = originals.createVariants;
+    }
+  });
+
   var report = { passed: passed, failed: failures.length, failures: failures };
   if (failures.length) throw new Error("Catalog and supply tests failed: " + JSON.stringify(failures));
   return report;
