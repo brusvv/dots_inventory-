@@ -92,6 +92,20 @@ Added or extended tests cover:
 
 The CI workflow runs syntax, FIFO replay, order-domain, supply UX, historical supply, catalog/order UX, system safety, dashboard, and finance schema suites independently.
 
+Latest completed validation on source commit `02669ce851066af75881e1b00c21698573c8bdb0`:
+- Apps Script syntax: 55 modules
+- Snapshot auditor: 8/8
+- FIFO replay: 46/46
+- Order Domain: 26/26
+- Supply Workspace UX: 17/17
+- Historical Supply: 12/12
+- Catalog / Order UX: 19/19
+- System Safety UX: 39/39
+- Warehouse Dashboard: 11/11
+- Finance Schema: 4/4
+
+All 182 source regression assertions passed. Release-pipeline checks and installation-package build also completed successfully. The current branch head adds only a CI workflow comment after the tested source commit.
+
 ## Remaining review items
 
 These are intentionally not changed without additional evidence or runtime measurements:
