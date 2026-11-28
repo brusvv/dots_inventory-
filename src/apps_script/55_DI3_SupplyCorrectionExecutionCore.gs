@@ -156,26 +156,33 @@ function di3EnsureSupplyCorrectionCostHistory_(payload) {
     return "SUPPLY_CORRECTION:" + payload.correction_id + ":" + line.supply_item_id;
   });
   var existing = sourceKeys.length ? di3ReadRowsByColumnValues_("ProductCostHistory", 7, sourceKeys) : [];
-  var existingKeys = Object.create(null);
+  var existingByKey = Object.create(null);
   existing.forEach(function (match) {
     var row = match.values, key = String(row[7] || "");
-    if (existingKeys[key]) throw new Error("ProductCostHistory: повторяется source_key " + key + ".");
-    existingKeys[key] = true;
+    if (existingByKey[key]) throw new Error("ProductCostHistory: повторяется source_key " + key + ".");
+    existingByKey[key] = row;
   });
   var rows = [];
   lines.forEach(function (line, index) {
     var key = sourceKeys[index];
-    if (existingKeys[key]) return;
-    var expected = [
-      "", String(line.product_id), String(line.pack_variant_id),
-      Number(line.cost_per_pack), Number(line.unit_cost), String(payload.currency || di3GetBaseCurrency_()),
+    var expectedTail = [
+      String(line.product_id), String(line.pack_variant_id), Number(line.cost_per_pack),
+      Number(line.unit_cost), String(payload.currency || di3GetBaseCurrency_()),
       "SUPPLY_CORRECTION", key, new Date(payload.received_at),
       new Date(payload.created_at), "Исправление поставки " + String(payload.supply_number) +
         "; correction " + String(payload.correction_id) + "; " + String(payload.reason || "")
     ];
-    if (existingKeys[key]) return;
-    rows.push([di3MakeUuid_()].concat(expected.slice(1)));
-    existingKeys[key] = true;
+    if (existingByKey[key]) {
+      var actualTail = existingByKey[key].slice(1, 11);
+      var normalize = function (value) {
+        return value instanceof Date ? value.toISOString() : value;
+      };
+      if (JSON.stringify(actualTail.map(normalize)) !== JSON.stringify(expectedTail.map(normalize))) {
+        throw new Error("ProductCostHistory: source_key " + key + " уже существует с другим содержимым.");
+      }
+      return;
+    }
+    rows.push([di3MakeUuid_()].concat(expectedTail));
   });
   if (rows.length) di3AppendTableRows_("ProductCostHistory", rows);
   return rows.length;
