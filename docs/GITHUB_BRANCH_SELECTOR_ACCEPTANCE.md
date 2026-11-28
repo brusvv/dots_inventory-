@@ -158,3 +158,20 @@ GitHub Actions run #68: **success**.
 Ограничение SHA-256: Git Trees API предоставляет SHA-1 Git blob и размер, но не отдельный SHA-256 каждого raw-файла. Поэтому branch flow вычисляет SHA-256 локально из скачанного source и включает его в manifest; тест подтверждает именно это поведение. Он не заявляет о сравнении с независимым SHA-256, полученным от GitHub. Для release assets отдельная проверка SHA-256 manifest asset уже покрыта regression suite.
 
 Эти тесты выполняются в Node VM с mock GitHub API/raw fetch. Они не являются Apps Script runtime acceptance и не меняют общий статус D-09 runtime.
+
+## 7C. D-09-N06 — canonical schema/timezone declarations
+
+Статус: **UNIT/CI PASS; APPS SCRIPT RUNTIME NOT RUN**.
+
+В `tools/test_github_branch_tree_preflight.js` добавлен негативный fixture: branch manifest builder получает source без корректного `DI3_APP_CONFIG.TIME_ZONE` либо без числового `DI3_SCHEMA_VERSION` и завершает сборку ошибкой. Оба варианта проверены.
+
+GitHub Actions run #69: **success**; Git tree preflight/integrity fixtures: 9 tests — PASS. Commit: `b50075026d8e1ef02b699a8bcfeb6610e33accd7`.
+- Run: https://github.com/brusvv/dots_inventory-/actions/runs/46178046087
+
+## 7D. D-09-N07 — schema/timezone compatibility gate
+
+Статус: **UNIT/CI PASS; APPS SCRIPT RUNTIME NOT RUN**.
+
+Существующий GitHub deployment-manager regression suite проверяет baseline READY и BLOCKED при несовпадении schema version, config timezone, manifest timezone, Apps Script runtime timezone и spreadsheet timezone. Также проверяется BLOCKED при неизвестной schema или отсутствующей timezone declaration.
+
+В run #69: 72 GitHub deployment-manager tests — PASS. Это подтверждает unit/CI-поведение compatibility gate, но не заменяет чтение фактических значений в disposable Apps Script project.
