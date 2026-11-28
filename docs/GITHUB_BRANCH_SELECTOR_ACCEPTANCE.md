@@ -67,6 +67,20 @@
 6. Убедиться, что не менялись spreadsheet data, schema, FIFO, stock, triggers, versioned deployments и deployment pointers. Code installation не запускает setup, schema migration, FIFO rebuild или складские операции.
 7. При отдельной проверке D-06 использовать только backup этого же Script ID и выполнить точную проверку rollback. Не смешивать проверку D-09 с восстановлением данных таблицы.
 
+
+## 6A. Проверка создания, обновления и отмены (D-09 probe)
+
+В релиз добавлен безопасный read-only файл `47_DI3_GitHubInstallLifecycleProbe.gs`. Он возвращает установленную ревизию и Script ID; сам ничего не записывает.
+
+Проверка выполняется только в disposable Apps Script project:
+
+1. Убедиться, что файла `47_DI3_GitHubInstallLifecycleProbe.gs` ещё нет. Сделать preview и выбрать YES. Ожидается `INSTALLED_AND_VERIFIED`; файл должен появиться. Запустить `di3RunGitHubInstallLifecycleProbe()`: ожидается `PROBE_OK`, ревизия `D09-PROBE-V1` и тот же тестовый Script ID.
+2. В отдельном безопасном commit тестовой ветки изменить только константу `DI3_GITHUB_INSTALL_LIFECYCLE_PROBE_REVISION` на `D09-PROBE-V2`. Повторно выбрать эту ветку, выполнить preview и запустить установку, затем нажать NO. Ожидается `CANCELLED` и `write_performed: false`. Повторный запуск probe должен по-прежнему вернуть `D09-PROBE-V1`; fingerprint и исходник файла должны совпасть с состоянием до отмены.
+3. Повторить preview для того же commit V2 и подтвердить YES. Ожидается `INSTALLED_AND_VERIFIED`; probe должен вернуть `D09-PROBE-V2`. Файл должен остаться единственным, без дублей.
+4. Сохранить результаты трёх запусков, fingerprints до/после отмены и после подтверждённой установки.
+
+Критерии: первый YES создаёт файл; NO не создаёт/не обновляет файлы и не меняет fingerprint; следующий YES обновляет существующий файл до V2. Не редактировать production и не использовать тестовый probe как механизм очистки.
+
 ## 7. Негативные сценарии
 
 | ID | Сценарий | Ожидаемое поведение |
