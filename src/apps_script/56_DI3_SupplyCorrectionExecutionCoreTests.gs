@@ -66,10 +66,11 @@ function di3RunSupplyCorrectionExecutionCoreTests() {
     var result = build([
       source("OLD-A", "P1", "V1"), source("OLD-B", "P1", "V2")
     ], [replacement("NEW-B", "P1", "V2"), replacement("NEW-C", "P1", "V3")]);
-    equal(result.filter(function (x) { return x.relation_type === "REPLACE"; }).length, 1);
+    equal(result.filter(function (x) { return x.relation_type === "REPLACE"; }).length, 2);
     equal(result.filter(function (x) { return x.source_movement_id === "OLD-B"; })[0].replacement_movement_id, "NEW-B");
-    equal(result.filter(function (x) { return x.relation_type === "REMOVE"; }).length, 1);
-    equal(result.filter(function (x) { return x.relation_type === "ADD"; }).length, 1);
+    equal(result.filter(function (x) { return x.source_movement_id === "OLD-A"; })[0].replacement_movement_id, "NEW-C");
+    equal(result.filter(function (x) { return x.relation_type === "REMOVE"; }).length, 0);
+    equal(result.filter(function (x) { return x.relation_type === "ADD"; }).length, 0);
   });
 
   test("ambiguous many-to-one same-product mapping fails safe as REMOVE plus ADD", function () {
