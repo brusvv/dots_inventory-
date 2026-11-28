@@ -395,6 +395,7 @@ function di3BuildStockJournalRows_(options) {
     throw new Error("Есть незавершённые складские операции (" + pendingOperations.length + "). Сначала запусти восстановление складских операций.");
   }
   var correctionMap = di3ReadSupplyCorrectionEffectiveMovementMap_();
+  di3AssertSupplyCorrectionFifoProjectionCurrent_(correctionMap);
   var superseded = Object.create(null);
   correctionMap.superseded_movement_ids.forEach(function (id) { superseded[String(id)] = true; });
   // The operational journal shows the effective stock history. Superseded
