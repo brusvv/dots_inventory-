@@ -102,6 +102,13 @@ function di3RunSupplyCorrectionExecutionCoreTests() {
     equal(result[0].replacement_supply_item_id, "RI-NEW");
   });
 
+  test("SUPPLY_CORRECTION is registered for operation recovery", function () {
+    var registry = di3GetOperationHandlerRegistry_();
+    if (typeof registry.SUPPLY_CORRECTION !== "function") {
+      throw new Error("SUPPLY_CORRECTION handler is missing from operation registry.");
+    }
+  });
+
   test("replacement receipt rows preserve original effective and recorded timestamps", function () {
     var originalActor = di3GetOperationInitiatorActor_;
     var originalSequence = di3RequireLedgerSequence_;
