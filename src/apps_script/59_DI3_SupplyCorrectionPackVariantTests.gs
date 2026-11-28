@@ -115,6 +115,51 @@ function di3RunSupplyCorrectionPackVariantTests() {
     equal(result.values[8].toISOString(), updatedAt.toISOString());
   });
 
+  test("invalid received_at on a received supply for an affected product fails closed", function () {
+    var bad = supply("BAD", "2026-11-20T10:00:00Z");
+    bad[18] = "not-a-date";
+    var error = null;
+    try {
+      di3BuildLatestReceivedPackVariantMap_([bad], [item("BAD", 1, "P1", "V-20")], ["P1"]);
+    } catch (caught) { error = caught; }
+    equal(!!error, true);
+    equal(/received_at/.test(String(error && error.message)), true);
+  });
+
+  test("invalid received_at on an unrelated product does not block affected product selection", function () {
+    var bad = supply("UNRELATED", "2026-11-20T10:00:00Z");
+    bad[18] = "not-a-date";
+    var result = di3BuildLatestReceivedPackVariantMap_([
+      bad, supply("VALID", "2026-11-19T10:00:00Z")
+    ], [
+      item("UNRELATED", 1, "P2", "V-OTHER"),
+      item("VALID", 1, "P1", "V-20")
+    ], ["P1"]);
+    equal(result.P1.pack_variant_id, "V-20");
+  });
+
+  test("duplicate line number for one affected product fails closed", function () {
+    var error = null;
+    try {
+      di3BuildLatestReceivedPackVariantMap_([supply("S1", "2026-11-20T10:00:00Z")], [
+        item("S1", 1, "P1", "V-20"),
+        item("S1", 1, "P1", "V-40")
+      ], ["P1"]);
+    } catch (caught) { error = caught; }
+    equal(!!error, true);
+    equal(/повторный line_no/.test(String(error && error.message)), true);
+  });
+
+  test("invalid line number for an affected product fails closed", function () {
+    var bad = item("S1", 0, "P1", "V-20");
+    var error = null;
+    try {
+      di3BuildLatestReceivedPackVariantMap_([supply("S1", "2026-11-20T10:00:00Z")], [bad], ["P1"]);
+    } catch (caught) { error = caught; }
+    equal(!!error, true);
+    equal(/line_no/.test(String(error && error.message)), true);
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply correction pack variant tests failed: " + JSON.stringify(failed));
   return report;
