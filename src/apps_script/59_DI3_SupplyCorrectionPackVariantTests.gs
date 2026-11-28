@@ -193,6 +193,91 @@ function di3RunSupplyCorrectionPackVariantTests() {
     equal(/одинаковые received_at и created_at/.test(String(error && error.message)), true);
   });
 
+  test("reconciliation reads affected item rows and only their parent supplies", function () {
+    var originalMultiRead = di3ReadRowsByColumnValues_;
+    var originalFullRead = di3ReadTableValues_;
+    var calls = [];
+    var itemRows = [
+      item("S-A", 1, "P1", "V-1"),
+      item("S-B", 1, "P2", "V-2")
+    ];
+    var parentRows = [
+      supply("S-A", "2026-11-20T10:00:00Z"),
+      supply("S-B", "2026-11-21T10:00:00Z")
+    ];
+    try {
+      di3ReadRowsByColumnValues_ = function (table, column, keys) {
+        calls.push({ table: table, column: column, keys: keys.slice().sort() });
+        if (table === "V3_SupplyItems") {
+          return itemRows.filter(function (row) { return keys.indexOf(String(row[column] || "")) !== -1; })
+            .map(function (values, index) { return { row_number: index + 2, values: values }; });
+        }
+        if (table === "V3_Supplies") {
+          return parentRows.filter(function (row) { return keys.indexOf(String(row[column] || "")) !== -1; })
+            .map(function (values, index) { return { row_number: index + 2, values: values }; });
+        }
+        throw new Error("Unexpected table " + table);
+      };
+      di3ReadTableValues_ = function () { throw new Error("Unexpected full-table read"); };
+      var result = di3ReadPackVariantReconciliationRows_(["P1", "P2"]);
+      equal(calls.length, 2);
+      equal(calls[0].table, "V3_SupplyItems");
+      equal(calls[0].column, DI3_TABLE_SCHEMAS.V3_SupplyItems.indexOf("product_id"));
+      equal(calls[1].table, "V3_Supplies");
+      equal(calls[1].column, DI3_TABLE_SCHEMAS.V3_Supplies.indexOf("supply_id"));
+      equal(result.itemRows.length, 2);
+      equal(result.supplyRows.length, 2);
+    } finally {
+      di3ReadRowsByColumnValues_ = originalMultiRead;
+      di3ReadTableValues_ = originalFullRead;
+    }
+  });
+
+  test("blank affected item supply_id retains full parent scan for fail-closed identity checks", function () {
+    var originalMultiRead = di3ReadRowsByColumnValues_;
+    var originalFullRead = di3ReadTableValues_;
+    var fullReadTables = [];
+    var blankItem = item("", 1, "P1", "V-1");
+    var parentRows = [supply("S1", "2026-11-20T10:00:00Z")];
+    try {
+      di3ReadRowsByColumnValues_ = function (table, column) {
+        if (table !== "V3_SupplyItems" || column !== DI3_TABLE_SCHEMAS.V3_SupplyItems.indexOf("product_id")) {
+          throw new Error("Unexpected selective read");
+        }
+        return [{ row_number: 2, values: blankItem }];
+      };
+      di3ReadTableValues_ = function (table) {
+        fullReadTables.push(table);
+        return parentRows;
+      };
+      var result = di3ReadPackVariantReconciliationRows_(["P1"]);
+      equal(fullReadTables.length, 1);
+      equal(fullReadTables[0], "V3_Supplies");
+      equal(result.itemRows.length, 1);
+      equal(result.supplyRows.length, 1);
+    } finally {
+      di3ReadRowsByColumnValues_ = originalMultiRead;
+      di3ReadTableValues_ = originalFullRead;
+    }
+  });
+
+  test("no affected supply items avoids reading the parent supply table", function () {
+    var originalMultiRead = di3ReadRowsByColumnValues_;
+    var originalFullRead = di3ReadTableValues_;
+    var fullReads = 0;
+    try {
+      di3ReadRowsByColumnValues_ = function () { return []; };
+      di3ReadTableValues_ = function () { fullReads++; return []; };
+      var result = di3ReadPackVariantReconciliationRows_(["P1"]);
+      equal(result.itemRows.length, 0);
+      equal(result.supplyRows.length, 0);
+      equal(fullReads, 0);
+    } finally {
+      di3ReadRowsByColumnValues_ = originalMultiRead;
+      di3ReadTableValues_ = originalFullRead;
+    }
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply correction pack variant tests failed: " + JSON.stringify(failed));
   return report;
