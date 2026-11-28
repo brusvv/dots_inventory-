@@ -1,9 +1,8 @@
 /**
  * Dots Inventory v3 — SC-04 execution primitives.
  *
- * This file deliberately contains only deterministic planning and idempotent
- * row construction. The operation handler is added only after these primitives
- * have explicit regression coverage.
+ * This file contains deterministic relation planning and idempotent row
+ * construction shared by the SC-04 operation handler.
  */
 
 /**
@@ -167,13 +166,15 @@ function di3EnsureSupplyCorrectionCostHistory_(payload) {
   lines.forEach(function (line, index) {
     var key = sourceKeys[index];
     if (existingKeys[key]) return;
-    rows.push([
-      di3MakeUuid_(), String(line.product_id), String(line.pack_variant_id),
-      Number(line.cost_per_pack), Number(line.unit_cost), di3GetBaseCurrency_(),
+    var expected = [
+      "", String(line.product_id), String(line.pack_variant_id),
+      Number(line.cost_per_pack), Number(line.unit_cost), String(payload.currency || di3GetBaseCurrency_()),
       "SUPPLY_CORRECTION", key, new Date(payload.received_at),
       new Date(payload.created_at), "Исправление поставки " + String(payload.supply_number) +
         "; correction " + String(payload.correction_id) + "; " + String(payload.reason || "")
-    ]);
+    ];
+    if (existingKeys[key]) return;
+    rows.push([di3MakeUuid_()].concat(expected.slice(1)));
     existingKeys[key] = true;
   });
   if (rows.length) di3AppendTableRows_("ProductCostHistory", rows);
