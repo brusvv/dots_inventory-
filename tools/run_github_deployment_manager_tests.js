@@ -756,13 +756,18 @@ test("selected branch fails closed when its immutable commit SHA is missing", ()
   }
 });
 
-test("selected branch overrides Stable/Preview release discovery", () => {
-  context.PropertiesService = { getScriptProperties: () => ({ getProperty: key => key === "DI3_GITHUB_SELECTED_BRANCH" ? "feature/branch-test" : null }) };
-  context.di3GetGitHubBranchManifest_ = branch => ({ status: "READY", selected: branch });
+test("selected branch overrides Stable/Preview discovery using the persisted commit SHA", () => {
+  const pinnedCommit = "9".repeat(40);
+  context.PropertiesService = { getScriptProperties: () => ({
+    getProperty: key => key === "DI3_GITHUB_SELECTED_BRANCH" ? "feature/branch-test" :
+      (key === "DI3_GITHUB_SELECTED_COMMIT" ? pinnedCommit : null)
+  }) };
+  context.di3GetGitHubBranchManifest_ = (branch, commit) => ({ status: "READY", selected: branch, commit });
   try {
     const result = vm.runInContext("di3GetLatestGitHubReleaseManifest_()", context);
     assert.equal(result.status, "READY");
     assert.equal(result.selected, "feature/branch-test");
+    assert.equal(result.commit, pinnedCommit);
   } finally {
     delete context.PropertiesService;
     delete context.di3GetGitHubBranchManifest_;
