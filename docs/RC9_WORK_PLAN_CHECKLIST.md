@@ -415,3 +415,15 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 - [ ] Disposable-workbook read-only preview remains NOT RUN.
 - [ ] SC-04 write-boundary failure/recovery acceptance remains pending separate explicit authorization.
 - [ ] PR #11 remains Draft; do not merge or deploy based on source CI alone.
+
+### SC-04 recovery and PackVariants reconciliation hardening
+
+- [x] Closed a retry gap after the operation-backed FULL FIFO replay has reached COMMITTED but the enclosing SUPPLY_CORRECTION operation has not yet committed. Recovery now locates the unique committed run for that operation, validates its final FULL FifoReplayEvents entry, verifies active allocation and lot-cache target fingerprints, and reuses its original F-06 archive instead of attempting a second run with the stable replay_id.
+- [x] Added pure regression coverage for valid committed-run selection, a still-PREPARED or mismatched final event, duplicate committed runs, and broken event sequence.
+- [x] Independent schema review found PackVariants reconciliation was reading V3_Supplies status/created_at/received_at from legacy numeric offsets (15/16/18), while the live v4 schema defines those fields at 3/4/7. This could leave the latest-received map empty and clear current flags after a correction.
+- [x] Replaced hard-coded supply and item offsets with indexes resolved from DI3_TABLE_SCHEMAS; corrected line_no and product_id selection/sorting to use schema indexes.
+- [x] Reworked PackVariants test fixtures to use the actual v4 schema and added a regression that deliberately puts currency/updated_at/expected_received_date values at the old offsets.
+- [x] Exact-head CI for `f7aef30c25883b79d31c3a7a5e2ad0f96e676ede`: 69/69 Apps Script syntax; snapshot audit 8/8; FIFO replay 46/46; order 22/22; supply/correction/lifecycle 170/170; catalog/order UX 14/14; system safety 39/39; warehouse 11/11; finance 4/4; Deployment Manager 57/57; release manifest 15/15; tag policy passed.
+- [x] Exact-head quality gates [46104514845](https://github.com/brusvv/dots_inventory-/actions/runs/46104514845), release pipeline [46104514897](https://github.com/brusvv/dots_inventory-/actions/runs/46104514897), package [46104514829](https://github.com/brusvv/dots_inventory-/actions/runs/46104514829) — PASS.
+- [ ] Disposable-workbook read-only preview remains NOT RUN.
+- [ ] SC-04 write-boundary failure/recovery acceptance remains pending separate explicit authorization.
