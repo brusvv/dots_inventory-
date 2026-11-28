@@ -234,3 +234,72 @@ These are source/Node CI results, not runtime latency measurements. Full-edit la
 - Final source/test commit: `7468c61f673f8748347066e1ab1061e06bdac708`.
 - Exact commit CI: 69/69 Apps Script syntax; supply domain/lifecycle 192/192; FIFO 46/46; Order 22/22; Catalog/Order UX 14/14; System Safety 39/39; Warehouse Dashboard 11/11; Finance 4/4; Snapshot Audit 8/8. Release pipeline and installation package both PASS.
 - These are source/Node checks only. Apps Script runtime timing and UI responsiveness have not been measured.
+
+
+
+## End-to-end supply lifecycle audit — 2026-11-28
+
+### Traced paths
+
+The source review followed the complete lifecycle rather than isolated functions:
+
+- **Ordinary supply:** `di3NewSupplyForm` → preview → `di3SaveSupplyDraft` → draft selection/reload → `di3ApplyNextSupplyStageFromForm` or register actions → `di3AdvanceSupplyStatus` → `di3ReceiveSupply_`.
+- **Receipt transaction:** validate item/variant identity → build immutable `SUPPLY_RECEIVE` payload → register `Operations` and `OperationPayloads` → idempotent handler → append/verify `StockLedger`, `StockMovementDetails`, `StockLots` → scoped FIFO preflight and replay → cost history → current PackVariants → status/history/register.
+- **Historical supply:** read-only preflight and confirmation outside the lock → exact form fingerprint revalidation → draft persistence → historical SENT/AWAITING history → the same receipt operation pipeline → finalization.
+- **Cancellation:** reject any supply with receipt operation or stock movements; permit only eligible pre-receipt states.
+- **Edits:** lightweight editor entry and preview → immutable `SUPPLY_DOCUMENT_EDIT` operation for document-only changes; received stock-impacting changes route to the separate `SUPPLY_CORRECTION` pipeline.
+
+### Findings
+
+1. **Critical — full-edit operation handler referenced an undefined variable.**  
+   `di3ApplySupplyDocumentEditOperation_` returned `removeRows.length`, although its local projection plan is `itemPlan` and no `removeRows` variable exists. The exception occurs after the parent/item/history writes and before the operation executor can mark the operation COMMITTED. A retry would repeat the handler and encounter the same exception. Fixed to return `itemPlan.remove_row_numbers.length`; regression coverage added.
+
+2. **High — full-edit commit performed an unrelated full stock audit.**  
+   The handler only needed to verify the immutable receipt payload for a received document-only edit, but called the default comprehensive snapshot and therefore read StockLedger, StockMovementDetails, StockLots, StockAllocations and ProductCostHistory. It now supplies the already-loaded supply/receipt operation and requests receipt-payload verification without the unrelated stock audit. The explicit audit entrypoint retains the comprehensive default.
+
+3. **High — form validation rebuilds were repeated on data changes that do not affect validation rules.**  
+   Draft save, ordinary status transitions, receipt, cancellation and historical finalization rebuilt product dropdowns, numeric rules and selector validations even though product catalogue and form validation rules had not changed. Draft save now refreshes selector identity only when needed; stage/receipt/cancel paths rely on the date-panel state machine and keep the explicit “Обновить списки формы” repair command as the full validation refresh.
+
+4. **High — duplicate catalogue/selector reads during save and load.**  
+   `di3RefreshSupplyFormValidations` previously loaded the product option index and supply summaries again after the caller had already loaded them. It also separately queried draft summary and selectable summary, then the selector helper queried selectable summary a second time. It now accepts operation-local product/supply snapshots, derives the draft count from the selectable summary, and the explicit supply load passes its already-loaded product index through.
+
+5. **High — register-driven transition rebuilt the whole register twice and used a stale row number.**  
+   The status/receipt handler already refreshed the register; the outer register action then cleared the pre-refresh row number and refreshed the entire register again. Since refresh sorts rows canonically, the old row number could point to a different supply after a reorder. The action now re-finds the row by immutable `supply_id`, clears the correct next-stage input, and only performs a further register refresh for the `ALREADY_RECEIVED` fast path where the inner receipt handler did not refresh it.
+
+6. **Medium — correction FIFO map loaded all Operations rows.**  
+   Ordinary FIFO rebuilds and correction previews read the entire Operations table merely to validate operations referenced by SupplyCorrectionEvents. They now query only operation IDs referenced by relation events; when there are no relation events, no Operations scan is needed. The relation-event table remains fully validated for sequence and chain integrity.
+
+### Remaining candidates — deliberately not changed in this batch
+
+- `di3RefreshSupplyRegister` still reads/sorts all supplies, clears/rebuilds the whole visible range, reapplies formatting/banding/filter/frozen rows and compacts the sheet. This is a candidate for incremental row projection, but must be benchmarked and tested with filters/sorts before replacing the canonical rebuild.
+- Receipt preparation and receipt completion each load PackVariants data. A selective identity/current-variant read may reduce this, but recovery must retain global variant-ID ownership guarantees.
+- Historical entry refreshes the register after moving the draft to AWAITING and again after receipt. The first refresh is intentionally retained for the interrupted-between-stages recovery case; removing it safely needs an explicit failure-path design.
+- Full-edit planning can read the current supply items more than once while building the baseline and projection. Reuse is possible, but should be paired with tests for partial retries and identity reconciliation.
+- Correction candidate preview intentionally reads complete stock source snapshots before replaying the affected products. Do not narrow those reads until global movement/lot uniqueness and relation-chain checks are proven equivalent.
+- Current regression suites are primarily pure/source-contract tests. They do not replace Apps Script runtime tests for lock behavior, partial writes, concurrent edits or service latency.
+
+### Batch 4 — lifecycle fixes and read reduction
+
+Implemented on `feature/supply-correction-fifo-replay`:
+
+- Fixed the full-edit result-count blocker and added a regression test.
+- Reused the preloaded receipt operation/supply for lightweight receipt-payload integrity checks during full-edit commit.
+- Reused product and supply-summary snapshots in form validation refresh; removed unnecessary full validation rebuilds from draft save and status/receipt/cancellation/historical paths.
+- Removed the second register rebuild after register-driven transitions and resolved the target row by `supply_id`, not the stale pre-refresh row number.
+- Limited correction operation reads to IDs referenced by SupplyCorrectionEvents in FIFO rebuild and candidate preview.
+- Added regression assertions for each changed contract.
+
+Exact-head validation on `7e2ce3c785dd58eed4bcaef8b56504b2021188e4`:
+
+- Apps Script syntax: 69 files.
+- Supply domain/lifecycle: 200 passed, 0 failed.
+- FIFO replay: 46/46.
+- Order domain: 22/22.
+- Catalog/Order UX: 15/15.
+- System Safety UX: 39/39.
+- Warehouse Dashboard: 11/11.
+- Finance Schema: 4/4.
+- Snapshot Audit: 8/8.
+- Release pipeline and installation package: PASS.
+
+These are source/Node CI results, not Apps Script runtime benchmarks. No live workbook, supply #17, receipt, cancellation, correction, FIFO replay, restore or failure injection was executed. Runtime acceptance remains restricted to a disposable restored workbook.
