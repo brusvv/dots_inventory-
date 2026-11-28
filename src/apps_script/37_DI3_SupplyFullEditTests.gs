@@ -182,8 +182,12 @@ function di3RunSupplyFullEditUnitTests() {
   });
   test("full edit automatic preview is read-only and never posts stock or creates pack variants", function () {
     var source = di3RefreshSupplyFullEditFinancialPreview_.toString();
-    equal(source.indexOf("di3ResolveSupplyFormLines_(false)") !== -1, true);
+    equal(source.indexOf("di3ResolveSupplyFormLines_(false, true)") !== -1, true);
     equal(source.indexOf("di3GetOrCreatePackVariant_") === -1, true);
+    var resolverSource = di3ResolveSupplyFormLines_.toString();
+    equal(resolverSource.indexOf("di3GetProductFormOptionIndex_(readOnlyCatalog === true)") !== -1, true);
+    var indexSource = di3GetProductFormOptionIndex_.toString();
+    equal(indexSource.indexOf("if (skipPublicCodeEnsure !== true)") !== -1, true);
     equal(source.indexOf("di3AppendTableRows_") === -1, true);
     equal(source.indexOf("di3RebuildFifoAllocations_") === -1, true);
     var handler = di3SupplyFormOnEdit.toString();
