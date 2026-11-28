@@ -55,6 +55,15 @@ function di3BuildSupplyCorrectionEffectiveFifoSnapshot_(ledgerRows, detailRows, 
       }
       var movementAt = di3ToDate_(ledger[7], "StockLedger.effective_at").getTime();
       var relationAt = new Date(relation.effective_at).getTime();
+      if (new Date(lot[6]).getTime() !== movementAt || new Date(lot[7]).getTime() !== new Date(ledger[8]).getTime()) {
+        throw new Error("SupplyCorrectionEvents: effective/recorded timestamps FIFO lot " + movementId + " не совпадают с StockLedger.");
+      }
+      if (relation.source_movement_id && relation.replacement_movement_id) {
+        var sourceLedger = ledgerByMovement[String(relation.source_movement_id)];
+        if (!sourceLedger || new Date(sourceLedger[8]).getTime() !== new Date(ledger[8]).getTime()) {
+          throw new Error("SupplyCorrectionEvents: replacement recorded_at должен совпадать с исходным receipt recorded_at.");
+        }
+      }
       if (movementAt !== relationAt) {
         throw new Error("SupplyCorrectionEvents: effective_at " + role + " movement " + movementId + " не совпадает с исходной датой приёмки.");
       }
