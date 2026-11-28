@@ -34,6 +34,9 @@ for (const file of files) {
     timeout: 5000
   });
 }
+// The supply financial-plan unit tests do not exercise settings storage; keep
+// their currency dependency deterministic and independent of SpreadsheetApp.
+context.di3GetBaseCurrency_ = () => "RUB";
 
 const suites = [
   ["catalog_and_supply", "di3RunCatalogAndSupplyUnitTests"],
