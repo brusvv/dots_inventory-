@@ -175,7 +175,7 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
   if (!installLock.tryLock(1000)) {
     return { status: "LOCK_NOT_ACQUIRED", write_performed: false, backup: verifiedBackup,
       release_tag: preview.release_tag,
-      error: "Другой процесс установки или отката уже выполняется. Повтори preview после его завершения." };
+      error: "Другой процесс установки уже выполняется. Повтори preview после его завершения." };
   }
   try {
   // Last-moment concurrency guard: do not overwrite edits made while the dialog
