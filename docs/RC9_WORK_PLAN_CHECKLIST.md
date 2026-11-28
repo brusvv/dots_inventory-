@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-28  
 Working branch: `feature/github-preview-releases`  
-Branch HEAD at update: `05d0fafe634f7bb7086faa2c46df0082468bf085`
+Branch HEAD at update: `e75ecf814aff7cbc07c08b9462e47c5f948c7a06`
 
 > This is the execution checklist. Mark an item `[x]` only when the stated evidence exists. `[ ]` means not done or not evidenced; `[~]` means partially completed; `[!]` means blocked/deferred. Source implementation, CI, and live Google Apps Script acceptance are separate evidence classes.
 
