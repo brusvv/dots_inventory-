@@ -75,9 +75,21 @@ function di3BuildSupplyFullEditSnapshot_(supplyId) {
   var allocations = Object.keys(lotIds).length
     ? di3ReadRowsByColumnValues_("StockAllocations", 3, Object.keys(lotIds)).map(function (match) { return match.values; })
     : [];
-  var costHistory = di3ReadTableValues_("ProductCostHistory").filter(function (row) {
-    return String(row[7] || "").indexOf("SUPPLY_RECEIPT:" + id + ":") === 0;
+  // The immutable receipt payload is the authoritative list of original item IDs.
+  // Include current document items as a defensive fallback for pre-receipt/legacy states.
+  var historyItemIds = Object.create(null);
+  items.forEach(function (item) { historyItemIds[String(item.supply_item_id || "")] = true; });
+  if (receiptPayload && Array.isArray(receiptPayload.lines)) {
+    receiptPayload.lines.forEach(function (line) {
+      if (line && line.supply_item_id) historyItemIds[String(line.supply_item_id)] = true;
+    });
+  }
+  var costHistoryKeys = Object.keys(historyItemIds).filter(Boolean).map(function (itemId) {
+    return "SUPPLY_RECEIPT:" + id + ":" + itemId;
   });
+  var costHistory = costHistoryKeys.length
+    ? di3ReadRowsByColumnValues_("ProductCostHistory", 7, costHistoryKeys).map(function (match) { return match.values; })
+    : [];
   var supplyData = DI3_TABLE_SCHEMAS.V3_Supplies.map(function (header) {
     return di3SupplyFullEditNormalizeValue_(supply[header]);
   });
