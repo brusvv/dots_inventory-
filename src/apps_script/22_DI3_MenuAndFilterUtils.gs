@@ -277,7 +277,7 @@ function di3BuildMenus_() {
         .addItem("Восстановить в новую таблицу…", "di3PromptRestoreSpreadsheetBackup");
     }));
     menu.addSubMenu(subMenu("GitHub и обновления", function (child) {
-      child.addItem("Выбрать ветку GitHub для Preview…", "di3SelectGitHubSourceBranch")
+      child.addItem("Выбрать ветку GitHub для обновления…", "di3SelectGitHubSourceBranch")
         .addItem("Сбросить выбор ветки (Stable / Preview)", "di3ClearGitHubSourceBranchSelection")
         .addSeparator()
         .addItem("Проверить релиз / выбранную ветку и сравнить код", "di3CheckGitHubRelease")
