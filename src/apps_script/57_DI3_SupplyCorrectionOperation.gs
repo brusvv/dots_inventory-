@@ -156,11 +156,9 @@ function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, 
   if (!Number.isFinite(effectiveAt.getTime()) || !Number.isFinite(originalRecordedAt.getTime())) {
     throw new Error("В исходном receipt payload некорректны received_at/recorded_at.");
   }
-  var sequenceIndex = di3ReadLedgerSequenceIndex_();
-  var nextLedgerSequence = Number(sequenceIndex.max_sequence || 0) + 1;
-  if (!Number.isSafeInteger(nextLedgerSequence) || nextLedgerSequence <= 0) {
-    throw new Error("Не удалось определить следующий ledger_sequence.");
-  }
+  // Reserve a contiguous append identity block under ScriptLock. This also
+  // rejects a concurrent/unresolved FIFO replay before any operation is stored.
+  var ledgerSequences = di3AllocateLedgerSequenceBlock_(plan.lines.length);
   var nextDisplayCode = di3NextMovementDisplayCode_();
   var displayMatch = String(nextDisplayCode).match(/^(.*?)(\d+)$/);
   var displayPrefix = displayMatch ? displayMatch[1] : "MOV-";
@@ -187,7 +185,7 @@ function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, 
       lot_id: di3MakeUuid_(),
       event_key: "SUPPLY_CORRECTION:" + correctionId + ":" + itemId,
       display_code: displayPrefix + String(displayNumber + index).padStart(Math.max(6, String(displayNumber + index).length), "0"),
-      ledger_sequence: nextLedgerSequence + index,
+      ledger_sequence: ledgerSequences[index],
       effective_at: effectiveAt.toISOString(),
       recorded_at: originalRecordedAt.toISOString()
     };
