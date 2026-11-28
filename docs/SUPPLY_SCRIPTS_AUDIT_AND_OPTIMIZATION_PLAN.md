@@ -100,3 +100,16 @@ Implemented on the audit branch:
 - The pure latest-received selection algorithm, schema-derived indexes, chronology tie rejection, duplicate line checks, and PackVariants ownership validation remain unchanged.
 
 Added regression coverage for selective item/parent reads, the blank-ID fallback, and the no-matching-items fast path. Exact-head CI is pending; do not treat this source change as validated until the workflows complete. Runtime comparison on a disposable workbook remains pending.
+
+
+## Optimization batch 3 — form clear and full-edit launch latency
+
+Implemented in source on `feature/supply-correction-fifo-replay`:
+
+- `di3BuildSupplyFullEditSnapshot_()` keeps its complete stock/FIFO audit as the default, but accepts operation-local options to omit stock audit tables and/or receipt payload lookup when callers only need the business fingerprint.
+- Full-edit entry reuses the already loaded supply and receipt operation. For received supplies it still reads and verifies the immutable receipt payload; it skips unrelated StockLedger, StockMovementDetails, StockLots, StockAllocations and ProductCostHistory reads.
+- Full-edit save uses the already loaded supply and only reads current supply items for the baseline fingerprint. It skips stock audit, receipt payload and redundant receipt-operation lookup.
+- `di3NewSupplyForm()` clears values without rebuilding product dropdowns, monetary validations and supply summaries. Existing validations remain installed; the existing menu command “Обновить списки формы” remains the explicit repair/refresh path.
+- Full-edit cancel/commit reload uses `skipValidationRefresh` to avoid rebuilding the whole validation set. If the supply number changed, only the selector validation is refreshed.
+
+Regression tests cover the lightweight snapshot call contracts, preserved full audit default, clear-without-validation-rebuild behavior, and targeted reload behavior. Exact source CI passed on `8609e3c2c1b1a9aad97d51ba8ddae1688358afc8`: 69 Apps Script files syntax-checked; supply domain 189/189; FIFO 46/46; order 22/22; catalog/order UX 14/14; system safety 39/39; warehouse dashboard 11/11; finance 4/4; snapshot audit 8/8. Release pipeline and installation package also passed. Runtime timing has not been measured; no Apps Script workbook was opened or changed.
