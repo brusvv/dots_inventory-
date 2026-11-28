@@ -135,6 +135,62 @@ function di3RunSupplyFullEditUnitTests() {
     equal(handlerSource.indexOf("receiptAudit.payload_integrity !== \"VALID\"") !== -1, true);
   });
 
+  test("full edit auto-preview reacts to quantity, pack size, price and financial inputs", function () {
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 2, 1, 1), true, "units per pack");
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 3, 1, 1), true, "pack count");
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 4, 1, 1), true, "purchase price");
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 1, 1, 1), true, "product");
+    equal(di3IsSupplyFullEditFinancialInputRange_(5, 2, 1, 1), true, "seller discount");
+    equal(di3IsSupplyFullEditFinancialInputRange_(6, 2, 2, 1), true, "partner discount and shipping paste");
+    equal(di3IsSupplyFullEditFinancialInputRange_(12, 5, 1, 1), false, "calculated columns do not trigger recalculation");
+    equal(di3IsSupplyFullEditFinancialInputRange_(8, 2, 1, 1), false, "notes do not trigger recalculation");
+    equal(di3IsSupplyFullEditFinancialInputRange_(31, 1, 1, 4), true, "last supported item row");
+    equal(di3IsSupplyFullEditFinancialInputRange_(32, 1, 1, 4), false, "rows below supply form do not trigger recalculation");
+  });
+  test("changing units per pack recalculates received units and unit cost", function () {
+    var original = di3BuildSupplyFinancialPlan_({
+      lines: [{ product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 3, purchase_price_per_pack: 100 }],
+      seller_discount_amount: 10, partner_discount_amount: 20, shipping_amount: 15
+    });
+    var changed = di3BuildSupplyFinancialPlan_({
+      lines: [{ product_id: "P1", pack_variant_id: "V40", units_per_pack: 40, packs: 3, purchase_price_per_pack: 100 }],
+      seller_discount_amount: 10, partner_discount_amount: 20, shipping_amount: 15
+    });
+    equal(original.lines[0].received_units, 60);
+    equal(changed.lines[0].received_units, 120);
+    equal(changed.goods_amount, original.goods_amount);
+    equal(changed.final_amount, original.final_amount);
+    equal(changed.lines[0].final_line_amount, original.lines[0].final_line_amount);
+    equal(changed.lines[0].unit_cost, original.lines[0].unit_cost / 2);
+  });
+  test("changing pack count recalculates goods, discounts, shipping and final unit cost", function () {
+    var original = di3BuildSupplyFinancialPlan_({
+      lines: [{ product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 3, purchase_price_per_pack: 100 }],
+      seller_discount_amount: 10, partner_discount_amount: 20, shipping_amount: 15
+    });
+    var changed = di3BuildSupplyFinancialPlan_({
+      lines: [{ product_id: "P1", pack_variant_id: "V20", units_per_pack: 20, packs: 4, purchase_price_per_pack: 100 }],
+      seller_discount_amount: 10, partner_discount_amount: 20, shipping_amount: 15
+    });
+    equal(changed.lines[0].received_units, 80);
+    equal(changed.goods_amount, 400);
+    equal(changed.discount_total, 30);
+    equal(changed.shipping_amount, 15);
+    equal(changed.final_amount, 385);
+    equal(changed.lines[0].final_pack_cost, 96.25);
+    equal(changed.lines[0].unit_cost, 4.8125);
+  });
+  test("full edit automatic preview is read-only and never posts stock or creates pack variants", function () {
+    var source = di3RefreshSupplyFullEditFinancialPreview_.toString();
+    equal(source.indexOf("di3ResolveSupplyFormLines_(false)") !== -1, true);
+    equal(source.indexOf("di3GetOrCreatePackVariant_") === -1, true);
+    equal(source.indexOf("di3AppendTableRows_") === -1, true);
+    equal(source.indexOf("di3RebuildFifoAllocations_") === -1, true);
+    var handler = di3SupplyFormOnEdit.toString();
+    equal(handler.indexOf("di3IsSupplyFullEditFinancialInputRange_") !== -1, true);
+    equal(handler.indexOf("di3RefreshSupplyFullEditFinancialPreview_") !== -1, true);
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply full editing tests failed: " + JSON.stringify(failed));
   return report;
