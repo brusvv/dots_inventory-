@@ -93,6 +93,20 @@ function di3RunSupplyCorrectionRelationUnitTests() {
         [operation("OP-1", "QUARANTINED")]);
     }, /карантине/);
   });
+  test("committed or quarantined relation cannot be silently deactivated", function () {
+    throws(function () {
+      resolve([
+        event(1, "REL-1", "COMMITTED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1", "OP-1"),
+        event(2, "REL-1", "ABORTED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1", "OP-1")
+      ], [operation("OP-1", "COMMITTED")]);
+    }, /нельзя отменить задним числом/);
+    throws(function () {
+      resolve([
+        event(1, "REL-1", "QUARANTINED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1", "OP-1"),
+        event(2, "REL-1", "COMMITTED", "REPLACE", "MOVE-A", "MOVE-B", "P1", "P1", "OP-1")
+      ], [operation("OP-1", "COMMITTED")]);
+    }, /событие после QUARANTINED/);
+  });
   test("cycle in correction chain is rejected", function () {
     throws(function () {
       resolve([
