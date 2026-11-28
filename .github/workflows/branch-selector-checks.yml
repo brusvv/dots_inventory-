@@ -1,6 +1,7 @@
 name: GitHub branch selector checks
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/github-branch-selector
