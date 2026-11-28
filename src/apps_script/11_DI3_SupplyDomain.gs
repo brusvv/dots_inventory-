@@ -901,7 +901,7 @@ function di3GetSupplyDraftSummary() {
 /** Preview never creates pack variants or writes document records. */
 function di3PreviewSupplyForm() {
   var sheet = di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
-  var lines = di3ResolveSupplyFormLines_(false);
+  var lines = di3ResolveSupplyFormLines_(false, true);
   var form = sheet.getRange("B5:B7").getValues().map(function (row) { return row[0]; });
   var plan = di3BuildSupplyFinancialPlan_({
     lines: lines,
