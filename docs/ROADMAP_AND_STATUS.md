@@ -2,6 +2,15 @@
 
 > Этот блок является единственной актуальной сводкой. Более ранние записи ниже — исторический журнал; их статусы и HEAD не должны переопределять этот блок.
 
+## D-09 — probe создания / обновления / отмены установки
+
+- Рабочая ветка: `feature/github-branch-selector`; PR #10 остаётся Draft, не объединён.
+- Добавлен `src/apps_script/47_DI3_GitHubInstallLifecycleProbe.gs` (ревизия `D09-PROBE-V1`). Функция `di3RunGitHubInstallLifecycleProbe()` read-only: возвращает статус, ревизию, Script ID и время запуска.
+- Runbook расширен сценарием: YES впервые создаёт файл; NO при следующей версии V2 не меняет V1 и fingerprint; следующий YES обновляет существующий файл до V2.
+- Коммиты: fixture `dfffe5ab`, runbook `50ab49ca`, source index `77128e14`.
+- Runtime не запускался: Google Drive connector / Apps Script runtime недоступны из этой среды. CI результат для этих новых коммитов пока не подтверждён. Production RC8 не затронут.
+- Важно: probe намеренно входит в целевой набор Apps Script и после успешного YES останется в тестовом проекте. Не удалять его автоматически; очистка — отдельное действие после приёмки.
+
 ## GitHub / Release Pipeline
 
 - Ветка: `feature/github-preview-releases`.
