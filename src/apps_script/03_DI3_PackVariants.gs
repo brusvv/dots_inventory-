@@ -85,6 +85,61 @@ function di3GetOrCreatePackVariant_(productId, unitsPerPack, source) {
 }
 
 /**
+ * Resolve several pack variants with one product read, one variant-index read
+ * and at most one append. Callers that already hold ScriptLock may pass their
+ * preloaded indexes to avoid re-reading repositories.
+ */
+function di3GetOrCreatePackVariants_(requests, source, productsById, variantIndex) {
+  if (!Array.isArray(requests)) throw new Error("Для пакетного создания фасовок передай массив позиций.");
+  var productMap = productsById || di3LoadProductsIndex_().byId;
+  var variants = variantIndex || di3LoadPackVariantIndex_();
+  var rowsToAppend = [];
+  var results = [];
+
+  requests.forEach(function (request, index) {
+    var productId = String(request && request.product_id || "");
+    var units = Number(request && request.units_per_pack);
+    var product = productMap[productId];
+    if (!product) throw new Error("Позиция " + (index + 1) + ": не найден товар с product_id " + productId + ".");
+    if (product.active === false || String(product.active).toLowerCase() === "false") {
+      throw new Error("Позиция " + (index + 1) + ": товар отключён и не может использоваться в новой поставке.");
+    }
+    var key = di3BuildPackVariantKey_(productId, units);
+    var existing = variants.byProductAndUnits[key];
+    if (existing) {
+      if (existing.active === false || String(existing.active).toLowerCase() === "false") {
+        throw new Error("Позиция " + (index + 1) + ": вариант упаковки " + units + " шт. отключён.");
+      }
+      results.push({
+        created: false,
+        pack_variant_id: String(existing.pack_variant_id),
+        product_id: productId,
+        units_per_pack: units
+      });
+      return;
+    }
+
+    var row = di3BuildPackVariantRow_(productId, units, new Date(), source || "SUPPLY");
+    row[4] = false;
+    var record = {};
+    DI3_TABLE_SCHEMAS.PackVariants.forEach(function (header, column) { record[header] = row[column]; });
+    record.row_number = null;
+    variants.byProductAndUnits[key] = record;
+    variants.byId[String(record.pack_variant_id)] = record;
+    rowsToAppend.push(row);
+    results.push({
+      created: true,
+      pack_variant_id: String(record.pack_variant_id),
+      product_id: productId,
+      units_per_pack: units
+    });
+  });
+
+  if (rowsToAppend.length) di3AppendTableRows_("PackVariants", rowsToAppend);
+  return results;
+}
+
+/**
  * Validate supply lines: same product may appear more than once only when the
  * pack variant differs. Duplicate product_id + pack_variant_id is rejected.
  */
