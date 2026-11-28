@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { gitBlobSha1, auditSnapshot } = require("../audit_apps_script_snapshot");
 
 function withSourceDir(files, callback) {
@@ -119,7 +120,7 @@ test("runtime source audit probe disables redirects for its OAuth-authenticated 
   let capturedOptions = null;
   const responseBody = JSON.stringify({
     scriptId: "script-test",
-    files: [{ name: "Code", type: "SERVER_JS", source: "function test() {}\\n" }]
+    files: [{ name: "Code", type: "SERVER_JS", source: "function test() {}\n" }]
   });
   const sandbox = {
     ScriptApp: { getScriptId: () => "script-test", getOAuthToken: () => "oauth-test" },
@@ -141,8 +142,8 @@ test("runtime source audit probe disables redirects for its OAuth-authenticated 
     Logger: { log: () => {} },
     Date, JSON, String, Array, Object, RegExp, Error, Math, Number
   };
-  vm.runInNewContext(probeSource + "\\ndi3AuditExportRuntimeSourceSnapshot();", sandbox);
-  assert.match(capturedUrl, /script\\.googleapis\\.com\\/v1\\/projects\\/script-test\\/content$/);
+  vm.runInNewContext(probeSource + "\ndi3AuditExportRuntimeSourceSnapshot();", sandbox);
+  assert.match(capturedUrl, /script\.googleapis\.com\/v1\/projects\/script-test\/content$/);
   assert.equal(capturedOptions.followRedirects, false);
   assert.equal(capturedOptions.headers.Authorization, "Bearer oauth-test");
 });
