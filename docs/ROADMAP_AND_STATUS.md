@@ -1125,7 +1125,7 @@ Implemented on `feature/github-preview-releases`: Stable tags are restricted to 
 
 - Working branch: `feature/supply-correction-fifo-replay`.
 - Branch HEAD at this update: `a763a36cbe714a4f0cd9849d50152b2a649c8e16`.
-- It is 192 commits ahead of `feature/github-preview-releases`, with no commits behind; the current PR comparison contains 35 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
+- At the final review snapshot it is 197 commits ahead of `feature/github-preview-releases`, with no commits behind; PR #11 contains 37 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
 - SC-01 through SC-04 are implemented in source: immutable receipt/source audit; append-only correction relation journal; candidate/effective FIFO preview and normal replay integration; explicit correction operation with recovery and a read-only all-sheet preview probe.
 - SC-04 remains source-ready only. The mutating API `di3CorrectReceivedSupply()` is not exposed in the menu. It must not be used on a live/production supply until runtime acceptance on a restored disposable workbook.
 - Known SC limitation: a second correction of the same supply is blocked; correction-chain document hydration is not implemented.
@@ -1179,3 +1179,14 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 - Updated `.github/workflows/quality-gates.yml`, `.github/workflows/release-pipeline-tests.yml`, and `.github/workflows/package-installation.yml` so PR #11 receives the full quality-gates, release-pipeline and package checks; also enabled direct push checks on the supply-correction branch.
 - The installation package now includes `RC9_WORK_PLAN_CHECKLIST.md` and writes the actual source branch name into its installation note.
 - These workflow changes are committed on the PR branch. Verify all three workflows on the final PR head before treating CI as green.
+
+
+### Exact-head CI evidence for PR #11
+
+| Workflow | Run | Result |
+|---|---|---|
+| Apps Script quality gates | [46100646815](https://github.com/brusvv/dots_inventory-/actions/runs/46100646815) | PASS |
+| Release pipeline checks | [46100646810](https://github.com/brusvv/dots_inventory-/actions/runs/46100646810) | PASS |
+| Installation package | [46100646814](https://github.com/brusvv/dots_inventory-/actions/runs/46100646814) | PASS |
+
+All three ran against `1df024ab46b22c2eb28ded02dc5fdf5292442e86`. PR #11 remains Draft, open, mergeable, and has no reviews yet. Mergeability does not waive its runtime acceptance gates.
