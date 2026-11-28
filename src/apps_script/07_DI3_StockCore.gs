@@ -531,7 +531,7 @@ function di3BuildProductValuation_(productId, lotRows, allocationRows) {
 }
 
 function di3GetPendingStockOperations_() {
-  var stockOperationTypes = ["MANUAL_STOCK_MOVEMENT", "SUPPLY_RECEIVE", "ORDER_DISPATCH", "ORDER_RETURN", "STOCK_ADJUSTMENT"];
+  var stockOperationTypes = ["MANUAL_STOCK_MOVEMENT", "SUPPLY_RECEIVE", "SUPPLY_CORRECTION", "ORDER_DISPATCH", "ORDER_RETURN", "STOCK_ADJUSTMENT"];
   var rows = di3ReadRowsByColumnValuesViaTextFinder_("Operations", 5, ["PREPARED", "RETRYABLE", "QUARANTINED"]);
   return rows.filter(function (match) {
     var row = match.values;
@@ -552,7 +552,11 @@ function di3AssertNoPendingStockOperations_() {
 
 function di3GetProductFifoValuation(productId) {
   di3AssertNoPendingStockOperations_();
-  var lots = di3ReadRowsByColumnValue_("StockLots", 1, productId).map(function (match) { return match.values; });
+  var correctionMap = di3ReadSupplyCorrectionEffectiveMovementMap_();
+  var superseded = Object.create(null);
+  correctionMap.superseded_movement_ids.forEach(function (id) { superseded[String(id)] = true; });
+  var lots = di3ReadRowsByColumnValue_("StockLots", 1, productId).map(function (match) { return match.values; })
+    .filter(function (row) { return !superseded[String(row[2] || "")]; });
   var allocations = di3ReadRowsByColumnValue_("StockAllocations", 4, productId).map(function (match) { return match.values; });
   return di3BuildProductValuation_(productId, lots, allocations);
 }
@@ -726,7 +730,12 @@ function di3GetWarehouseDashboardData(targetGrossMargin) {
   // Read once per dashboard render rather than once per product.
   var productCodeMap = di3GetProductPublicCodeMap_();
   var active = di3GetActiveRunAllocations_();
-  var lots = di3ReadTableValues_("StockLots");
+  var correctionMap = di3ReadSupplyCorrectionEffectiveMovementMap_();
+  var superseded = Object.create(null);
+  correctionMap.superseded_movement_ids.forEach(function (id) { superseded[String(id)] = true; });
+  var lots = di3ReadTableValues_("StockLots").filter(function (row) {
+    return !superseded[String(row[2] || "")];
+  });
   var rows = [];
   var totals = { products: products.length, stock_units: 0, known_units: 0, unknown_units: 0, known_inventory_value: 0,
     known_inventory_value_minor: 0, average_known_unit_cost: null, inventory_value: 0,
@@ -804,7 +813,11 @@ function di3GetProductFifoValuationHistory(productId, days) {
   di3AssertNoPendingStockOperations_();
   var count = Number(days || 30);
   if (![30, 90, 180].includes(count)) throw new Error("Поддерживаются периоды 30, 90 или 180 дней.");
-  var ledgerRows = di3ReadRowsByColumnValue_("StockLedger", 3, productId).map(function (match) { return match.values; });
+  var correctionMap = di3ReadSupplyCorrectionEffectiveMovementMap_();
+  var superseded = Object.create(null);
+  correctionMap.superseded_movement_ids.forEach(function (id) { superseded[String(id)] = true; });
+  var ledgerRows = di3ReadRowsByColumnValue_("StockLedger", 3, productId).map(function (match) { return match.values; })
+    .filter(function (row) { return !superseded[String(row[0] || "")]; });
   var movementIds = [];
   var movementSet = Object.create(null);
   ledgerRows.forEach(function (row) {
