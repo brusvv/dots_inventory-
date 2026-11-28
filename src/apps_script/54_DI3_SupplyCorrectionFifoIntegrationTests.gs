@@ -18,7 +18,7 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     return [id, "OP-" + id, "EV-" + id, productId, "SUPPLY", "S1", delta,
       new Date(effectiveAt), new Date(recordedAt || effectiveAt), "", "", "", 1];
   }
-  function detail(id, type) { return [id, "MOV-" + id, type, "SUPPLY_RECEIVE", "", "", "KNOWN", "", "test", ""]; }
+  function detail(id, type) { return [id, "MOV-" + id, type, "SUPPLY_RECEIVE", "", "", "KNOWN", "", "test", "", "SUPPLY"]; }
   function lot(id, productId, movementId, quantity) {
     return [id, productId, movementId, "SUPPLY", "S1", "PV-" + productId,
       new Date("2026-01-02T09:00:00Z"), new Date("2026-01-02T09:00:00Z"),
