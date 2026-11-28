@@ -36,11 +36,12 @@ function di3RunSupplyCorrectionUnitTests() {
       lots: [{ row_number: 2, values: ["LOT-1", "P1", "MOVE-1", "SUPPLY", "S1", "VAR-20",
         effective, recorded, 40, 4.5, "KNOWN", "RUB", "Поставка 26NR201", 40, 18000] }],
       items: [{ supply_item_id: "ITEM-1", supply_id: "S1", product_id: "P1", pack_variant_id: "VAR-20",
-        units_per_pack: 20, packs: 2, received_units: 40, unit_cost: 4.5, final_pack_cost: 90, final_line_amount: 180 }]
+        units_per_pack: 20, packs: 2, received_units: 40, unit_cost: 4.5, final_pack_cost: 90, final_line_amount: 180 }],
+      allocations: []
     };
   }
   function audit(data) {
-    return di3BuildSupplyCorrectionSourceMap_(data.operation, data.payload, data.ledger, data.details, data.lots, data.items);
+    return di3BuildSupplyCorrectionSourceMap_(data.operation, data.payload, data.ledger, data.details, data.lots, data.items, data.allocations);
   }
 
   test("valid committed receipt maps each payload line to exactly one ledger, detail and lot", function () {
@@ -107,6 +108,51 @@ function di3RunSupplyCorrectionUnitTests() {
     throws(function () { audit(data); }, /recorded_at/);
     data = fixture(); data.ledger[0].values[12] = 0;
     throws(function () { audit(data); }, /ledger_sequence/);
+  });
+  test("source audit reconciles active FIFO allocations with each source lot cache", function () {
+    var data = fixture();
+    data.lots[0].values[13] = 20;
+    data.allocations = [{ row_number: 7, values: [
+      "ALLOC-1", "RUN-1", "OUT-1", "LOT-1", "P1", "CONSUME", 20, 4.5,
+      "KNOWN", 90, new Date("2026-11-21T12:00:00.000Z"),
+      new Date("2026-11-21T12:00:01.000Z"), "", 9000
+    ] }];
+    var result = audit(data);
+    equal(result.source_lines[0].consumed_quantity, 20);
+    equal(result.source_lines[0].remaining_quantity, 20);
+    equal(result.source_lines[0].allocation_count, 1);
+    equal(result.fifo_allocation_count, 1);
+
+    data = fixture();
+    data.lots[0].values[13] = 20;
+    throws(function () { audit(data); }, /CONSUME и remaining_quantity/);
+
+    data = fixture();
+    data.allocations = [{ row_number: 7, values: [
+      "ALLOC-1", "RUN-1", "OUT-1", "LOT-1", "P2", "CONSUME", 20, 4.5,
+      "KNOWN", 90, new Date("2026-11-21T12:00:00.000Z"),
+      new Date("2026-11-21T12:00:01.000Z"), "", 9000
+    ] }];
+    throws(function () { audit(data); }, /товар, тип, количество/);
+
+    data = fixture();
+    data.allocations = [{ row_number: 7, values: [
+      "ALLOC-1", "RUN-1", "OUT-1", "LOT-1", "P1", "CONSUME", 20, 4.5,
+      "KNOWN", 90, new Date("2026-11-21T12:00:00.000Z"),
+      new Date("2026-11-21T12:00:01.000Z"), "", 8999
+    ] }];
+    throws(function () { audit(data); }, /сумма CONSUME и remaining_quantity/);
+  });
+  test("source audit rejects duplicate allocation IDs and uninitialized lot remaining cache", function () {
+    var data = fixture();
+    data.allocations = [
+      { row_number: 7, values: ["ALLOC-1", "RUN-1", "OUT-1", "LOT-1", "P1", "CONSUME", 10, 4.5, "KNOWN", 45, new Date("2026-11-21T12:00:00.000Z"), new Date("2026-11-21T12:00:01.000Z"), "", 4500] },
+      { row_number: 8, values: ["ALLOC-1", "RUN-1", "OUT-2", "LOT-1", "P1", "CONSUME", 10, 4.5, "KNOWN", 45, new Date("2026-11-21T13:00:00.000Z"), new Date("2026-11-21T13:00:01.000Z"), "", 4500] }
+    ];
+    throws(function () { audit(data); }, /повторяется allocation_id/);
+    data = fixture();
+    data.lots[0].values[13] = "";
+    throws(function () { audit(data); }, /remaining_quantity/);
   });
   test("source audit rejects extra movements belonging to the original receipt operation", function () {
     var data = fixture();
