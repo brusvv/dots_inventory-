@@ -1383,13 +1383,35 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
   if (!isFullReplay && (String(stateVersion) !== DI3_FIFO_STATE_VERSION ||
       !Number.isSafeInteger(cursor) || cursor < 0 || cursor > maxLedgerSequence)) isFullReplay = true;
 
+  // Correction relations are part of the immutable FIFO input. A changed
+  // committed relation map invalidates the prior projection and forces a full
+  // replay, including REMOVE-only products with no new ledger tail.
+  var correctionRelationRows = di3GetSpreadsheet_().getSheetByName("SupplyCorrectionEvents")
+    ? di3ReadTableValues_("SupplyCorrectionEvents") : [];
+  var correctionOperationRows = di3GetSpreadsheet_().getSheetByName("Operations")
+    ? di3ReadTableValues_("Operations") : [];
+  var correctionMap = di3BuildSupplyCorrectionEffectiveMovementMap_(
+    correctionRelationRows, correctionOperationRows, { include_operation_id: operationId }
+  );
+  var storedCorrectionFingerprint = String(di3GetAppMetaValue_("fifo_supply_correction_fingerprint") || "");
+  if (!isFullReplay && storedCorrectionFingerprint !== correctionMap.fingerprint) isFullReplay = true;
+
   var ledgerRows = null, detailRows = null, lotRows = null, newLedgerRows = [];
-  var productIds = [], candidateReplay = null;
+  var productIds = [], candidateReplay = null, effectiveSnapshot = null;
   if (isFullReplay) {
     ledgerRows = di3ReadTableValues_("StockLedger");
     detailRows = di3ReadTableValues_("StockMovementDetails");
     lotRows = di3ReadTableValues_("StockLots");
-    productIds = Array.from(new Set(ledgerRows.map(function (row) { return String(row[3] || ""); }).filter(Boolean)));
+    effectiveSnapshot = di3BuildSupplyCorrectionEffectiveFifoSnapshot_(
+      ledgerRows, detailRows, lotRows, correctionMap
+    );
+    ledgerRows = effectiveSnapshot.ledger_rows;
+    detailRows = effectiveSnapshot.detail_rows;
+    lotRows = effectiveSnapshot.lot_rows;
+    productIds = Array.from(new Set(
+      ledgerRows.map(function (row) { return String(row[3] || ""); })
+        .concat(effectiveSnapshot.affected_product_ids).filter(Boolean)
+    ));
     candidateReplay = di3BuildFifoReplayPlan_(ledgerRows, detailRows, lotRows, null);
   } else {
     // Scan narrow identity columns, then read full rows only for sequences beyond the cursor.
@@ -1400,8 +1422,12 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
   var fingerprintLedgerRows = (isFullReplay ? ledgerRows : newLedgerRows).slice()
     .sort(function (a, b) { return Number(a[12]) - Number(b[12]); });
   var runInputFingerprint = isFullReplay
-    ? di3BuildFifoReplayInputFingerprint_(null, ledgerRows, detailRows, lotRows)
-    : di3BuildFifoFingerprint_({ mode: "INCREMENTAL_TAIL", ledger: fingerprintLedgerRows });
+    ? di3BuildFifoFingerprint_({
+        replay_input: di3BuildFifoReplayInputFingerprint_(null, ledgerRows, detailRows, lotRows),
+        supply_correction_relation_fingerprint: correctionMap.fingerprint
+      })
+    : di3BuildFifoFingerprint_({ mode: "INCREMENTAL_TAIL", ledger: fingerprintLedgerRows,
+        supply_correction_relation_fingerprint: correctionMap.fingerprint });
   var run = di3CreateFifoRun_(isFullReplay ? "FULL_REPLAY:" + (reason || "MANUAL") : (reason || "INCREMENTAL"),
     ledgerCount, 0, productIds.length, {
       operation_id: operationId,
@@ -1439,7 +1465,10 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
         operation_id: operationId,
         scope_type: "FULL",
         scope_json: "FULL",
-        input_fingerprint: di3BuildFifoReplayInputFingerprint_(null, ledgerRows, detailRows, lotRows),
+        input_fingerprint: di3BuildFifoFingerprint_({
+          replay_input: di3BuildFifoReplayInputFingerprint_(null, ledgerRows, detailRows, lotRows),
+          supply_correction_relation_fingerprint: correctionMap.fingerprint
+        }),
         reason: "FULL_REPLAY:" + String(reason || "MANUAL"),
         archived_at: run.created_at,
         target_rows: fullRows,
@@ -1505,6 +1534,9 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
     di3SetAppMetaValue_("fifo_state_version", DI3_FIFO_STATE_VERSION);
     di3CommitFifoReplayEventsForRun_(run.run_id);
     di3UpdateFifoRunStatus_(run.row_number, "COMMITTED", new Date(), "", created);
+    // Store only after the projection and replay run are committed. If the
+    // process stops earlier, the next invocation still detects the mismatch.
+    di3SetAppMetaValue_("fifo_supply_correction_fingerprint", correctionMap.fingerprint);
     return {
       run_id: run.run_id, run_sequence: run.run_sequence,
       allocations_created: created, allocations_replaced: replaced,
