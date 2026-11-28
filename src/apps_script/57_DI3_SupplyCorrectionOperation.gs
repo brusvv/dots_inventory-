@@ -349,7 +349,7 @@ function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, 
     currentDetails.concat(replacementRows.details),
     currentLots.concat(replacementRows.lots),
     relationRows.concat(syntheticEvents),
-    di3ReadTableValues_("Operations").concat([syntheticOperation]),
+    di3ReadSupplyCorrectionOperationRows_(relationRows).concat([syntheticOperation]),
     { include_operation_id: operationId }
   );
   payload.candidate_fifo_input_fingerprint = candidate.input_fingerprint;
