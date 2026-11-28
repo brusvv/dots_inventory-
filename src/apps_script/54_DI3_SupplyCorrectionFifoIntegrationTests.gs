@@ -114,6 +114,21 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     }, /должен быть положительным приходом IN/);
   });
 
+  test("stale committed correction projection is rejected by stock read guards", function () {
+    var original = di3GetAppMetaValue_;
+    try {
+      di3GetAppMetaValue_ = function (key) { return key === "fifo_supply_correction_fingerprint" ? "OLD-FINGERPRINT" : ""; };
+      throws(function () {
+        di3AssertSupplyCorrectionFifoProjectionCurrent_({ relations: [{ relation_id: "R1" }], fingerprint: "NEW-FINGERPRINT" });
+      }, /FIFO-проекция ещё не пересчитана/);
+      di3GetAppMetaValue_ = function (key) { return key === "fifo_supply_correction_fingerprint" ? "NEW-FINGERPRINT" : ""; };
+      equal(di3AssertSupplyCorrectionFifoProjectionCurrent_({ relations: [{ relation_id: "R1" }], fingerprint: "NEW-FINGERPRINT" }), true);
+      equal(di3AssertSupplyCorrectionFifoProjectionCurrent_({ relations: [], fingerprint: "EMPTY" }), true);
+    } finally {
+      di3GetAppMetaValue_ = original;
+    }
+  });
+
   test("rejects a replacement with a different effective receipt date", function () {
     var date = "2026-01-02T09:00:00Z";
     throws(function () {
