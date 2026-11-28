@@ -93,6 +93,20 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     equal(result.lot_rows[0][0], "LOT-C");
   });
 
+  test("REPLACE preserves the original receipt recorded_at tie-break timestamp", function () {
+    var date = "2026-01-02T09:00:00Z";
+    var changedRecordedAt = "2026-01-04T09:00:00Z";
+    throws(function () {
+      snapshot(
+        [ledger("SRC", "P1", 10, date, date), ledger("REPL", "P1", 10, date, changedRecordedAt)],
+        [detail("SRC", "IN"), detail("REPL", "IN")],
+        [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 10, 5, date, changedRecordedAt)],
+        [relation(1, "REL-1", "REPLACE", "SRC", "REPL", "P1", "P1", "OP-1")],
+        [operation("OP-1")]
+      );
+    }, /recorded_at должен совпадать с исходным receipt/);
+  });
+
   test("source snapshots are not mutated", function () {
     var date = "2026-01-02T09:00:00Z";
     var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date)];
