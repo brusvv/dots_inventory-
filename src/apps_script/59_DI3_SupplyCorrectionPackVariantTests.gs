@@ -160,6 +160,21 @@ function di3RunSupplyCorrectionPackVariantTests() {
     equal(/line_no/.test(String(error && error.message)), true);
   });
 
+  test("equal receipt and creation timestamps across supplies fail closed", function () {
+    var error = null;
+    try {
+      di3BuildLatestReceivedPackVariantMap_([
+        supply("S-A", "2026-11-20T10:00:00Z", "2026-11-19T10:00:00Z"),
+        supply("S-B", "2026-11-20T10:00:00Z", "2026-11-19T10:00:00Z")
+      ], [
+        item("S-A", 1, "P1", "V-A"),
+        item("S-B", 1, "P1", "V-B")
+      ], ["P1"]);
+    } catch (caught) { error = caught; }
+    equal(!!error, true);
+    equal(/одинаковые received_at и created_at/.test(String(error && error.message)), true);
+  });
+
   var report = { passed: passed, failed: failed.length, failures: failed };
   if (failed.length) throw new Error("Supply correction pack variant tests failed: " + JSON.stringify(failed));
   return report;
