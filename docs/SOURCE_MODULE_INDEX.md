@@ -47,7 +47,7 @@ The base `.gs` modules came from the supplied `40.rar`. The current working tree
 | `40_DI3_CatalogOrderUxTests.gs` | UX-04–UX-06 regression tests for Catalog, Order and navigation |
 | `41_DI3_SystemSafetyUxTests.gs` | UX-07–UX-10 regression tests for confirmations before batch recovery, Money/FIFO migration, period reopening and manual warehouse movement; extended for payload guard and backup flush checks |
 | `42_DI3_FinanceSchemaTests.gs` | Four local tests for Finance Dashboard schema-name column mapping and the removal of hard-coded source-table indexes |
-| `43_DI3_GitHubDeploymentManager.gs` | D-03/D-04 release inspection, immutable manifest/source validation, Apps Script project read and verified Drive source backup; updater v0.2.0 schema/timezone compatibility gate |
+| `43_DI3_GitHubDeploymentManager.gs` | D-03/D-04 release inspection, immutable manifest/source validation, Apps Script project read and verified Drive source backup; updater v0.2.0 schema/timezone compatibility gate; D-09 pinned branch selection and Git blob SHA-1 verification |
 | `44_DI3_GitHubInstallPreview.gs` | D-05 read-only preview of pinned release source files; preserves target manifest, non-server files and unmanaged local modules |
 | `45_DI3_GitHubConfirmedInstaller.gs` | D-05 explicitly confirmed complete-project write with verified backup, concurrency recheck and exact post-write verification |
 | `46_DI3_GitHubCodeRollback.gs` | D-06 verified Apps Script source rollback from a matching Drive backup while preserving the target manifest |
