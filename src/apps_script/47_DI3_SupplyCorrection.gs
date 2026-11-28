@@ -31,7 +31,7 @@ function di3SupplyCorrectionNearlyEqual_(left, right, fieldName) {
  * Inputs are arrays of {row_number, values} returned by read-only repository
  * helpers. Ledger rows must already be scoped to the original receipt operation.
  */
-function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, ledgerMatches, detailMatches, lotMatches) {
+function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, ledgerMatches, detailMatches, lotMatches, currentItems) {
   if (!receiptOperation || !receiptOperation.values) throw new Error("Не найдена исходная операция приёмки.");
   var operation = receiptOperation.values;
   var operationId = String(operation[0] || "");
@@ -51,6 +51,18 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
   }
 
   var lines = receiptPayload.lines;
+  if (!Array.isArray(currentItems)) throw new Error("Не переданы текущие строки V3_SupplyItems для сверки с receipt payload.");
+  var currentItemById = Object.create(null);
+  currentItems.forEach(function (item) {
+    var itemId = String(item && item.supply_item_id || "");
+    if (!itemId || currentItemById[itemId]) throw new Error("В V3_SupplyItems отсутствует или повторяется supply_item_id " + itemId + ".");
+    if (String(item.supply_id || "") !== supplyId) throw new Error("Строка V3_SupplyItems принадлежит другой поставке.");
+    currentItemById[itemId] = item;
+  });
+  if (currentItems.length !== lines.length) {
+    throw new Error("Количество текущих строк V3_SupplyItems не совпадает с исходным receipt payload.");
+  }
+
   var expectedItemIds = Object.create(null);
   var expectedMovementIds = Object.create(null);
   var expectedLotIds = Object.create(null);
@@ -89,10 +101,8 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
     var quantity = Number(line.quantity);
     if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new Error(prefix + ": некорректное количество в payload.");
     var units = Number(line.units_per_pack);
-    var packs = Number(line.packs);
-    if (!Number.isSafeInteger(units) || units <= 0) throw new Error(prefix + ": некорректный размер упаковки.");
-    if (!Number.isSafeInteger(packs) || packs <= 0 || quantity !== packs * units) {
-      throw new Error(prefix + ": quantity не совпадает с packs × units_per_pack.");
+    if (!Number.isSafeInteger(units) || units <= 0 || quantity % units !== 0) {
+      throw new Error(prefix + ": quantity не делится на units_per_pack без остатка.");
     }
     di3SupplyCorrectionSameInstant_(line.effective_at, receiptPayload.received_at, prefix + " effective_at");
     di3SupplyCorrectionSameInstant_(line.recorded_at, receiptPayload.recorded_at, prefix + " recorded_at");
@@ -151,6 +161,21 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
     var detail = detailMatch.values;
     var lot = lotMatch.values;
     var quantity = Number(line.quantity);
+    var currentItem = currentItemById[String(line.supply_item_id)];
+    if (!currentItem) throw new Error(prefix + ": исходная строка отсутствует в V3_SupplyItems.");
+    if (String(currentItem.product_id) !== String(line.product_id) ||
+        String(currentItem.pack_variant_id) !== String(line.pack_variant_id) ||
+        Number(currentItem.units_per_pack) !== Number(line.units_per_pack) ||
+        Number(currentItem.received_units) !== quantity ||
+        Number(currentItem.packs) * Number(currentItem.units_per_pack) !== quantity) {
+      throw new Error(prefix + ": V3_SupplyItems product/variant/quantity отличается от исходного receipt payload.");
+    }
+    di3SupplyCorrectionNearlyEqual_(currentItem.unit_cost, line.unit_cost, prefix + " V3_SupplyItems.unit_cost");
+    di3SupplyCorrectionNearlyEqual_(currentItem.final_pack_cost, line.cost_per_pack, prefix + " V3_SupplyItems.final_pack_cost");
+    var itemTotalMinor = di3MoneyToMinorUnits_(Number(currentItem.final_line_amount), prefix + " V3_SupplyItems.final_line_amount", false);
+    if (itemTotalMinor !== Number(line.total_cost_minor)) {
+      throw new Error(prefix + ": V3_SupplyItems.final_line_amount не совпадает с исходным receipt payload.");
+    }
 
     if (String(ledger[2]) !== String(line.event_key) || String(ledger[3]) !== String(line.product_id) ||
         String(ledger[4]) !== "SUPPLY" || String(ledger[5]) !== supplyId ||
@@ -245,13 +270,18 @@ function di3AuditSupplyCorrectionSource(supplyId) {
       throw new Error("Хэш исходного payload приёмки не совпадает с Operations.");
     }
     if (String(payload.supply_id || "") !== id) throw new Error("supply_id в payload не совпадает с выбранной поставкой.");
+    var currentItems = di3GetSupplyItems_(id);
+    di3SupplyCorrectionSameInstant_(supply.received_at, payload.received_at, "V3_Supplies.received_at");
+    if (String(supply.supply_number || "") !== String(payload.supply_number || "")) {
+      throw new Error("Номер поставки в V3_Supplies не совпадает с исходным receipt payload.");
+    }
     var movementIds = (payload.lines || []).map(function (line) { return String(line && line.movement_id || ""); }).filter(Boolean);
     var ledgerMatches = di3ReadRowsByColumnValue_("StockLedger", 5, id).filter(function (match) {
       return String(match.values[1]) === operationId;
     });
     var detailMatches = movementIds.length ? di3ReadRowsByColumnValues_("StockMovementDetails", 0, movementIds) : [];
     var lotMatches = movementIds.length ? di3ReadRowsByColumnValues_("StockLots", 2, movementIds) : [];
-    var source = di3BuildSupplyCorrectionSourceMap_(operationMatch, payload, ledgerMatches, detailMatches, lotMatches);
+    var source = di3BuildSupplyCorrectionSourceMap_(operationMatch, payload, ledgerMatches, detailMatches, lotMatches, currentItems);
     return {
       status: "READY",
       read_only: true,
