@@ -420,3 +420,18 @@ Latest source verification at commit `76440457589cd3577913f517921d98ec36231520`:
 - [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46099249735).
 
 The handler still supports only the first correction per supply. Runtime acceptance on a restored workbook and failure-injection at each write boundary remain mandatory before using the mutating command.
+
+
+### Read-only runtime probe
+
+Added `di3RunSupplyCorrectionPreviewRuntimeProbe(supplyId, spec)`. On a restored test workbook it snapshots values and formulas for the source, FIFO, operation, archive, catalog and pack-variant sheets, runs only `di3PreviewSupplyCorrection`, then verifies that those sheets are unchanged. It never calls the mutating correction command. Results distinguish a successful preview, a blocked preview with no side effects, and detected workbook changes.
+
+Latest source verification at commit `29b8f777035e017d9916bb545ae35d9f4f0d8264`:
+- Apps Script syntax: **69/69 files**.
+- Snapshot audit: **7/7**; FIFO replay: **46/46**; order domain: **22/22**.
+- Supply/correction/lifecycle and execution tests: **149/149**.
+- Catalog/order UX: **14/14**; system safety/operation: **39/39**; warehouse dashboard: **11/11**; finance schema: **4/4**.
+- Total: **292 passed, 0 failed**.
+- [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46099338029).
+
+No workbook runtime probe has been run yet. The new probe is prepared for the restored-copy acceptance stage only.
