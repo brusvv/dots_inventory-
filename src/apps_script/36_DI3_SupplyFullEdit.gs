@@ -293,7 +293,7 @@ function di3ValidateSupplyFullEditDates_(input, nowMillis) {
   return { order_date: orderDate, expected_date: expectedDate, sent_at: sentAt, awaiting_at: awaitingAt, received_at: receivedAt };
 }
 
-function di3BuildSupplyFullEditPlan_(context, createVariants) {
+function di3BuildSupplyFullEditPlan_(context, createVariants, lineSnapshot) {
   var input = di3ParseSupplyFullEditInput_(context.sheet);
   var currentStatus = di3NormalizeSupplyStatus_(context.supply.status);
   if (currentStatus === DI3_SUPPLY_STATUS.RECEIVED && !input.received_at) {
@@ -312,7 +312,7 @@ function di3BuildSupplyFullEditPlan_(context, createVariants) {
     ? DI3_SUPPLY_STATUS.RECEIVED
     : (input.awaiting_at ? DI3_SUPPLY_STATUS.AWAITING : (input.sent_at ? DI3_SUPPLY_STATUS.SENT : DI3_SUPPLY_STATUS.CREATED));
 
-  var rawLines = di3ResolveSupplyFormLines_(false);
+  var rawLines = di3ResolveSupplyFormLines_(false, false, lineSnapshot);
   if (!rawLines.length) throw new Error("Добавь хотя бы одну товарную позицию.");
   var seen = Object.create(null);
   rawLines.forEach(function (line, index) {
@@ -327,7 +327,7 @@ function di3BuildSupplyFullEditPlan_(context, createVariants) {
     shipping_amount: input.shipping_amount
   });
   if (createVariants) {
-    rawLines = di3ResolveSupplyFormLines_(true);
+    rawLines = di3ResolveSupplyFormLines_(true, false, lineSnapshot);
     plan = di3BuildSupplyFinancialPlan_({
       lines: rawLines,
       seller_discount_amount: input.seller_discount_amount,
@@ -600,7 +600,8 @@ function di3SaveFullSupplyEdit() {
       // Never resume an immutable operation blindly: the user may have changed
       // the form after a failed/lost acknowledgement. Rebuild a side-effect-free
       // request fingerprint and only resume when it exactly matches the payload.
-      var currentRequestPlan = di3BuildSupplyFullEditPlan_(context, false);
+      var requestLineSnapshot = di3LoadSupplyFormLineSnapshot_(false);
+      var currentRequestPlan = di3BuildSupplyFullEditPlan_(context, false, requestLineSnapshot);
       if (currentRequestPlan.current_status !== DI3_SUPPLY_STATUS.RECEIVED) {
         // Variant creation is deliberately not repeated for the comparison path.
         // PREVIEW IDs are normalized away by the request fingerprint helper.
@@ -632,9 +633,10 @@ function di3SaveFullSupplyEdit() {
     if (snapshot.fingerprint !== context.baseline_hash) {
       throw new Error("Поставка была изменена после включения полного редактирования. Изменения не применены. Отмени режим и загрузи свежую версию.");
     }
-    var plan = di3BuildSupplyFullEditPlan_(context, false);
+    var lineSnapshot = di3LoadSupplyFormLineSnapshot_(false);
+    var plan = di3BuildSupplyFullEditPlan_(context, false, lineSnapshot);
     if (plan.current_status !== DI3_SUPPLY_STATUS.RECEIVED) {
-      plan = di3BuildSupplyFullEditPlan_(context, true);
+      plan = di3BuildSupplyFullEditPlan_(context, true, lineSnapshot);
     }
     if (plan.target_number !== String(context.supply.supply_number)) {
       di3SetSupplySelectorValidation_(context.sheet, plan.target_number);
