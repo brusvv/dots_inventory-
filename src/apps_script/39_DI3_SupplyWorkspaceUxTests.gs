@@ -93,6 +93,8 @@ function di3RunSupplyWorkspaceUxUnitTests() {
   test("new supply form clears values without rebuilding catalogue and status validations", function () {
     var source = di3NewSupplyForm.toString();
     includes(source, 'sheet.getRange("B2:B8").clearContent()');
+    includes(source, 'sheet.getRange("M4:M9").clearContent()');
+    includes(source, 'sheet.getRange("N2:N7").clearContent()');
     includes(source, 'sheet.getRange(DI3_SUPPLY_FORM.firstLine, 1, DI3_SUPPLY_FORM.lineCount, 10).clearContent()');
     includes(source, "di3RefreshSupplyDatePanel_(null)");
     equal(source.indexOf("di3RefreshSupplyFormValidations()") === -1, true,
