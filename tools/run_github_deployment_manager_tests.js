@@ -485,7 +485,7 @@ function configureInstallerHarness(answer, outcome) {
     files[1]
   ];
   let readCount = 0, updateCalls = 0, alerts = [];
-  let lockAcquireCount = 0, lockReleaseCount = 0;
+  let lockAcquireCount = 0, lockReleaseCount = 0, lockWaitMs = null;
   let selectedBackupReadCount = 0, selectedBackupMode = "normal";
   context.di3PrepareGitHubInstallPreview = () => ({
     status: "PREVIEW_READY", summary: { removed: 0, target_file_count: 2, added: 0, changed: 1, unchanged: 1, preserved_unmanaged: 0, preserved_non_server: 1 },
@@ -519,11 +519,11 @@ function configureInstallerHarness(answer, outcome) {
   };
   context.PropertiesService = { getScriptProperties: () => ({ setProperty: () => {} }) };
   context.LockService = { getScriptLock: () => ({
-    tryLock: () => { lockAcquireCount++; return outcome !== "lock-busy"; },
+    tryLock: (waitMs) => { lockAcquireCount++; lockWaitMs = waitMs; return outcome !== "lock-busy"; },
     releaseLock: () => { lockReleaseCount++; }
   }) };
   return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; },
-    get lockAcquireCount() { return lockAcquireCount; }, get lockReleaseCount() { return lockReleaseCount; }, alerts, backup };
+    get lockAcquireCount() { return lockAcquireCount; }, get lockReleaseCount() { return lockReleaseCount; }, get lockWaitMs() { return lockWaitMs; }, alerts, backup };
 }
 
 test("installer NO cancellation preserves verified backup and never calls updateContent", () => {
@@ -550,6 +550,7 @@ test("installer does not write when the script lock is already held", () => {
     assert.equal(result.write_performed, false);
     assert.equal(h.updateCalls, 0);
     assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
     assert.equal(h.lockReleaseCount, 0);
   } finally {
     for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
@@ -563,6 +564,7 @@ test("installer releases script lock after a successful verified install", () =>
     assert.equal(result.status, "INSTALLED_AND_VERIFIED");
     assert.equal(h.updateCalls, 1);
     assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
     assert.equal(h.lockReleaseCount, 1);
   } finally {
     for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
@@ -576,6 +578,7 @@ test("installer releases script lock when update result is uncertain", () => {
     assert.equal(result.status, "UPDATE_RESULT_UNCERTAIN");
     assert.equal(h.updateCalls, 1);
     assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
     assert.equal(h.lockReleaseCount, 1);
   } finally {
     for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
@@ -589,6 +592,7 @@ test("installer releases script lock when post-write read-back is unavailable", 
     assert.equal(result.status, "POST_WRITE_VERIFICATION_UNAVAILABLE");
     assert.equal(h.updateCalls, 1);
     assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
     assert.equal(h.lockReleaseCount, 1);
   } finally {
     for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
@@ -642,7 +646,7 @@ function configureRollbackHarness(answer, outcome) {
   const selectedEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(oldProject) + ", 'sheet-123', '2026-11-27T00:00:00.000Z')", context);
   const currentEnvelope = vm.runInContext("di3BuildAppsScriptSourceBackupEnvelope_(" + JSON.stringify(baseline) + ", 'sheet-123', '2026-11-28T00:00:00.000Z')", context);
   let readCount = 0, updateCalls = 0, alerts = [], selectedBackupReadCount = 0,
-    selectedBackupMode = "normal", lockAcquireCount = 0, lockReleaseCount = 0;
+    selectedBackupMode = "normal", lockAcquireCount = 0, lockReleaseCount = 0, lockWaitMs = null;
   context.SpreadsheetApp = { getUi: () => ({
     Button: { OK: "OK", CANCEL: "CANCEL", YES: "YES", NO: "NO" },
     ButtonSet: { OK_CANCEL: "OK_CANCEL", YES_NO: "YES_NO", OK: "OK" },
@@ -678,7 +682,7 @@ function configureRollbackHarness(answer, outcome) {
   }) };
   return { get readCount() { return readCount; }, get updateCalls() { return updateCalls; },
     get selectedBackupReadCount() { return selectedBackupReadCount; },
-    get lockAcquireCount() { return lockAcquireCount; }, get lockReleaseCount() { return lockReleaseCount; },
+    get lockAcquireCount() { return lockAcquireCount; }, get lockReleaseCount() { return lockReleaseCount; }, get lockWaitMs() { return lockWaitMs; },
     set selectedBackupMode(value) { selectedBackupMode = value; }, alerts };
 }
 
@@ -691,6 +695,7 @@ test("rollback does not write when the shared script lock is already held", () =
     assert.equal(h.updateCalls, 0);
     assert.equal(h.selectedBackupReadCount, 1);
     assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
     assert.equal(h.lockReleaseCount, 0);
   } finally {
     for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
@@ -704,6 +709,7 @@ test("rollback releases the shared script lock after verified restore", () => {
     assert.equal(result.status, "ROLLED_BACK_AND_VERIFIED");
     assert.equal(h.updateCalls, 1);
     assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
     assert.equal(h.lockReleaseCount, 1);
   } finally {
     for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
@@ -723,6 +729,7 @@ test("rollback releases the shared script lock when update result is uncertain",
     assert.equal(result.status, "ROLLBACK_RESULT_UNCERTAIN");
     assert.equal(h.updateCalls, 1);
     assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
     assert.equal(h.lockReleaseCount, 1);
   } finally {
     for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
@@ -736,6 +743,7 @@ test("rollback releases the shared script lock when post-write read-back is unav
     assert.equal(result.status, "ROLLBACK_VERIFICATION_UNAVAILABLE");
     assert.equal(h.updateCalls, 1);
     assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000);
     assert.equal(h.lockReleaseCount, 1);
   } finally {
     for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key];
@@ -765,7 +773,8 @@ test("installer final fingerprint guard blocks concurrent project edits and rele
   try {
     assert.throws(() => vm.runInContext("di3InstallLatestGitHubReleaseWithConfirmation()", context), /проект изменился после подтверждения/);
     assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2);
-    assert.equal(h.lockAcquireCount, 1); assert.equal(h.lockReleaseCount, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000); assert.equal(h.lockReleaseCount, 1);
   } finally { for (const key of ["di3PrepareGitHubInstallPreview", "di3GetAppsScriptProjectContent_", "di3CreateAppsScriptSourceBackup", "DriveApp", "SpreadsheetApp", "di3GetGitHubInstallCompatibilityReport_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
@@ -774,7 +783,8 @@ test("rollback final fingerprint guard blocks concurrent project edits and relea
   try {
     assert.throws(() => vm.runInContext("di3RollbackAppsScriptCodeWithConfirmation()", context), /проект изменился после создания резервной копии/);
     assert.equal(h.updateCalls, 0); assert.equal(h.readCount, 2);
-    assert.equal(h.lockAcquireCount, 1); assert.equal(h.lockReleaseCount, 1);
+    assert.equal(h.lockAcquireCount, 1);
+    assert.equal(h.lockWaitMs, 1000); assert.equal(h.lockReleaseCount, 1);
   } finally { for (const key of ["SpreadsheetApp", "di3GetAppsScriptProjectContent_", "di3ReadVerifiedRollbackBackup_", "di3CreateAppsScriptSourceBackup", "di3ReadAndVerifyInstallBackup_", "di3UpdateAppsScriptProjectContent_", "PropertiesService", "LockService"]) delete context[key]; }
 });
 
