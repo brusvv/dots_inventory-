@@ -656,5 +656,6 @@ function di3RefreshDependentCatalogViews_() {
     results.fifo_history_products = di3RefreshFifoHistoryProductOptions();
   }
   if (ss.getSheetByName(DI3_PRODUCT_FORM_SHEET)) results.product_form_options = di3RefreshProductFormValidations();
+  if (ss.getSheetByName(DI3_ORDER_FORM_SHEET)) results.order_form_options = di3RefreshOrderFormValidations();
   return results;
 }
