@@ -68,7 +68,7 @@ Branch HEAD at update: `e75ecf814aff7cbc07c08b9462e47c5f948c7a06`
 - [x] Extend the runtime probe to report manifest timezone/OAuth scopes, project fingerprint, trigger metadata, deployment version metadata, Script Properties key names only, and backup payload/Drive metadata/folder membership.
 - [x] Harden OAuth-authenticated Apps Script API reads in the probe with `followRedirects: false`.
 - [x] Strengthen snapshot auditor backup acceptance to require valid Drive metadata and configured-folder membership.
-- [x] Add regression coverage for probe redirect behavior and invalid backup metadata/folder membership; Apps Script quality gates passed 8/8.
+- [x] Add regression coverage for probe redirect behavior and invalid backup metadata/folder membership; Apps Script quality gates passed 8/8. Current verified branch HEAD `4aae90bad96d73a73d98b741f9000fc01d4acd5a`: Release Pipeline, quality gates and package build all PASS.
 - [ ] Obtain explicit approval before adding/removing the temporary probe file in the exact disposable bound project.
 - [x] Identify Dots beta 4 as the test workbook.
 - [x] Confirm separate bound Apps Script Script ID is recorded by owner.
