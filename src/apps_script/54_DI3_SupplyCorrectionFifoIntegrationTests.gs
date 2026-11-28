@@ -42,6 +42,14 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     return di3BuildSupplyCorrectionEffectiveFifoSnapshot_(ledgerRows, details, lots, map);
   }
 
+  test("correction operation lookup reads only operations referenced by relation events", function () {
+    var source = di3ReadSupplyCorrectionOperationRows_.toString();
+    equal(source.indexOf('di3ReadRowsByColumnValues_("Operations", operationIdIndex, keys)') >= 0, true);
+    equal(source.indexOf('di3ReadTableValues_("Operations")'), -1);
+    var relationMap = di3ReadSupplyCorrectionEffectiveMovementMap_.toString();
+    equal(relationMap.indexOf('di3ReadSupplyCorrectionOperationRows_(relationRows)') >= 0, true);
+    equal(relationMap.indexOf('di3ReadTableValues_("Operations")'), -1);
+  });
   test("REPLACE excludes source ledger, detail and lot while retaining replacement", function () {
     var date = "2026-01-02T09:00:00Z";
     var rows = [ledger("SRC", "P1", 10, date), ledger("REPL", "P1", 10, date, date)];
