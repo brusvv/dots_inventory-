@@ -220,6 +220,7 @@ function di3BuildSupplyCorrectionSourceMap_(receiptOperation, receiptPayload, le
       remaining_quantity: lot[13],
       unit_cost: Number(line.unit_cost),
       total_cost_minor: Number(line.total_cost_minor),
+      cost_status: String(line.cost_status),
       effective_at: new Date(line.effective_at).toISOString(),
       recorded_at: new Date(line.recorded_at).toISOString(),
       ledger_sequence: Number(ledger[12]),
