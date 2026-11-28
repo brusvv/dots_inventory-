@@ -824,7 +824,7 @@ test("preserves installed updater modules for older branches without branch sele
     "src/apps_script/46_DI3_GitHubCodeRollback.gs": "function oldRollback() {}"
   };
   const tree = Object.entries(sources).map(([path, source]) => ({
-    path, type: "blob", size: Buffer.byteLength(source),
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
     sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
   }));
   const manifest = vm.runInContext(
