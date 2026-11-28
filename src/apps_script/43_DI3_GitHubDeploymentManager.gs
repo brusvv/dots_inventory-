@@ -297,9 +297,14 @@ function di3FetchGitHubAsset_(asset, expectedName) {
 /** Validate a user-selected branch name before it is used in GitHub API or raw URLs. */
 function di3ValidateGitHubBranchName_(branch) {
   var value = String(branch || "").trim();
-  if (!/^(feature|release|hotfix)\/[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value) ||
-      value.indexOf("//") !== -1 || /(^|\/)\.{1,2}(?=\/|$)/.test(value) || value.charAt(value.length - 1) === "/") {
-    throw new Error("Разрешены только ветки feature/*, release/* и hotfix/* с корректным именем.");
+  var components = value.split("/");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value) ||
+      value.indexOf("//") !== -1 || value.indexOf("..") !== -1 ||
+      value.indexOf("@{") !== -1 || value.charAt(value.length - 1) === "/" ||
+      components.some(function (part) {
+        return !part || part.charAt(0) === "." || part.charAt(part.length - 1) === "." || /\.lock$/i.test(part);
+      })) {
+    throw new Error("Недопустимое имя GitHub-ветки. Разрешены безопасные имена веток с буквами, цифрами, точками, дефисами и слешами.");
   }
   return value;
 }
@@ -476,7 +481,7 @@ function di3SelectGitHubSourceBranch() {
   if (response.status !== "OK" || !Array.isArray(response.data)) throw new Error("Не удалось получить список веток GitHub.");
   var allowed = response.data.map(function (item) { return String(item && item.name || ""); })
     .filter(function (name) { try { di3ValidateGitHubBranchName_(name); return true; } catch (ignore) { return false; } });
-  if (!allowed.length) throw new Error("В репозитории нет веток feature/*, release/* или hotfix/*.");
+  if (!allowed.length) throw new Error("В репозитории нет веток с поддерживаемыми безопасными именами.");
   var ui = SpreadsheetApp.getUi(), current = di3GetSelectedGitHubBranch_();
   var prompt = ui.prompt("GitHub · выбор ветки",
     "Введи точное имя ветки. Доступные ветки (первые 40):\n" + allowed.slice(0, 40).join("\n") +
