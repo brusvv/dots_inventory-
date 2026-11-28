@@ -355,6 +355,17 @@ function di3RunSupplyFullEditUnitTests() {
       di3BuildSupplyFullEditItemProjectionPlan_([], [""], [], "S1");
     }, /удаляемый supply_item_id/);
   });
+  test("full edit handler returns the planned removal count and does not reference an undefined collection", function () {
+    var source = di3ApplySupplyDocumentEditOperation_.toString();
+    includes(source, "removed_item_rows: itemPlan.remove_row_numbers.length");
+    equal(source.indexOf("removeRows.length"), -1);
+  });
+  test("received full-edit commit verifies receipt payload without loading full stock audit", function () {
+    var source = di3ApplySupplyDocumentEditOperation_.toString();
+    includes(source, "includeStockAudit: false");
+    includes(source, "includeReceiptPayload: true");
+    includes(source, "receiptOperation: receipt");
+  });
   test("full edit handler resolves all item IDs in one batch before parent projection write", function () {
     var source = di3ApplySupplyDocumentEditOperation_.toString();
     equal(source.indexOf("di3ReadRowsByColumnValues_(\"V3_SupplyItems\", 0, lookupIds)") !== -1, true);
