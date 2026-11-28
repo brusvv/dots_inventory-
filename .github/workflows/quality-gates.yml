@@ -35,6 +35,8 @@ jobs:
         run: node tools/run_order_domain_tests.js
       - name: Supply workspace UX tests
         run: node tools/run_supply_workspace_ux_tests.js
+      - name: Catalog and supply domain tests
+        run: node tools/run_catalog_supply_tests.js
       - name: Historical supply unit tests
         run: node tools/run_historical_supply_tests.js
       - name: Catalog and order UX tests
