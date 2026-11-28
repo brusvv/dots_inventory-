@@ -9,7 +9,7 @@ on:
       - "tools/**"
       - ".github/workflows/**"
   pull_request:
-    branches: [main, feature/github-runtime-acceptance]
+    branches: [main, feature/github-runtime-acceptance, feature/github-preview-releases]
 
 permissions:
   contents: read
