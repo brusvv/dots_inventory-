@@ -144,6 +144,15 @@ function di3RollbackAppsScriptCodeWithConfirmation() {
       current_backup: verifiedCurrentBackup };
   }
 
+  // Share the same project-wide lock as the confirmed installer. This prevents
+  // install and rollback from overwriting one another after separate confirmations.
+  var rollbackLock = LockService.getScriptLock();
+  if (!rollbackLock.tryLock(1000)) {
+    return { status: "LOCK_NOT_ACQUIRED", write_performed: false,
+      selected_backup: selectedBackup, current_backup: verifiedCurrentBackup,
+      error: "Другой процесс установки или отката уже выполняется. Повтори операцию после его завершения." };
+  }
+  try {
   // Re-open and fully revalidate the selected Drive backup after YES. This closes
   // the confirmation-dialog window in which the file, its metadata or its folder
   // membership could have changed after the initial selection.
@@ -213,6 +222,9 @@ function di3RollbackAppsScriptCodeWithConfirmation() {
     "Backup состояния до отката: " + verifiedCurrentBackup.url +
     "\n\nДанные таблицы и развёртывания не затронуты.", ui.ButtonSet.OK); } catch (ignoreRollbackSuccessAlert) {}
   return result;
+  } finally {
+    rollbackLock.releaseLock();
+  }
 }
 
 function di3RollbackAppsScriptCodeFromMenu() {
