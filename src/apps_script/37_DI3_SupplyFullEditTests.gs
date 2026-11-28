@@ -157,6 +157,83 @@ function di3RunSupplyFullEditUnitTests() {
     includes(di3AuditSupplyForFullEdit.toString(), "di3BuildSupplyFullEditSnapshot_(id)");
   });
 
+  test("lightweight full-edit snapshot avoids every stock audit table read", function () {
+    var originals = {
+      getSupply: di3GetSupplyById_,
+      getItems: di3GetSupplyItems_,
+      getReceipt: di3GetSupplyReceiptOperation_,
+      readOne: di3ReadRowsByColumnValue_,
+      readMany: di3ReadRowsByColumnValues_
+    };
+    var readTables = [];
+    var supply = {};
+    DI3_TABLE_SCHEMAS.V3_Supplies.forEach(function (header) { supply[header] = ""; });
+    supply.supply_id = "S-LIGHT";
+    supply.supply_number = "26NR001";
+    supply.status = DI3_SUPPLY_STATUS.CREATED;
+    supply.row_number = 2;
+    try {
+      di3GetSupplyById_ = function () { return supply; };
+      di3GetSupplyItems_ = function () { return []; };
+      di3GetSupplyReceiptOperation_ = function () { throw new Error("Receipt lookup must be skipped"); };
+      di3ReadRowsByColumnValue_ = function (table) { readTables.push(table); return []; };
+      di3ReadRowsByColumnValues_ = function (table) { readTables.push(table); return []; };
+      var result = di3BuildSupplyFullEditSnapshot_("S-LIGHT", {
+        includeStockAudit: false,
+        includeReceiptPayload: false,
+        includeReceiptOperation: false,
+        supply: supply
+      });
+      equal(readTables.length, 0);
+      equal(result.counts.ledger_movements, 0);
+      equal(result.counts.fifo_lots, 0);
+      equal(result.counts.fifo_allocations, 0);
+      equal(result.counts.cost_history_rows, 0);
+      equal(!!result.fingerprint, true);
+    } finally {
+      di3GetSupplyById_ = originals.getSupply;
+      di3GetSupplyItems_ = originals.getItems;
+      di3GetSupplyReceiptOperation_ = originals.getReceipt;
+      di3ReadRowsByColumnValue_ = originals.readOne;
+      di3ReadRowsByColumnValues_ = originals.readMany;
+    }
+  });
+
+  test("default full-edit audit snapshot still reads stock and FIFO evidence", function () {
+    var originals = {
+      getSupply: di3GetSupplyById_,
+      getItems: di3GetSupplyItems_,
+      getReceipt: di3GetSupplyReceiptOperation_,
+      readOne: di3ReadRowsByColumnValue_,
+      readMany: di3ReadRowsByColumnValues_
+    };
+    var readTables = [];
+    var supply = {};
+    DI3_TABLE_SCHEMAS.V3_Supplies.forEach(function (header) { supply[header] = ""; });
+    supply.supply_id = "S-AUDIT";
+    supply.supply_number = "26NR002";
+    supply.status = DI3_SUPPLY_STATUS.CREATED;
+    supply.row_number = 3;
+    try {
+      di3GetSupplyById_ = function () { return supply; };
+      di3GetSupplyItems_ = function () { return []; };
+      di3GetSupplyReceiptOperation_ = function () { return null; };
+      di3ReadRowsByColumnValue_ = function (table) { readTables.push(table); return []; };
+      di3ReadRowsByColumnValues_ = function (table) { readTables.push(table); return []; };
+      var result = di3BuildSupplyFullEditSnapshot_("S-AUDIT");
+      equal(readTables.indexOf("StockLedger") !== -1, true);
+      equal(readTables.indexOf("StockLots") !== -1, true);
+      equal(result.counts.ledger_movements, 0);
+      equal(!!result.fingerprint, true);
+    } finally {
+      di3GetSupplyById_ = originals.getSupply;
+      di3GetSupplyItems_ = originals.getItems;
+      di3GetSupplyReceiptOperation_ = originals.getReceipt;
+      di3ReadRowsByColumnValue_ = originals.readOne;
+      di3ReadRowsByColumnValues_ = originals.readMany;
+    }
+  });
+
   test("full-edit cancel and successful reload can reuse existing form validations", function () {
     var endSource = di3EndFullSupplyEditMode.toString();
     var loadSource = di3LoadSelectedSupplyDraft.toString();
