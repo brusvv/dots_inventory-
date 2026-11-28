@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-28  
 Working branch: `feature/github-preview-releases`  
-Branch HEAD at update: `2a33c5532e8bffcf7bef1a0458f8064f390111fd`
+Branch HEAD at update: `e75ecf814aff7cbc07c08b9462e47c5f948c7a06`
 
 > This is the execution checklist. Mark an item `[x]` only when the stated evidence exists. `[ ]` means not done or not evidenced; `[~]` means partially completed; `[!]` means blocked/deferred. Source implementation, CI, and live Google Apps Script acceptance are separate evidence classes.
 
@@ -31,7 +31,7 @@ Branch HEAD at update: `2a33c5532e8bffcf7bef1a0458f8064f390111fd`
 
 - [x] Re-open and fully revalidate the selected rollback backup after YES: file identity, name, metadata, Script ID, folder membership, envelope/hash, and target fingerprint are checked again immediately before update.
 - [x] Regression tests: selected backup is re-read after confirmation; if it becomes unavailable before write, rollback fails closed and makes zero `projects.updateContent` calls.
-- [x] CI for source/test state `f818dc2dc72663f32579f3aee534abc8c2af294e`: Release Pipeline, Apps Script quality gates and package build all passed. Release Pipeline includes the corrected selected-backup revalidation tests (57/57).
+- [x] CI for source/test state `05d0fafe634f7bb7086faa2c46df0082468bf085`: Release Pipeline, Apps Script quality gates and package build all passed. Release Pipeline includes rollback revalidation (57/57); snapshot auditor/probe tests 8/8.
 
 - [x] Source review + regression test: preview preserves exact target `appsscript.json`.
 - [x] Source review + regression test: preview preserves non-`SERVER_JS` files and unmanaged local `SERVER_JS` modules.
@@ -63,8 +63,13 @@ Branch HEAD at update: `2a33c5532e8bffcf7bef1a0458f8064f390111fd`
 - [ ] Preview tag/release explicitly approved and verified.
 - [ ] Stable/RC9 release explicitly approved only after all required gates pass.
 
-## 2. R0 — test environment inventory (read-only)
+## 2. R0 — test environment inventory (runtime inspection read-only; temporary probe insertion is a separately approved source write)
 
+- [x] Extend the runtime probe to report manifest timezone/OAuth scopes, project fingerprint, trigger metadata, deployment version metadata, Script Properties key names only, and backup payload/Drive metadata/folder membership.
+- [x] Harden OAuth-authenticated Apps Script API reads in the probe with `followRedirects: false`.
+- [x] Strengthen snapshot auditor backup acceptance to require valid Drive metadata and configured-folder membership.
+- [x] Add regression coverage for probe redirect behavior and invalid backup metadata/folder membership; Apps Script quality gates passed 8/8. Current verified branch HEAD `4aae90bad96d73a73d98b741f9000fc01d4acd5a`: Release Pipeline, quality gates and package build all PASS.
+- [ ] Obtain explicit approval before adding/removing the temporary probe file in the exact disposable bound project.
 - [x] Identify Dots beta 4 as the test workbook.
 - [x] Confirm separate bound Apps Script Script ID is recorded by owner.
 - [x] Confirm initial Bootstrap reported 47/47 modules installed and verified.
