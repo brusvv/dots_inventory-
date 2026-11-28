@@ -512,9 +512,12 @@ function configureInstallerHarness(answer, outcome) {
     ButtonSet: { YES_NO: "YES_NO", OK: "OK" }
   }) };
   context.di3GetGitHubInstallCompatibilityReport_ = () => ({ status: "READY", issues: [] });
-  context.di3UpdateAppsScriptProjectContent_ = () => {
+  context.di3UpdateAppsScriptProjectContent_ = (_scriptId, targetFiles) => {
     updateCalls++;
     if (outcome === "update-uncertain") throw new Error("simulated transport timeout");
+    // Model the Apps Script API write so the subsequent getContent read-back
+    // observes the exact files submitted to updateContent.
+    project.content.files = targetFiles.map(file => ({ ...file }));
     return { updateTime: "2026-11-28T00:00:00Z" };
   };
   context.PropertiesService = { getScriptProperties: () => ({ setProperty: () => {} }) };
