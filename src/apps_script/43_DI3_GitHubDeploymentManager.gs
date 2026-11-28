@@ -483,12 +483,39 @@ function di3GetGitHubBranchManifest_(branch, pinnedCommit) {
     published_at: "", prerelease: true, channel: "branch", source_branch: branch }, manifest: manifest, validation: validation };
 }
 
-function di3SelectGitHubSourceBranch() {
+function di3GetGitHubBranchNames_() {
   var config = di3GetGitHubDeploymentConfig_();
-  var response = di3FetchGitHubJson_("https://api.github.com/repos/" + config.repository + "/branches?per_page=100");
-  if (response.status !== "OK" || !Array.isArray(response.data)) throw new Error("Не удалось получить список веток GitHub.");
-  var allowed = response.data.map(function (item) { return String(item && item.name || ""); })
-    .filter(function (name) { try { di3ValidateGitHubBranchName_(name); return true; } catch (ignore) { return false; } });
+  var apiBase = "https://api.github.com/repos/" + config.repository + "/branches?per_page=100&page=";
+  var allowed = [];
+  var seen = {};
+  // GitHub paginates the branches endpoint. Read up to 1,000 entries so a
+  // branch outside page 1 is still selectable; fail closed beyond that cap.
+  for (var page = 1; page <= 10; page++) {
+    var response = di3FetchGitHubJson_(apiBase + page);
+    if (response.status !== "OK" || !Array.isArray(response.data)) {
+      throw new Error("Не удалось получить страницу " + page + " списка веток GitHub.");
+    }
+    response.data.forEach(function (item) {
+      var name = String(item && item.name || "");
+      try {
+        di3ValidateGitHubBranchName_(name);
+        if (!seen[name]) { seen[name] = true; allowed.push(name); }
+      } catch (ignoreUnsafeBranch) {}
+    });
+    if (response.data.length < 100) return allowed;
+  }
+  var overflow = di3FetchGitHubJson_(apiBase + "11");
+  if (overflow.status !== "OK" || !Array.isArray(overflow.data)) {
+    throw new Error("Не удалось проверить границу пагинации списка веток GitHub.");
+  }
+  if (overflow.data.length) {
+    throw new Error("В репозитории более 1 000 веток; выбор остановлен, чтобы не показывать неполный список.");
+  }
+  return allowed;
+}
+
+function di3SelectGitHubSourceBranch() {
+  var allowed = di3GetGitHubBranchNames_();
   if (!allowed.length) throw new Error("В репозитории нет веток с поддерживаемыми безопасными именами.");
   var ui = SpreadsheetApp.getUi(), current = di3GetSelectedGitHubBranch_();
   var prompt = ui.prompt("GitHub · выбор ветки",
