@@ -205,6 +205,35 @@ The latest source CI run `46087315910` passed after these changes. The supply li
 
 The detailed next-stage correction design is in [SUPPLY_CORRECTION_IMPLEMENTATION_SPEC.md](SUPPLY_CORRECTION_IMPLEMENTATION_SPEC.md). It defines the immutable correction payload, append-only source-to-replacement relation, correction-aware FIFO event stream, operation phases and runtime acceptance matrix. This is a specification only; the correction handler, new event schema, and replay integration have not yet been implemented.
 
+#### SC-01 follow-up source audit — correction relation and cost-history semantics
+
+A repository-wide scan of all **47 Apps Script modules** on this branch found
+`ProductCostHistory` references only in:
+- `12_DI3_SupplyReceiving.gs`: append-only original receipt cost-history rows;
+- `36_DI3_SupplyFullEdit.gs`: read-only audit snapshot lookup by original receipt source keys.
+
+No product catalogue, dashboard, finance or order workflow currently reads this
+table directly. The correction implementation must still preserve the table's
+history and make correction supersession auditable; it must not invent a new
+current-cost consumer or change FIFO valuation to depend on ProductCostHistory.
+The actual FIFO cost source remains the effective StockLots/event stream.
+
+The spec was tightened before implementation to resolve three edge cases:
+- correction relation rows now distinguish `REPLACE`, `REMOVE` and `ADD`;
+  product identity changes are represented as REMOVE + ADD, not a cross-product
+  replacement;
+- a relation is effective for ordinary replay only when both its relation event
+  and linked Operations row are COMMITTED; rejected/abandoned attempts have an
+  ABORTED terminal relation event;
+- replacement FIFO events retain the original receipt `recorded_at` tie-break
+  timestamp while receiving a new ledger sequence. The correction's actual
+  recording time stays in the correction operation/relation audit. This avoids
+  reordering same-effective-time receipts and sales merely because a correction
+  was recorded later.
+
+These are specification clarifications only. No Apps Script module, schema,
+workbook, stock projection or runtime state was changed.
+
 ### Deferred pending measurements or design
 
 - S-11 (register refresh): defer structural formatting optimizations until Apps Script runtime measurements exist; avoid introducing stale presentation state.
