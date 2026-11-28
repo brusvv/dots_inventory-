@@ -86,7 +86,7 @@ function di3RunSupplyCorrectionUnitTests() {
     ];
     mutations.forEach(function (mutate) {
       var data = fixture(); mutate(data);
-      throws(function () { audit(data); }, /StockLedger|операции/);
+      throws(function () { audit(data); }, /StockLedger|операцией/);
     });
   });
   test("source audit rejects detail and lot identity/cost mismatches", function () {
