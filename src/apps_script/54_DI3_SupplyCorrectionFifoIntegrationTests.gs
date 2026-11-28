@@ -60,6 +60,24 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     equal(result.affected_product_ids.join(","), "P1");
   });
 
+  test("F-06 target lot cache zeros superseded lots after preserving them in source snapshot", function () {
+    var result = di3BuildSupplyCorrectionTargetLotRemainingMap_(
+      [{ lot_id: "LOT-REPL", remaining_quantity: 7 }],
+      [lot("LOT-SRC", "P1", "SRC", 10), lot("LOT-REPL", "P1", "REPL", 12)],
+      ["SRC"]
+    );
+    equal(result["LOT-SRC"], 0);
+    equal(result["LOT-REPL"], 7);
+  });
+
+  test("F-06 target lot cache fails if an effective lot is absent from replay", function () {
+    throws(function () {
+      di3BuildSupplyCorrectionTargetLotRemainingMap_([], [
+        lot("LOT-ACTIVE", "P1", "ACTIVE", 10)
+      ], ["OLD"]);
+    }, /missing from candidate FIFO replay/);
+  });
+
   test("REMOVE keeps no superseded receipt and still exposes affected product scope", function () {
     var date = "2026-01-02T09:00:00Z";
     var result = snapshot([ledger("SRC", "P1", 10, date)], [detail("SRC", "IN")],
