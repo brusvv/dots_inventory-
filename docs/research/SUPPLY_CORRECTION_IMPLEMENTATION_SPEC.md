@@ -288,3 +288,24 @@ replacement movement type/date and input immutability.
 called by the operation executor or normal FIFO rebuild; no live correction
 can be committed and no active FIFO projection is changed. SC-03 integration
 and SC-04 commit/recovery remain pending.
+
+
+### SC-03 preview quality-gate verification
+
+The candidate preview and its tests passed in
+[GitHub Actions #46095508594](https://github.com/brusvv/dots_inventory-/actions/runs/46095508594),
+source commit \`591020b6af15aecef8a24466c2251f17800933df\`.
+
+- Apps Script syntax: **61/61** modules.
+- Snapshot auditor: **8/8**.
+- FIFO replay: **46/46**.
+- Order domain: **22/22**.
+- Supply domain, lifecycle and correction: **120/120**.
+- Catalog/order UX: **14/14**.
+- System safety/operation: **39/39**.
+- Warehouse dashboard: **11/11**.
+- Finance schema: **4/4**.
+
+Total automated assertions: **264 passed, 0 failed**. The test run validates
+the read-only candidate preview only; it does not establish Apps Script
+runtime acceptance or enable live correction execution.
