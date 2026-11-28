@@ -33,12 +33,8 @@ jobs:
         run: node tools/run_fifo_replay_tests.js
       - name: Order domain tests
         run: node tools/run_order_domain_tests.js
-      - name: Supply workspace UX tests
-        run: node tools/run_supply_workspace_ux_tests.js
-      - name: Catalog and supply domain tests
-        run: node tools/run_catalog_supply_tests.js
-      - name: Historical supply unit tests
-        run: node tools/run_historical_supply_tests.js
+      - name: Supply domain and lifecycle regression tests
+        run: node tools/run_supply_domain_tests.js
       - name: Catalog and order UX tests
         run: node tools/run_catalog_order_ux_tests.js
       - name: System safety and operation tests
