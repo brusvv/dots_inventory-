@@ -844,6 +844,28 @@ test("rejects branch source content that does not match its Git blob SHA", () =>
   ), /Git blob SHA-1/);
 });
 
+test("branch-selector-capable source cannot replace only part of the updater module set", () => {
+  const branch = "feature/partial-updater";
+  const commit = "c".repeat(40);
+  const sources = {
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;",
+    "src/apps_script/43_DI3_GitHubDeploymentManager.gs":
+      'var DI3_GITHUB_UPDATER_VERSION = "0.2.0"; function di3SelectGitHubSourceBranch() {}',
+    "src/apps_script/44_DI3_GitHubInstallPreview.gs": "function preview() {}",
+    "src/apps_script/45_DI3_GitHubConfirmedInstaller.gs": "function install() {}"
+  };
+  const tree = Object.entries(sources).map(([path, source]) => ({
+    path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
+    sha: crypto.createHash("sha1").update("blob " + Buffer.byteLength(source) + String.fromCharCode(0) + source, "utf8").digest("hex")
+  }));
+  assert.throws(() => vm.runInContext(
+    "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
+      JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
+    context
+  ), /полный согласованный набор updater-модулей/);
+});
+
 test("preserves installed updater modules for older branches without branch selector support", () => {
   const branch = "feature/older-business-change";
   const commit = "a".repeat(40);
