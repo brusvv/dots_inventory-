@@ -892,7 +892,7 @@ test("loads paginated GitHub branch lists beyond the first 100 entries", () => {
 test("fails closed when GitHub branch count exceeds the 1,000-entry selector limit", () => {
   let requestedPages = 0;
   context.di3FetchGitHubJson_ = url => {
-    const pageMatch = String(url).match(/[?&]page=(\\d+)/);
+    const pageMatch = String(url).match(/[?&]page=(\d+)/);
     const page = pageMatch ? Number(pageMatch[1]) : 0;
     requestedPages++;
     if (page >= 1 && page <= 10) {
