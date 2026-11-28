@@ -700,9 +700,9 @@ test("builds a branch manifest pinned to one immutable commit and validates it",
   const branch = "feature/branch-test";
   const commit = "b".repeat(40);
   const sources = {
-    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });\\n',
-    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;\\n",
-    "src/apps_script/01_Module.gs": "function alpha() { return 1; }\\n"
+    "src/apps_script/00_DI3_AppConfig.gs": 'var DI3_APP_CONFIG = Object.freeze({ TIME_ZONE: "Europe/Moscow" });\n',
+    "src/apps_script/33_DI3_SchemaVersioning.gs": "var DI3_SCHEMA_VERSION = 4;\n",
+    "src/apps_script/01_Module.gs": "function alpha() { return 1; }\n"
   };
   const tree = Object.entries(sources).map(([path, source]) => ({
     path, type: "blob", mode: "100644", size: Buffer.byteLength(source),
