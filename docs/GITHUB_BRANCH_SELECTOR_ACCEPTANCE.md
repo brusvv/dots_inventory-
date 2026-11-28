@@ -202,7 +202,7 @@ GitHub Actions run #69: **success**; Git tree preflight/integrity fixtures: 9 te
 
 ## 7I. D-09-N11 — сериализация установки и отката
 
-Статус: **IMPLEMENTED; UNIT/CI PENDING; APPS SCRIPT RUNTIME NOT RUN**.
+Статус: **IMPLEMENTED; UNIT/CI PASS (run #83); APPS SCRIPT RUNTIME NOT RUN**.
 
 После явного YES установщик и откат получают один и тот же `LockService.getScriptLock()` с ограниченным ожиданием 1000 мс. Блокировка удерживается на протяжении последней проверки fingerprint/совместимости, повторной проверки backup для отката, `projects.updateContent`, post-write read-back и фиксации результата. Она освобождается через `finally`, включая ветки с неопределённым результатом записи и ошибками read-back.
 
@@ -233,3 +233,6 @@ GitHub Actions run #69: **success**; Git tree preflight/integrity fixtures: 9 te
 | N10 installer NO cancellation | PASS | Probe cancellation подтверждён; полный installer NO fingerprint test не выполнялся |
 
 Все перечисленные CI-тесты подтверждены run #69: https://github.com/brusvv/dots_inventory-/actions/runs/46178046087. Общий D-09 runtime acceptance остаётся незавершённым до выполнения оставшихся сценариев в disposable Apps Script project.
+
+
+Проверка CI после исправления installer harness: run #83 — PASS (syntax check 56 `.gs`, deployment-manager regression suite, Git tree preflight fixtures). В harness mock теперь имитирует успешный `projects.updateContent`, заменяя содержимое тестового проекта перед post-write read-back. Это устранило ложный `POST_WRITE_VERIFICATION_FAILED`; production-код установщика для исправления теста не менялся. Run: https://github.com/brusvv/dots_inventory-/actions/runs/46181968966. Runtime concurrency test в disposable Apps Script project остаётся невыполненным.
