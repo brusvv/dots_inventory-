@@ -63,6 +63,7 @@ function di3ValidateSupplyCorrectionRelationMetadata_(metadata) {
   if (!metadata.effective_at || !Number.isFinite(effective.getTime())) {
     throw new Error("SupplyCorrectionEvents: некорректный effective_at для relation_id " + metadata.relation_id + ".");
   }
+  metadata.effective_at = effective.toISOString();
   return metadata;
 }
 
@@ -95,6 +96,7 @@ function di3BuildSupplyCorrectionEffectiveMovementMap_(relationRows, operationRo
 
   var groups = Object.create(null);
   var sequenceIndex = Object.create(null);
+  var eventIdIndex = Object.create(null);
   (relationRows || []).forEach(function (rowOrMatch) {
     var row = di3SupplyCorrectionRelationValues_(rowOrMatch);
     var eventId = String(row[0] || "");
@@ -104,6 +106,8 @@ function di3BuildSupplyCorrectionEffectiveMovementMap_(relationRows, operationRo
     if (!eventId || !relationId || !Number.isSafeInteger(sequence) || sequence <= 0) {
       throw new Error("SupplyCorrectionEvents: отсутствует event_id/relation_id или некорректен event_sequence.");
     }
+    if (eventIdIndex[eventId]) throw new Error("SupplyCorrectionEvents: повторяется event_id " + eventId + ".");
+    eventIdIndex[eventId] = true;
     if (DI3_SUPPLY_CORRECTION_EVENT_TYPES_.indexOf(eventType) === -1) {
       throw new Error("SupplyCorrectionEvents: неизвестный event_type " + eventType + ".");
     }
@@ -240,8 +244,14 @@ function di3AppendSupplyCorrectionRelationEvents_(relations, eventType, operatio
       existingByKey[key] = row;
     });
     var sequenceValues = di3ReadTableColumnValues_("SupplyCorrectionEvents", 5);
+    var seenSequences = Object.create(null);
     var maxSequence = sequenceValues.reduce(function (max, value) {
-      return Math.max(max, Number(value) || 0);
+      var sequence = Number(value);
+      if (!Number.isSafeInteger(sequence) || sequence <= 0 || seenSequences[sequence]) {
+        throw new Error("SupplyCorrectionEvents: обнаружен пустой, некорректный или повторный event_sequence. Запись остановлена.");
+      }
+      seenSequences[sequence] = true;
+      return Math.max(max, sequence);
     }, 0);
     var createdAt = new Date();
     var rowsToAppend = [];
@@ -264,6 +274,7 @@ function di3AppendSupplyCorrectionRelationEvents_(relations, eventType, operatio
       var details = detailsByRelationId && detailsByRelationId[metadata.relation_id] != null
         ? detailsByRelationId[metadata.relation_id] : (relation.details || {});
       var detailsJson = JSON.stringify(details);
+      if (detailsJson.length > 45000) throw new Error("SupplyCorrectionEvents.details_json превышает безопасный размер ячейки.");
       if (existingByKey[key]) {
         var prior = existingByKey[key];
         var priorMetadata = di3SupplyCorrectionRelationMetadata_(prior);
