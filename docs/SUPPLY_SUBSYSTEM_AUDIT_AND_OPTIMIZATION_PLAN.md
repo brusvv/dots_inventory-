@@ -143,6 +143,31 @@ Existing tests cover financial allocation, pack identity, state transitions, dat
 - No optimization may change financial allocation, FIFO event ordering, business timestamps, lot identity, return linkage, period guards or operation recovery semantics.
 - Performance claims require Apps Script runtime measurements on a disposable restored workbook. Node/source tests are not runtime benchmarks.
 
+## Source changes completed during this audit
+
+The following items have been implemented on this branch; they are source changes only and have not been deployed to a live Apps Script project.
+
+| Finding | Status | Change |
+|---|---|---|
+| S-03 | Implemented | Status-history idempotency now matches supply ID, old/new status, effective timestamp and operation ID. A later re-entry to the same status can be recorded. |
+| S-04 | Implemented | Receipt boundary validates unique item IDs, unique product/pack-variant pairs, positive integer pack size and positive integer pack count. |
+| S-06 | Implemented | Supply loader resolves labels from one preloaded product index; inactive products remain available for historical display and missing products use the saved label snapshot. |
+| S-07 | Implemented | Added batch pack-variant resolver; supply form reuses preloaded product/variant indexes and appends missing variants in one write. |
+| S-08 | Implemented | Receipt cost-history idempotency looks up only source keys for the current receipt. |
+| S-09 | Implemented | Full-edit snapshot retrieves cost-history rows by the supply's original receipt item IDs instead of loading the complete table. |
+| S-10 | Implemented | Current pack variants are grouped by product before updates, avoiding product-by-all-variants nested scans. |
+| S-14 | Implemented | Runtime probe diagnostic label now reflects the current 14-column register. |
+
+Regression tests were added for event-scoped status-history deduplication, receipt line invariants, batched pack-variant creation and supply-loader lookup behaviour. The quality-gates workflow now runs the consolidated supply lifecycle test runner on this feature branch.
+
+A pre-existing CI blocker was also found and repaired while enabling this branch's quality gates: `tools/tests/audit_apps_script_snapshot.test.js` had an invalid regular-expression literal and lacked its `node:crypto` import. This issue was unrelated to the supply implementation but prevented every later regression suite from running.
+
+### Deferred pending measurements or design
+
+- S-11 (register refresh): defer structural formatting optimizations until Apps Script runtime measurements exist; avoid introducing stale presentation state.
+- S-12 (FIFO repository reads): defer batching until C-01 benchmark identifies the dominant reads and thresholds.
+- S-01/S-02/S-05 (SUPPLY_CORRECTION, canonical replay stream and downstream valuation history): remain the main implementation workstream. No received supply has been corrected or replayed.
+
 ## Current conclusion
 
 The subsystem is not ready for stock-affecting correction of an already received supply. The current fail-closed guard is correct and should remain until S-01/S-02/S-05 are implemented and runtime-accepted.
