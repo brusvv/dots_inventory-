@@ -1,6 +1,6 @@
 # SUPPLY_CORRECTION implementation specification
 
-Status: design baseline for SC-01; implementation and runtime execution are not yet enabled.
+Status: SC-01 read-only source mapping audit is implemented and CI-covered. The correction operation, event schema, FIFO replay integration and runtime execution remain disabled.
 Branch: `feature/supply-correction-fifo-replay`
 Date: 2026-11-28
 
@@ -101,6 +101,7 @@ Corrections may be chained. A later correction must supersede the currently effe
 
 - Verify supply status RECEIVED.
 - Verify the original receipt operation is COMMITTED and its immutable payload hash is valid.
+- Verify the current V3_Supplies receipt date/number and every V3_SupplyItems row against the immutable receipt payload.
 - Verify exact source movement/detail/lot mapping for every original receipt line.
 - Capture source supply/document fingerprint and product-scoped stock/FIFO fingerprints.
 - Build corrected document rows and corrected receipt lines using the existing financial planner.
@@ -167,3 +168,38 @@ Minimum source/runtime acceptance:
 - Same-day negative stock compensation.
 - Automatic correction of unrelated supplies or orders.
 - Enabling stock-affecting received-supply edits before runtime acceptance.
+
+
+## 10. SC-01 source audit implementation status
+
+Implemented on `feature/supply-correction-fifo-replay`:
+
+- `src/apps_script/47_DI3_SupplyCorrection.gs` adds
+  `di3AuditSupplyCorrectionSource(supplyId)` and a pure exact-mapping validator.
+- The audit requires a RECEIVED supply, a COMMITTED `SUPPLY_RECEIVE` operation,
+  a valid immutable payload hash, matching supply number/received timestamp,
+  matching current `V3_SupplyItems` rows, and exactly one ledger movement,
+  movement detail and FIFO lot per original receipt line.
+- It verifies operation ownership, event key, product, variant, quantity,
+  effective/recorded timestamps, ledger sequence, cost status, unit cost and
+  total cost in minor units.
+- Missing, duplicate, extra or mismatched source records return BLOCKED; the
+  audit does not repair or quarantine them.
+- `src/apps_script/48_DI3_SupplyCorrectionTests.gs` adds 9 regression tests and
+  `tools/run_supply_domain_tests.js` includes the new suite.
+
+The source audit is read-only: no schema creation, operation registration,
+ledger/lot/cost-history writes, FIFO replay, or document edits. It does not yet
+build a correction candidate or authorize a correction. The existing
+stock-affecting full-edit guard remains in place.
+
+Latest CI for source commit
+`319c842d0d91d7e11f341dcba32da5a20c871b90`:
+[quality gates run 46087880782](https://github.com/brusvv/dots_inventory-/actions/runs/46087880782)
+passed, including Apps Script syntax, all supply lifecycle suites (98/98),
+FIFO replay (46/46), order domain (22/22), catalog/order UX (14/14), system
+safety (39/39), warehouse dashboard (11/11), finance schema (4/4), and snapshot
+auditor tests (8/8).
+
+SC-02 through SC-04 remain unimplemented. No live Apps Script project, Google
+Sheet, Drive file, stock record or FIFO projection was changed.
