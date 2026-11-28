@@ -26,7 +26,10 @@ function di3AuditExportRuntimeSourceSnapshot() {
         Authorization: "Bearer " + ScriptApp.getOAuthToken(),
         Accept: "application/json"
       },
-      muteHttpExceptions: true
+      muteHttpExceptions: true,
+      // This request carries an OAuth bearer token. Never forward it through
+      // an automatic redirect; fail closed on any 3xx response.
+      followRedirects: false
     }
   );
   if (Number(response.getResponseCode()) !== 200) {
