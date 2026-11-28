@@ -180,6 +180,23 @@ Total automated assertions/tests reported by these suites: **228 passed, 0 faile
 
 The branch was also synchronized with the latest `feature/github-preview-releases` base. The merge commit `593ad71f6662521545fe93fdd45b0824b8b00cf5` has the latest preview branch as its second parent; the merge tree preserves the already-tested source state and includes the newer base documentation/source-audit tooling. The branch is now **0 commits behind** the preview base.
 
+### Full-edit form: automatic quantity and financial recalculation
+
+Implemented after the initial audit:
+
+- In `FULL_EDIT` mode, edits or multi-cell pastes intersecting `A12:D31` automatically rebuild the financial preview. This includes product, units per pack, pack count and purchase price.
+- Edits intersecting `B5:B7` also recalculate seller discount, partner discount, shipping allocation and the final document total.
+- The calculation reuses `di3ResolveSupplyFormLines_(false)` and `di3BuildSupplyFinancialPlan_`; it does not create pack variants, save document rows, post ledger movements or execute FIFO.
+- If the user temporarily enters invalid/incomplete values, the previous preview is cleared and the error is placed in the M2 note. This prevents stale calculated values from appearing current.
+- Source tests cover the edited ranges, unit/pack quantity effects, line total, discount/shipping distribution, unit cost and the read-only nature of the automatic preview.
+
+The expected behaviour is:
+- Change units per pack: received units and unit cost are recalculated; pack purchase price and document goods total remain unchanged if pack count and price are unchanged.
+- Change pack count: received units, goods amount, proportional discount/shipping allocations, final line amount, final pack cost and unit cost are recalculated.
+- Change both: all dependent values are recalculated from the new pair of inputs.
+
+This is a document preview only. For a received supply, the existing guard still blocks saving stock-affecting changes until the correction operation and FIFO replay are implemented and runtime-accepted.
+
 ### Deferred pending measurements or design
 
 - S-11 (register refresh): defer structural formatting optimizations until Apps Script runtime measurements exist; avoid introducing stale presentation state.
