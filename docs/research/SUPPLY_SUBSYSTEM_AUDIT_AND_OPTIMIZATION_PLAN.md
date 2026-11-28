@@ -356,3 +356,21 @@ The relation resolver now rejects inconsistent terminal states between `SupplyCo
 Latest source quality gates passed at `8ddf13e6021c7a8e091d246971d34fe000779b5e`: syntax 63/63; snapshot auditor 8; FIFO 46; order domain 22; supply/correction/lifecycle 130; catalog/order UX 14; system safety/operation 39; warehouse dashboard 11; finance schema 4. **274 passed, 0 failed.** [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46096260507).
 
 This remains source-level verification. The Apps Script project and workbook have not been runtime-tested or changed. SC-04 operation/commit/recovery is still open, so the received-supply edit guard remains in force.
+
+
+### SC-04 source implementation update
+
+Implemented an explicit, non-menu correction workflow:
+- `di3PreviewSupplyCorrection(supplyId, spec)` performs source audit and candidate FIFO preview without registering an operation or writing rows.
+- `di3CorrectReceivedSupply(supplyId, spec)` registers/resumes the immutable `SUPPLY_CORRECTION` operation using `SUPPLY_CORRECTION:<supply_id>:<correction_id>`.
+- Replacement ledger/detail/lot rows are idempotent, use new IDs and reserved ledger sequences, and preserve original receipt effective/recorded timestamps.
+- The document projection is applied with before/after snapshot conflict checks; source receipt operation, ledger, details and immutable lot fields are revalidated on recovery.
+- F-06 full replay archives all source lot cache rows, including superseded lots, then zeroes superseded lot remaining quantities. The handler verifies the archived source allocation fingerprint and source lot cache against the original audit.
+- ProductCostHistory rows are appended after successful FIFO replay using stable correction source keys. Relation events are committed before the shared Operations status is committed last.
+- `di3RecoverAllPendingOperations()` now includes `SUPPLY_CORRECTION`.
+
+The handler currently permits only the first correction for a supply; another correction is explicitly blocked until effective-line source hydration for correction chains is implemented. The command is API-only and has not been added to the spreadsheet menu.
+
+Source CI at `a15c8ce7cf9d1700e9638558e8e4e37b4fe61789`: 66 Apps Script files syntax-checked; snapshot 7, FIFO 46, order 22, supply/correction/lifecycle 144, catalog/order UX 14, system safety/operation 39, warehouse dashboard 11, finance schema 4; **287 passed, 0 failed**. [GitHub Actions run](https://github.com/brusvv/dots_inventory-/actions/runs/46098738440).
+
+No bound-workbook runtime test has been performed and no supply has been corrected. The received-supply edit guard remains enabled pending restored-copy runtime acceptance.
