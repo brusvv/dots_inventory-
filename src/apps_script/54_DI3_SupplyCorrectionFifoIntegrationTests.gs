@@ -54,6 +54,9 @@ function di3RunSupplyCorrectionFifoIntegrationTests() {
     equal(result.lot_rows.length, 1);
     equal(result.lot_rows[0][0], "LOT-REPL");
     equal(result.lot_rows[0]._di3RowNumber, 3, "physical StockLots row must survive filtering");
+    equal(result.all_lot_rows.length, 2, "F-06 must retain both source and replacement lot cache rows");
+    equal(result.all_lot_rows[0][0], "LOT-SRC");
+    equal(result.all_lot_rows[0]._di3RowNumber, 2, "superseded lot physical row must survive for archival");
     equal(result.affected_product_ids.join(","), "P1");
   });
 
