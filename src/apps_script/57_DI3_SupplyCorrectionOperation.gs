@@ -34,6 +34,86 @@ function di3SupplyCorrectionRowFromRecord_(schemaName, record) {
   return DI3_TABLE_SCHEMAS[schemaName].map(function (header) { return record[header]; });
 }
 
+/**
+ * Read-only preflight for the correction executor. Never bootstraps schemas,
+ * money metadata, product codes or FIFO projections from a business operation.
+ */
+function di3BuildSupplyCorrectionPrerequisiteAudit_(sheetNames, headersByName, appMeta, sequenceIndex) {
+  var issues = [];
+  var existing = Object.create(null);
+  (sheetNames || []).forEach(function (name) { existing[String(name)] = true; });
+  var headers = headersByName || {};
+  var required = DI3_CORE_TABLE_NAMES.slice();
+
+  required.forEach(function (name) {
+    if (!existing[name]) {
+      issues.push("Не найден обязательный системный лист " + name + ".");
+      return;
+    }
+    var expected = DI3_TABLE_SCHEMAS[name] || [];
+    var actual = Array.isArray(headers[name]) ? headers[name].map(di3NormalizeHeader_) : null;
+    if (!actual) {
+      issues.push(name + ": не удалось прочитать строку заголовков.");
+      return;
+    }
+    if (actual.length !== expected.length || expected.some(function (header, index) {
+      return actual[index] !== header;
+    })) {
+      issues.push(name + ": заголовки не соответствуют точной текущей схеме v4.");
+    }
+  });
+
+  var meta = appMeta || {};
+  var fifoVersion = String(meta.fifo_state_version == null ? "" : meta.fifo_state_version);
+  if (fifoVersion !== String(DI3_FIFO_STATE_VERSION)) {
+    issues.push("FIFO state не инициализирован для текущей версии; сначала выполни утверждённую установку/проверку схемы.");
+  }
+  var cursorRaw = meta.fifo_ledger_sequence_cursor;
+  var cursor = cursorRaw === "" || cursorRaw == null ? NaN : Number(cursorRaw);
+  var maxSequence = Number(sequenceIndex && sequenceIndex.max_sequence);
+  if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isSafeInteger(maxSequence) || maxSequence < 0) {
+    issues.push("FIFO ledger sequence cursor или индекс StockLedger некорректен.");
+  } else if (cursor !== maxSequence) {
+    issues.push("FIFO projection отстаёт от StockLedger: cursor " + cursor + ", max sequence " + maxSequence + ". Сначала восстанови/синхронизируй FIFO.");
+  }
+
+  return {
+    status: issues.length ? "BLOCKED" : "READY",
+    issues: issues,
+    required_table_count: required.length,
+    fifo_state_version: fifoVersion,
+    fifo_ledger_sequence_cursor: Number.isFinite(cursor) ? cursor : null,
+    max_ledger_sequence: Number.isFinite(maxSequence) ? maxSequence : null
+  };
+}
+
+/** Runtime wrapper around the pure prerequisite audit; performs reads only. */
+function di3AssertSupplyCorrectionRuntimeReady_() {
+  var spreadsheet = di3GetSpreadsheet_();
+  var sheetNames = spreadsheet.getSheets().map(function (sheet) { return sheet.getName(); });
+  var headersByName = Object.create(null);
+  DI3_CORE_TABLE_NAMES.forEach(function (name) {
+    var sheet = spreadsheet.getSheetByName(name);
+    if (!sheet) return;
+    var width = Math.max(DI3_TABLE_SCHEMAS[name].length, sheet.getLastColumn());
+    if (sheet.getMaxColumns() < DI3_TABLE_SCHEMAS[name].length) return;
+    headersByName[name] = sheet.getRange(1, 1, 1, width).getDisplayValues()[0];
+  });
+  var audit = di3BuildSupplyCorrectionPrerequisiteAudit_(
+    sheetNames,
+    headersByName,
+    {
+      fifo_state_version: di3GetAppMetaValue_("fifo_state_version"),
+      fifo_ledger_sequence_cursor: di3GetAppMetaValue_("fifo_ledger_sequence_cursor")
+    },
+    di3ReadLedgerSequenceIndex_()
+  );
+  if (audit.status !== "READY") {
+    throw new Error("SUPPLY_CORRECTION остановлена до любых записей: " + audit.issues.join(" "));
+  }
+  return audit;
+}
+
 function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, operationId) {
   spec = spec || {};
   var supply = di3GetSupplyById_(supplyId);
@@ -808,7 +888,7 @@ function di3PreviewSupplyCorrection(supplyId, correctionSpec) {
  */
 function di3CorrectReceivedSupply(supplyId, correctionSpec) {
   return di3WithLock_(function () {
-    di3EnsureStockCoreSchemas_();
+    di3AssertSupplyCorrectionRuntimeReady_();
     var id = String(supplyId || "").trim();
     var spec = correctionSpec || {};
     var correctionId = String(spec.correction_id || "").trim();
