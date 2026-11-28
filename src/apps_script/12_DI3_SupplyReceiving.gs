@@ -961,6 +961,7 @@ function di3RecoverAllPendingOperations() {
     di3EnsureStockCoreSchemas_();
     var manual = di3RecoverPreparedOperations_(["MANUAL_STOCK_MOVEMENT"]);
     var supply = di3RecoverPreparedOperations_(["SUPPLY_RECEIVE"]);
+    var supplyCorrections = di3RecoverPreparedOperations_(["SUPPLY_CORRECTION"]);
     var supplyEdits = di3RecoverPreparedOperations_(["SUPPLY_DOCUMENT_EDIT"]);
     var orders = di3RecoverPreparedOperations_(["ORDER_CREATE", "ORDER_DISPATCH", "ORDER_RETURN"]);
     // If a pending full-edit operation was completed for the document currently
@@ -978,6 +979,7 @@ function di3RecoverAllPendingOperations() {
     return {
       manual_stock: manual,
       supply_receipts: supply,
+      supply_corrections: supplyCorrections,
       supply_document_edits: supplyEdits,
       orders: orders,
       unsupported: report.unsupported,
