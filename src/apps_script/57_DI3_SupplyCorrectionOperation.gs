@@ -97,6 +97,26 @@ function di3BuildSupplyCorrectionOperationPayload_(supplyId, spec, sourceAudit, 
     shipping_amount: spec.shipping_amount || 0
   });
   var oldItems = di3GetSupplyItems_(supplyId);
+  var oldComparable = oldItems.map(function (item) {
+    return [String(item.product_id), String(item.pack_variant_id), Number(item.units_per_pack),
+      Number(item.packs), di3ToCents_(item.purchase_price_per_pack, "Исходная закупочная цена")];
+  }).sort(function (a, b) { return JSON.stringify(a).localeCompare(JSON.stringify(b)); });
+  var newComparable = plan.lines.map(function (line) {
+    return [String(line.product_id), String(line.pack_variant_id), Number(line.units_per_pack),
+      Number(line.packs), di3ToCents_(line.purchase_price_per_pack, "Новая закупочная цена")];
+  }).sort(function (a, b) { return JSON.stringify(a).localeCompare(JSON.stringify(b)); });
+  var documentFinancials = [
+    [di3ToCents_(supply.goods_amount, "Исходная стоимость товаров"), di3ToCents_(plan.goods_amount, "Новая стоимость товаров")],
+    [di3ToCents_(supply.seller_discount_amount, "Исходная скидка продавца"), di3ToCents_(plan.seller_discount_amount, "Новая скидка продавца")],
+    [di3ToCents_(supply.partner_discount_amount, "Исходная скидка партнёров"), di3ToCents_(plan.partner_discount_amount, "Новая скидка партнёров")],
+    [di3ToCents_(supply.shipping_amount, "Исходная доставка"), di3ToCents_(plan.shipping_amount, "Новая доставка")],
+    [di3ToCents_(supply.final_amount, "Исходная итоговая сумма"), di3ToCents_(plan.final_amount, "Новая итоговая сумма")]
+  ];
+  var linesChanged = JSON.stringify(oldComparable) !== JSON.stringify(newComparable);
+  var financialChanged = documentFinancials.some(function (pair) { return pair[0] !== pair[1]; });
+  if (!linesChanged && !financialChanged) {
+    throw new Error("Новая версия поставки полностью совпадает с текущей. Пустую складскую коррекцию создавать нельзя.");
+  }
   var oldByIdentity = Object.create(null);
   oldItems.forEach(function (item) {
     var key = String(item.product_id) + "\u001f" + String(item.pack_variant_id);
@@ -611,6 +631,80 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
 }
 
 /**
+ * Read-only correction preview. It runs the exact candidate FIFO calculation
+ * but does not register an operation or write any workbook sheet.
+ */
+function di3PreviewSupplyCorrection(supplyId, correctionSpec) {
+  return di3WithLock_(function () {
+    var id = String(supplyId || "").trim();
+    var spec = correctionSpec || {};
+    var correctionId = String(spec.correction_id || "").trim();
+    if (!id || !correctionId) throw new Error("Укажи supply_id и стабильный correction_id.");
+    var idempotencyKey = "SUPPLY_CORRECTION:" + id + ":" + correctionId;
+    var requestFingerprint = di3BuildSupplyCorrectionRequestFingerprint_(id, spec);
+    var existing = di3FindRowByColumnValue_("Operations", 1, idempotencyKey);
+    if (existing) {
+      var saved = di3ReadVerifiedOperationPayload_(existing);
+      if (String(saved.request_fingerprint || "") !== requestFingerprint) {
+        throw new Error("Этот correction_id уже использован с другим набором исправлений.");
+      }
+      return {
+        status: String(existing.values[5]) === "COMMITTED" ? "ALREADY_COMMITTED" : "RESUME_AVAILABLE",
+        read_only: true,
+        operation_id: String(existing.values[0]),
+        correction_id: correctionId,
+        candidate_fifo_preview: saved.candidate_fifo_preview || null,
+        affected_product_ids: saved.affected_product_ids || [],
+        replacement_lines: (saved.replacement_lines || []).length
+      };
+    }
+    di3AssertNoOtherPendingStockOperations_(idempotencyKey);
+    var sourceAudit = di3AuditSupplyCorrectionSource(id);
+    if (sourceAudit.status !== "READY") throw new Error("Source audit blocked: " + String(sourceAudit.reason || "unknown"));
+    var previewOperationId = "PREVIEW-" + di3MakeUuid_();
+    var payload = di3BuildSupplyCorrectionOperationPayload_(id, spec, sourceAudit, previewOperationId);
+    return {
+      status: "READY",
+      read_only: true,
+      correction_id: correctionId,
+      supply_id: id,
+      supply_number: payload.supply_number,
+      reason: payload.reason,
+      financials: {
+        goods_amount: payload.after_supply_row[8],
+        seller_discount_amount: payload.after_supply_row[9],
+        partner_discount_amount: payload.after_supply_row[10],
+        discount_total: payload.after_supply_row[11],
+        shipping_amount: payload.after_supply_row[12],
+        final_amount: payload.after_supply_row[13],
+        currency: payload.currency
+      },
+      source_fingerprint: payload.source_supply_fingerprint,
+      candidate_fifo_input_fingerprint: payload.candidate_fifo_input_fingerprint,
+      candidate_fifo_preview: payload.candidate_fifo_preview,
+      affected_product_ids: payload.affected_product_ids,
+      relations: payload.relations.map(function (relation) {
+        return {
+          relation_type: relation.relation_type,
+          source_movement_id: relation.source_movement_id,
+          replacement_movement_id: relation.replacement_movement_id,
+          source_product_id: relation.source_product_id,
+          replacement_product_id: relation.replacement_product_id
+        };
+      }),
+      replacement_lines: payload.replacement_lines.map(function (line) {
+        return {
+          product_id: line.product_id, product_label: line.product_label,
+          pack_variant_id: line.pack_variant_id, units_per_pack: line.units_per_pack,
+          packs: line.packs, quantity: line.quantity, cost_per_pack: line.cost_per_pack,
+          unit_cost: line.unit_cost, total_cost_minor: line.total_cost_minor
+        };
+      })
+    };
+  });
+}
+
+/**
  * Explicit correction command. Call only after reviewing the read-only preview.
  * Repeating the same correction_id and exact request resumes its immutable op.
  */
@@ -627,6 +721,9 @@ function di3CorrectReceivedSupply(supplyId, correctionSpec) {
       var savedPayload = di3ReadVerifiedOperationPayload_(existing);
       if (String(savedPayload.request_fingerprint || "") !== requestFingerprint) {
         throw new Error("Этот correction_id уже использован с другим набором исправлений. Создай новый correction_id.");
+      }
+      if (["PREPARED", "RETRYABLE"].indexOf(String(existing.values[5])) !== -1) {
+        di3AssertNoOtherPendingStockOperations_(idempotencyKey);
       }
       return di3ExecutePreparedOperation_(existing);
     }
