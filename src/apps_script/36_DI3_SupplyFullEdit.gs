@@ -204,7 +204,12 @@ function di3EnableFullSupplyEditMode() {
     if (receipt && ["PREPARED", "RETRYABLE", "QUARANTINED", "REJECTED"].indexOf(String(receipt.values[5])) !== -1) {
       throw new Error("По поставке существует операция приёмки в состоянии " + String(receipt.values[5]) + ". Сначала разберись с ней в журнале операций.");
     }
-    var snapshot = di3BuildSupplyFullEditSnapshot_(supplyId, {\n      includeStockAudit: false,\n      includeReceiptPayload: status === DI3_SUPPLY_STATUS.RECEIVED,\n      supply: supply,\n      receiptOperation: receipt\n    });
+    var snapshot = di3BuildSupplyFullEditSnapshot_(supplyId, {
+      includeStockAudit: false,
+      includeReceiptPayload: status === DI3_SUPPLY_STATUS.RECEIVED,
+      supply: supply,
+      receiptOperation: receipt
+    });
     if (status === DI3_SUPPLY_STATUS.RECEIVED &&
         (!snapshot.receipt_operation || snapshot.receipt_operation.status !== "COMMITTED" || snapshot.receipt_operation.payload_integrity !== "VALID")) {
       throw new Error("Для полученной поставки не удалось подтвердить целостность исходного payload SUPPLY_RECEIVE. Полное редактирование остановлено без изменений.");
@@ -644,7 +649,11 @@ function di3SaveFullSupplyEdit() {
     if (pendingEdits.length) {
       throw new Error("По этой поставке уже есть незавершённая корректировка. Сначала восстанови или проверь её в журнале операций: " + String(pendingEdits[0].values[0]));
     }
-    var snapshot = di3BuildSupplyFullEditSnapshot_(context.supply_id, {\n      includeStockAudit: false,\n      includeReceiptPayload: false,\n      supply: context.supply\n    });
+    var snapshot = di3BuildSupplyFullEditSnapshot_(context.supply_id, {
+      includeStockAudit: false,
+      includeReceiptPayload: false,
+      supply: context.supply
+    });
     if (snapshot.fingerprint !== context.baseline_hash) {
       throw new Error("Поставка была изменена после включения полного редактирования. Изменения не применены. Отмени режим и загрузи свежую версию.");
     }
