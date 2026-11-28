@@ -264,11 +264,14 @@ function di3BuildSupplyCorrectionAllocationAudit_(sourceLines, allocationMatches
   var allocationIds = Object.create(null);
   var consumedByLot = Object.create(null);
   var costMinorByLot = Object.create(null);
+  var allocationCountByLot = Object.create(null);
   (sourceLines || []).forEach(function (line) {
     lotsById[String(line.lot_id)] = line;
     consumedByLot[String(line.lot_id)] = 0;
     costMinorByLot[String(line.lot_id)] = 0;
-    if (!Number.isSafeInteger(Number(line.initial_quantity)) ||
+    allocationCountByLot[String(line.lot_id)] = 0;
+    if (line.remaining_quantity === "" || line.remaining_quantity == null ||
+        !Number.isSafeInteger(Number(line.initial_quantity)) ||
         !Number.isSafeInteger(Number(line.remaining_quantity)) ||
         Number(line.remaining_quantity) < 0 ||
         Number(line.remaining_quantity) > Number(line.initial_quantity)) {
@@ -304,6 +307,7 @@ function di3BuildSupplyCorrectionAllocationAudit_(sourceLines, allocationMatches
       costMinorByLot[lotId] += allocatedMinor;
     }
     consumedByLot[lotId] += quantity;
+    allocationCountByLot[lotId]++;
   });
 
   Object.keys(lotsById).forEach(function (lotId) {
@@ -321,9 +325,7 @@ function di3BuildSupplyCorrectionAllocationAudit_(sourceLines, allocationMatches
       }
     }
     line.consumed_quantity = consumed;
-    line.allocation_count = (allocationMatches || []).filter(function (match) {
-      return String(match.values[3]) === lotId;
-    }).length;
+    line.allocation_count = allocationCountByLot[lotId];
   });
   var stableAllocationRows = (allocationMatches || []).map(function (match) {
     return match.values.slice(0, 14);
