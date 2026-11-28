@@ -697,6 +697,7 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
   // Cost history becomes visible only after the new FIFO allocation projection
   // has been durably committed; stable source keys make this retry-safe.
   var costHistoryAdded = di3EnsureSupplyCorrectionCostHistory_(payload);
+  var currentPackVariantsUpdated = di3ReconcileCurrentPackVariantsForProducts_(payload.affected_product_ids);
   di3EnsureSupplyCorrectionRelationStage_(payload.relations, operationId, "COMMITTED");
 
   var committedMap = di3ReadSupplyCorrectionEffectiveMovementMap_(operationId);
@@ -718,6 +719,7 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
     replacement_lots_created: replacementWrite.lots_added,
     document_item_rows: document.item_rows,
     cost_history_added: costHistoryAdded,
+    current_pack_variants_updated: currentPackVariantsUpdated,
     fifo_run_id: fifo.run_id,
     fifo_mode: fifo.mode,
     source_archive: sourceArchive,
