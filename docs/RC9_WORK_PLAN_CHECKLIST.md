@@ -1,15 +1,15 @@
 # Dots Inventory v4 — RC9 work plan and acceptance checklist
 
 Last updated: 2026-11-28  
-Working branch: `feature/github-preview-releases`  
-Branch HEAD at update: `e75ecf814aff7cbc07c08b9462e47c5f948c7a06`
+Working branch: `feature/supply-correction-fifo-replay`  
+Branch HEAD at update: `a763a36cbe714a4f0cd9849d50152b2a649c8e16`
 
 > This is the execution checklist. Mark an item `[x]` only when the stated evidence exists. `[ ]` means not done or not evidenced; `[~]` means partially completed; `[!]` means blocked/deferred. Source implementation, CI, and live Google Apps Script acceptance are separate evidence classes.
 
 ## 0. Safety and scope gates
 
 - [x] Keep production RC8 and its workbook untouched.
-- [x] Keep PR #7 Draft; no merge, tag, GitHub Release, Preview/Stable publication, or production update.
+- [x] Keep all existing PRs Draft; no merge, tag, GitHub Release, Preview/Stable publication, or production update.
 - [x] Keep N-02 runtime fault-injection deferred at the user's request.
 - [ ] Confirm the exact disposable Apps Script project and workbook before any write/runtime acceptance.
 - [ ] Obtain explicit approval immediately before each destructive or business-data write operation.
@@ -291,3 +291,57 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 | Date | Target | Source/test state | Result | Evidence |
 |---|---|---|---|---|
 | 2026-11-28 | GitHub source branch | `57327687990979594ed69aa7ee88cb7f6b132738` | PASS — Release Pipeline, Apps Script quality gates, package build; includes rollback backup reread after YES and unavailable-backup fail-closed test | [Release Pipeline](https://github.com/brusvv/dots_inventory-/actions/runs/46084515885), [Quality gates](https://github.com/brusvv/dots_inventory-/actions/runs/46084515883), [Package](https://github.com/brusvv/dots_inventory-/actions/runs/46084515887) |
+
+
+## 2026-11-28 — consolidated work plan and PR review
+
+### Current source branch
+
+- Working branch: `feature/supply-correction-fifo-replay`.
+- Branch HEAD at this update: `a763a36cbe714a4f0cd9849d50152b2a649c8e16`.
+- It is 190 commits ahead of `feature/github-preview-releases`, with no commits behind; the incremental comparison contains 34 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
+- SC-01 through SC-04 are implemented in source: immutable receipt/source audit; append-only correction relation journal; candidate/effective FIFO preview and normal replay integration; explicit correction operation with recovery and a read-only all-sheet preview probe.
+- SC-04 remains source-ready only. The mutating API `di3CorrectReceivedSupply()` is not exposed in the menu. It must not be used on a live/production supply until runtime acceptance on a restored disposable workbook.
+- Known SC limitation: a second correction of the same supply is blocked; correction-chain document hydration is not implemented.
+- Latest source CI is run [46100406477](https://github.com/brusvv/dots_inventory-/actions/runs/46100406477) on parent source commit `ae963fc958991ae809453cf9551933f299e8c849`: Apps Script syntax and all regression suites passed. The current branch HEAD adds documentation only after that source commit; therefore this is source/Node evidence, not Apps Script runtime evidence.
+- The all-sheet preview probe is prepared but has not been executed in a bound workbook. No live Apps Script project, Drive, spreadsheet, production data, or deployment was changed.
+
+### GitHub pull-request audit (2026-11-28)
+
+All currently open PRs are Draft. No PR has submitted reviews or inline review threads. The PRs are stacked and must not be merged out of order.
+
+| PR | Scope | Current assessment | Decision |
+|---|---|---|---|
+| #1 | N-03 clean schema v4, F-02 and core hardening | Source CI passed; broad foundational change; runtime migration/setup and business-flow acceptance remain pending. Includes N-02 source resolution code, but N-02 runtime fault injection remains deferred. | Keep Draft; do not merge before disposable-copy acceptance. |
+| #2 | D-01/D-02 release manifest/package | Base is PR #1 branch; GitHub reports merge conflict/not mergeable at this snapshot. | Keep Draft; rebase/resolve only after its base is finalized. |
+| #3 | D-03/D-04 release inspection and verified source backup | Depends on #2; source tests pass; Apps Script scopes and actual Drive backup/read-back are not runtime accepted. | Keep Draft. |
+| #4 | D-05 confirmed installer | Depends on #3; source tests pass; no disposable-project install/read-back acceptance. | Keep Draft. |
+| #5 | D-06 verified code rollback | Depends on #4; source tests pass; no disposable-project rollback acceptance. | Keep Draft. |
+| #6 | D-07 runtime acceptance runbook | Depends on #5; documentation/CI only. D-07 execution is still blocked until the release chain is available and a disposable project is prepared. | Keep Draft. |
+| #7 | Stable/Preview channels and updater safeguards | Depends on #6; release pipeline, package build and quality gates passed on its checked head. D-07 live runtime acceptance has not run. | Keep Draft; no tag/release/merge yet. |
+| #8 | D-08 browser-only bootstrap | Depends on #7; CI passed on its checked head, but GitHub reports not mergeable. Its bootstrap pins an older source commit and needs an explicit freshness/upgrade decision before acceptance. | Keep Draft; inspect/update the pinned source before merge. |
+| #10 | D-09 pinned branch selector | Depends on #7; focused run [46099723578](https://github.com/brusvv/dots_inventory-/actions/runs/46099723578) passed 55 syntax checks and 69 deployment-manager tests. Full release-pipeline CI on the exact PR head and runtime acceptance are not evidenced. | Keep Draft; require full CI and disposable-project runtime acceptance. |
+
+### PR sequencing and next action
+
+1. Keep the foundational chain #1 → #2 → #3 → #4 → #5 → #6 → #7 intact. Do not merge a child PR before its base is accepted.
+2. #8 and #10 are separate stacked follow-ups to #7; they are not prerequisites for the supply correction work.
+3. Open a new Draft PR for `feature/supply-correction-fifo-replay` targeting `feature/github-preview-releases`. This makes the 34-file incremental SC/supply delta reviewable without mixing it into the older D-02 PR. The new PR remains blocked from merge until source review and disposable-workbook runtime acceptance.
+4. Run the complete quality-gates, release-pipeline and package workflows on the new PR head. The current green run is on its parent source commit.
+5. Do not run N-02 fault injection, production migration, received-supply correction, release publication, or deployment without separate explicit approval.
+
+### Revised verification order
+
+- [ ] Review/accept the foundational release chain in dependency order, but only after its required runtime gates.
+- [ ] Complete R0 inventory on the exact disposable project: actual manifest/scopes, timezone, project fingerprint, triggers/deployments, Script Properties key names only, and verified full source backup.
+- [ ] Resolve the three source mismatches (modules 11, 19, 35) from exact diffs; do not overwrite based on summaries.
+- [ ] Complete N-03 Dry Run, backup and v3→v4 migration on the disposable copy only, after explicit approval.
+- [ ] Finish Supply Workspace UX, lifecycle, Dashboard W-1–W-10 and commission/Finance runtime acceptance.
+- [ ] Complete F-01 return-after-later-stock-operation and F-02 historical-sale chronology/PeriodGuard acceptance.
+- [ ] Complete Backup/Restore-as-new, F-13 timing, F-14 two-session ScriptLock, and remaining C-01–C-17 checks.
+- [ ] SC-01: execute the read-only source audit on representative received supplies in the disposable copy; verify blocked/mismatch cases.
+- [ ] SC-02/03: validate relation resolution, candidate replay and effective FIFO projections in the disposable copy, including REMOVE-only products and insufficient-stock cases.
+- [ ] SC-04: first test the all-sheet read-only preview probe; then test correction execution only after a separately approved backup, exact preview, and explicit write authorization. Inject failures at every write boundary only in the disposable copy.
+- [ ] Keep second correction of the same supply out of scope until document hydration and correction-chain acceptance are implemented.
+- [!] N-02 runtime fault injection remains deferred by the user.
+- [ ] Final RC9 gate: exact candidate commit CI green, all required runtime evidence recorded, PR approvals/merge order explicitly authorized, and no unresolved P0/P1 defects.
