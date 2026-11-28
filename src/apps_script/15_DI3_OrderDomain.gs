@@ -545,6 +545,8 @@ function di3ApplyOrderCreateOperation_(operationRecord, payload) {
   if (!savedOrder || savedItems.length !== payload.item_rows.length) {
     throw new Error("Не удалось подтвердить сохранение заказа и точного набора его позиций.");
   }
+  var savedOrderRow = DI3_TABLE_SCHEMAS.V3_Orders.map(function (header) { return savedOrder[header]; });
+  di3AssertOrderCreateImmutableRow_(savedOrderRow, payload.order_row, immutableOrderColumns, "сохранённого заказа");
   var savedById = Object.create(null);
   savedItems.forEach(function (row) {
     var id = String(row[0] || "");
