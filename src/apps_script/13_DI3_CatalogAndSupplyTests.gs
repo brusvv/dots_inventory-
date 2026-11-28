@@ -226,6 +226,64 @@ function di3RunCatalogAndSupplyUnitTests() {
     }
   });
 
+  test("supply selector summary uses one multi-key status lookup and de-duplicates IDs", function () {
+    var original = di3ReadRowsByColumnValues_;
+    var calls = [];
+    function supplyRow(id, number, status, createdAt, orderDate) {
+      var row = [];
+      row[0] = id; row[1] = number; row[2] = "Supplier"; row[3] = status;
+      row[4] = createdAt; row[17] = orderDate;
+      return row;
+    }
+    try {
+      di3ReadRowsByColumnValues_ = function (sheetName, column, values) {
+        calls.push({ sheet: sheetName, column: column, values: values.slice() });
+        return [
+          { row_number: 2, values: supplyRow("S1", "26NR001", DI3_SUPPLY_STATUS.CREATED, new Date(2026, 10, 1), new Date(2026, 9, 30)) },
+          { row_number: 3, values: supplyRow("S1", "26NR001", "Оформлена", new Date(2026, 10, 1), new Date(2026, 9, 30)) },
+          { row_number: 4, values: supplyRow("S2", "26NR002", DI3_SUPPLY_STATUS.RECEIVED, new Date(2026, 10, 2), new Date(2026, 10, 1)) }
+        ];
+      };
+      var result = di3GetSupplyFormLoadSummary_();
+      equal(calls.length, 1);
+      equal(calls[0].sheet, "V3_Supplies");
+      equal(calls[0].column, 3);
+      equal(calls[0].values.length, 11);
+      equal(result.length, 2);
+      equal(result[0].supply_id, "S2");
+      equal(result[1].supply_id, "S1");
+    } finally {
+      di3ReadRowsByColumnValues_ = original;
+    }
+  });
+
+  test("draft supply summary uses one multi-key status lookup and keeps canonical labels", function () {
+    var original = di3ReadRowsByColumnValues_;
+    var calls = [];
+    function row(id, status) {
+      var values = [];
+      values[0] = id; values[1] = "26NR001"; values[2] = "Supplier"; values[3] = status;
+      values[4] = new Date(2026, 10, 1); values[13] = 100; values[17] = new Date(2026, 9, 30);
+      return values;
+    }
+    try {
+      di3ReadRowsByColumnValues_ = function (sheetName, column, values) {
+        calls.push({ sheet: sheetName, column: column, values: values.slice() });
+        return [
+          { row_number: 2, values: row("S1", DI3_SUPPLY_STATUS.CREATED) },
+          { row_number: 3, values: row("S1", "Оформлена") }
+        ];
+      };
+      var result = di3GetSupplyDraftSummary();
+      equal(calls.length, 1);
+      equal(calls[0].values, [DI3_SUPPLY_STATUS.CREATED, "Создана", "Оформлена"]);
+      equal(result.length, 1);
+      equal(result[0].status, "Оформлена");
+    } finally {
+      di3ReadRowsByColumnValues_ = original;
+    }
+  });
+
   var report = { passed: passed, failed: failures.length, failures: failures };
   if (failures.length) throw new Error("Catalog and supply tests failed: " + JSON.stringify(failures));
   return report;
