@@ -85,6 +85,18 @@ function di3RunSupplyReceivingUnitTests() {
   test("repeated cancellation is identified as already cancelled", function () {
     equal(di3ValidateSupplyCancellation_({ supply_id: "S1", status: DI3_SUPPLY_STATUS.CANCELLED }, null, 0).already_cancelled, true);
   });
+  test("supply status and receipt paths do not rebuild unchanged product/money validations", function () {
+    var transition = di3AdvanceSupplyStatus.toString();
+    var receipt = di3CompleteSupplyReceipt_.toString();
+    equal(transition.indexOf("di3RefreshSupplyFormValidations()"), -1);
+    equal(receipt.indexOf("di3RefreshSupplyFormValidations()"), -1);
+  });
+  test("register transition clears the refreshed row by supply_id and avoids a second full refresh", function () {
+    var source = di3TransitionSelectedSupply_.toString();
+    includes(source, 'register.getRange(4, 12');
+    equal(source.indexOf("selected.row_number, 13"), -1);
+    includes(source, 'if (String(result.status) === "ALREADY_RECEIVED") di3RefreshSupplyRegister()');
+  });
   test("receipt date parser accepts Russian date and time", function () {
     var date = di3ParseSupplyEffectiveDate_("20.11.2026 14:35", null);
     equal(date.getFullYear(), 2026);
