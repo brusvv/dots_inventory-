@@ -130,11 +130,54 @@ function di3BuildPackVariantCurrentFlagUpdate_(record, targetVariantId, updatedA
   return { row_number: record.row_number, values: row };
 }
 
+/**
+ * Load only supply-item rows for affected products, then only their parent
+ * supply rows. The shared multi-key reader scans the key column once and
+ * fetches full rows only for matches, avoiding full-width table transfers.
+ *
+ * If an affected item has no supply_id, retain the legacy full parent scan:
+ * it is the only way to preserve the existing fail-closed check for a
+ * received parent document with a missing identity.
+ */
+function di3ReadPackVariantReconciliationRows_(productIds) {
+  var itemHeaders = DI3_TABLE_SCHEMAS.V3_SupplyItems;
+  var supplyHeaders = DI3_TABLE_SCHEMAS.V3_Supplies;
+  var productIndex = itemHeaders.indexOf("product_id");
+  var itemSupplyIndex = itemHeaders.indexOf("supply_id");
+  var supplyIdIndex = supplyHeaders.indexOf("supply_id");
+  if (productIndex < 0 || itemSupplyIndex < 0 || supplyIdIndex < 0) {
+    throw new Error("PackVariants reconciliation: missing product_id/supply_id schema column.");
+  }
+
+  var itemMatches = di3ReadRowsByColumnValues_("V3_SupplyItems", productIndex, productIds);
+  var itemRows = itemMatches.map(function (match) { return match.values; });
+  if (!itemRows.length) return { supplyRows: [], itemRows: [] };
+
+  var supplyIds = Object.create(null);
+  var hasBlankSupplyId = false;
+  itemRows.forEach(function (row) {
+    var supplyId = String(row[itemSupplyIndex] || "");
+    if (!supplyId) hasBlankSupplyId = true;
+    else supplyIds[supplyId] = true;
+  });
+
+  var supplyRows;
+  if (hasBlankSupplyId) {
+    supplyRows = di3ReadTableValues_("V3_Supplies");
+  } else {
+    var supplyMatches = di3ReadRowsByColumnValues_(
+      "V3_Supplies", supplyIdIndex, Object.keys(supplyIds));
+    supplyRows = supplyMatches.map(function (match) { return match.values; });
+  }
+  return { supplyRows: supplyRows, itemRows: itemRows };
+}
+
 function di3ReconcileCurrentPackVariantsForProducts_(productIds) {
   var affected = (productIds || []).map(String).filter(Boolean);
   if (!affected.length) return 0;
-  var supplyRows = di3ReadTableValues_("V3_Supplies");
-  var itemRows = di3ReadTableValues_("V3_SupplyItems");
+  var reconciliationRows = di3ReadPackVariantReconciliationRows_(affected);
+  var latest = di3BuildLatestReceivedPackVariantMap_(
+    reconciliationRows.supplyRows, reconciliationRows.itemRows, affected);
   var latest = di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affected);
   var variants = di3LoadPackVariantIndex_();
   var updates = [];
