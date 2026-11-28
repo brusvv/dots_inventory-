@@ -299,7 +299,7 @@ Add one entry per executed test. Include date/time, target copy, source commit, 
 
 - Working branch: `feature/supply-correction-fifo-replay`.
 - Branch HEAD at this update: `a763a36cbe714a4f0cd9849d50152b2a649c8e16`.
-- It is 192 commits ahead of `feature/github-preview-releases`, with no commits behind; the incremental comparison contains 35 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
+- It is 197 commits ahead of `feature/github-preview-releases`, with no commits behind; the incremental comparison contains 37 changed files. Treat this as a stacked continuation of the release/updater branch, not as a replacement for the existing PR chain.
 - SC-01 through SC-04 are implemented in source: immutable receipt/source audit; append-only correction relation journal; candidate/effective FIFO preview and normal replay integration; explicit correction operation with recovery and a read-only all-sheet preview probe.
 - SC-04 remains source-ready only. The mutating API `di3CorrectReceivedSupply()` is not exposed in the menu. It must not be used on a live/production supply until runtime acceptance on a restored disposable workbook.
 - Known SC limitation: a second correction of the same supply is blocked; correction-chain document hydration is not implemented.
@@ -345,3 +345,14 @@ All currently open PRs are Draft. No PR has submitted reviews or inline review t
 - [ ] Keep second correction of the same supply out of scope until document hydration and correction-chain acceptance are implemented.
 - [!] N-02 runtime fault injection remains deferred by the user.
 - [ ] Final RC9 gate: exact candidate commit CI green, all required runtime evidence recorded, PR approvals/merge order explicitly authorized, and no unresolved P0/P1 defects.
+
+
+## 2026-11-28 — PR #11 exact-head CI evidence
+
+- [x] Created Draft [PR #11](https://github.com/brusvv/dots_inventory-/pull/11), head `feature/supply-correction-fifo-replay`, base `feature/github-preview-releases`.
+- [x] Added the PR base branch to quality-gates, release-pipeline and package workflow filters.
+- [x] Exact PR head `1df024ab46b22c2eb28ded02dc5fdf5292442e86`: [quality gates 46100646815](https://github.com/brusvv/dots_inventory-/actions/runs/46100646815), [release pipeline 46100646810](https://github.com/brusvv/dots_inventory-/actions/runs/46100646810), [package build 46100646814](https://github.com/brusvv/dots_inventory-/actions/runs/46100646814) — all PASS.
+- [ ] Source-level code review and approval for PR #11.
+- [ ] Read-only all-sheet runtime probe on a restored disposable workbook.
+- [ ] SC-04 partial-failure/recovery acceptance on the disposable copy, after separate explicit authorization.
+- [!] N-02 runtime fault injection remains deferred.
