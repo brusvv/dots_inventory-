@@ -399,7 +399,7 @@ function di3GetGitHubBranchManifest_(branch, pinnedCommit) {
   var apiBase = "https://api.github.com/repos/" + config.repository;
   var commit = String(pinnedCommit || "").trim().toLowerCase();
   if (!commit) {
-    var branchPath = branch.split("/").map(function (part) { return encodeURIComponent(part); }).join("/");
+    var branchPath = encodeURIComponent(branch);
     var branchResult = di3FetchGitHubJson_(apiBase + "/branches/" + branchPath);
     if (branchResult.status !== "OK" || !branchResult.data || String(branchResult.data.name || "") !== branch) {
       throw new Error("Ветка " + branch + " не найдена в GitHub или недоступна.");
