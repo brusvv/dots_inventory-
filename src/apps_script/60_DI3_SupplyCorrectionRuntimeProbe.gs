@@ -22,12 +22,17 @@ function di3BuildSupplyCorrectionPreviewRuntimeSnapshot_() {
       snapshot[name] = null;
       return;
     }
-    var values = sheet.getDataRange().getValues();
-    snapshot[name] = values.map(function (row) {
-      return row.map(function (value) {
-        return value instanceof Date ? value.toISOString() : value;
-      });
-    });
+    var range = sheet.getDataRange();
+    var values = range.getValues();
+    var formulas = range.getFormulas();
+    snapshot[name] = {
+      values: values.map(function (row) {
+        return row.map(function (value) {
+          return value instanceof Date ? value.toISOString() : value;
+        });
+      }),
+      formulas: formulas
+    };
   });
   return snapshot;
 }
