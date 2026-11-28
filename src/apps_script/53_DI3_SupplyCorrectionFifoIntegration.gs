@@ -62,8 +62,14 @@ function di3BuildSupplyCorrectionEffectiveFifoSnapshot_(ledgerRows, detailRows, 
   var effectiveDetails = (detailRows || []).filter(function (row) {
     return !!retained[String(row[0] || "")];
   });
-  var effectiveLots = (lotRows || []).filter(function (row) {
-    return !!retained[String(row[2] || "")];
+  var effectiveLots = [];
+  (lotRows || []).forEach(function (row, index) {
+    if (!retained[String(row[2] || "")]) return;
+    var copy = row.slice();
+    // The replay writer updates StockLots by physical sheet row. Filtering
+    // must retain the original row number instead of shifting later rows.
+    copy._di3RowNumber = Number(row._di3RowNumber || index + 2);
+    effectiveLots.push(copy);
   });
 
   // Fail closed if any effective inbound ledger row has no corresponding lot;
