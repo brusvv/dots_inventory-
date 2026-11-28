@@ -44,6 +44,7 @@ const suites = [
   ["historical_supply", "di3RunHistoricalSupplyUnitTests"],
   ["supply_full_edit", "di3RunSupplyFullEditUnitTests"],
   ["supply_correction_source_audit", "di3RunSupplyCorrectionUnitTests"],
+  ["supply_correction_relations", "di3RunSupplyCorrectionRelationUnitTests"],
   ["supply_workspace_ux", "di3RunSupplyWorkspaceUxUnitTests"]
 ];
 const results = suites.map(([name, entrypoint]) => {
