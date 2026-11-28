@@ -1536,7 +1536,12 @@ function di3RebuildFifoAllocations_(reason, affectedProductIds, options) {
     di3UpdateFifoRunStatus_(run.row_number, "COMMITTED", new Date(), "", created);
     // Store only after the projection and replay run are committed. If the
     // process stops earlier, the next invocation still detects the mismatch.
-    di3SetAppMetaValue_("fifo_supply_correction_fingerprint", correctionMap.fingerprint);
+    var hasPendingCorrectionForRun = operationId && correctionMap.relations.some(function (relation) {
+      return String(relation.operation_id) === operationId;
+    });
+    if (!hasPendingCorrectionForRun) {
+      di3SetAppMetaValue_("fifo_supply_correction_fingerprint", correctionMap.fingerprint);
+    }
     return {
       run_id: run.run_id, run_sequence: run.run_sequence,
       allocations_created: created, allocations_replaced: replaced,
