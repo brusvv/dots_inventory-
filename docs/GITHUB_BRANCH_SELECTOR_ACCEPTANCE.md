@@ -15,7 +15,7 @@
 
 Выбор ветки доступен только после установки branch-selector-aware updater в тестовый Apps Script project.
 
-1. В редакторе Apps Script тестового проекта вручную обновить модули 43_DI3_GitHubDeploymentManager.gs, 44_DI3_GitHubInstallPreview.gs, 45_DI3_GitHubConfirmedInstaller.gs и 46_DI3_GitHubCodeRollback.gs из проверенного commit ветки feature/github-branch-selector.
+1. В редакторе Apps Script тестового проекта вручную обновить модуль меню 22_DI3_MenuAndFilterUtils.gs (в нём зарегистрированы команды выбора/сброса ветки) и updater-модули 43_DI3_GitHubDeploymentManager.gs, 44_DI3_GitHubInstallPreview.gs, 45_DI3_GitHubConfirmedInstaller.gs и 46_DI3_GitHubCodeRollback.gs из одного и того же проверенного commit ветки feature/github-branch-selector.
 2. Не заменять и не удалять фактический appsscript.json, HTML/JSON-файлы или другие локальные модули.
 3. Сохранить проект, авторизовать требуемые scopes и перезагрузить связанную Google Sheet.
 4. Убедиться, что в меню Система → GitHub и обновления появились команды выбора и сброса ветки.
