@@ -870,7 +870,7 @@ test("loads paginated GitHub branch lists beyond the first 100 entries", () => {
   const requested = [];
   context.di3FetchGitHubJson_ = url => {
     requested.push(url);
-    const pageMatch = String(url).match(/[?&]page=(\\d+)/);
+    const pageMatch = String(url).match(/[?&]page=(\d+)/);
     const page = pageMatch ? Number(pageMatch[1]) : 0;
     if (page === 1) return { status: "OK", data: Array.from({ length: 100 }, (_, i) => ({ name: "branch-" + i })) };
     if (page === 2) return { status: "OK", data: [{ name: "feature/paginated" }, { name: "feature/../unsafe" }] };
