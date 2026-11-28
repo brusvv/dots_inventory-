@@ -141,7 +141,7 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
   var ui = SpreadsheetApp.getUi();
   var changedNames = preview.diff.added.concat(preview.diff.changed);
   var message = [
-    "Канал: " + (preview.release_channel === "preview" ? "PREVIEW" : "STABLE") + (preview.source_branch ? " · ветка: " + preview.source_branch : ""),
+    "Источник: " + di3GetGitHubSourceLabel_(preview.release_channel) + (preview.source_branch ? " · ветка: " + preview.source_branch : ""),
     "Релиз: " + preview.release_tag,
     "Commit: " + preview.commit,
     "Проект: " + baseline.script_id,
@@ -232,11 +232,14 @@ function di3InstallLatestGitHubReleaseWithConfirmation() {
   try {
     PropertiesService.getScriptProperties().setProperty("DI3_INSTALLED_RELEASE_TAG", preview.release_tag);
     PropertiesService.getScriptProperties().setProperty("DI3_INSTALLED_RELEASE_COMMIT", preview.commit);
+    PropertiesService.getScriptProperties().setProperty("DI3_INSTALLED_RELEASE_BRANCH", preview.source_branch || "");
   } catch (ignoreInstalledTag) {}
   var result = {
     status: "INSTALLED_AND_VERIFIED",
     write_performed: true,
     release_tag: preview.release_tag,
+    release_channel: preview.release_channel,
+    source_branch: preview.source_branch || null,
     commit: preview.commit,
     project_id: baseline.script_id,
     file_count: verification.file_count,
