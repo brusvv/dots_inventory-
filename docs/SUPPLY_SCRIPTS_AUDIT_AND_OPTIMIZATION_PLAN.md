@@ -47,8 +47,8 @@ This document records the work plan and initial static observations. It is not a
 - [x] S4 — Integrity audit: schema/header indexing, idempotency keys, immutable payloads, operation locking, retry behavior, status history, FIFO and PackVariants projections (static source review).
 - [x] S5 — Test-coverage audit: initial tests added for the first three optimizations; broader invariant-to-test matrix remains part of follow-up.
 - [x] S6 — Optimization proposal: rank candidates by expected benefit, risk, scope and measurable acceptance criteria.
-- [x] S7 — First optimization batch implemented: read-only Preview, batched Full Edit identity preflight, and multi-key supply status summaries. Further candidates remain.
-- [ ] S8 — Source/regression, release-contract and package CI passed for PR merge result containing head `17547abe4bb2cd94f768cc60ad8f8efa1addc025`; disposable-workbook runtime benchmarks remain pending.
+- [x] S7 — First optimization batch implemented: read-only Preview, batched Full Edit identity preflight, multi-key supply status summaries, and operation-local form/catalogue snapshot reuse in draft and full-edit saves. Further candidates remain.
+- [ ] S8 — Source/regression (182 supply-domain tests, 0 failures), release-contract and package CI passed for PR merge result containing head `5f890d46f0484468930ceec1eb874115afa45386`; disposable-workbook runtime benchmarks remain pending.
 - [ ] S9 — Final report: changed files, measured results, residual risks and deferred runtime acceptance.
 
 ## Initial static observations (not yet a final audit)
@@ -85,6 +85,6 @@ This document records the work plan and initial static observations. It is not a
 
 - S0–S4 and S6 are complete as a static repository audit; detailed findings are recorded in [SUPPLY_SCRIPTS_AUDIT_REPORT.md](SUPPLY_SCRIPTS_AUDIT_REPORT.md).
 - S5 has initial coverage for the first optimization batch; the broader invariant-to-test matrix remains open.
-- S7 has begun: the first three low-risk optimizations are implemented with regression tests.
+- S7 has begun: the first four low-risk optimizations are implemented with regression tests.
 - Source/regression, release-contract and package CI passed for the PR merge result containing the current optimization batch.
 - S8 runtime timing on a disposable workbook and S9 final report remain pending; static call-count observations are not runtime benchmarks.
