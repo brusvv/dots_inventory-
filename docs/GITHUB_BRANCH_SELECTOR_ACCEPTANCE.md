@@ -175,3 +175,41 @@ GitHub Actions run #69: **success**; Git tree preflight/integrity fixtures: 9 te
 Существующий GitHub deployment-manager regression suite проверяет baseline READY и BLOCKED при несовпадении schema version, config timezone, manifest timezone, Apps Script runtime timezone и spreadsheet timezone. Также проверяется BLOCKED при неизвестной schema или отсутствующей timezone declaration.
 
 В run #69: 72 GitHub deployment-manager tests — PASS. Это подтверждает unit/CI-поведение compatibility gate, но не заменяет чтение фактических значений в disposable Apps Script project.
+
+## 7E. D-09-N08 — incomplete updater module set
+
+Статус: **UNIT/CI PASS; APPS SCRIPT RUNTIME NOT RUN**.
+
+В regression suite есть тест `branch-selector-capable source cannot replace only part of the updater module set`: если исходник 43_DI3_GitHubDeploymentManager.gs объявляет branch-selector capability, но в tree отсутствует один из модулей 43–46, сборка branch manifest завершается ошибкой. Fixture намеренно не содержит 46_DI3_GitHubCodeRollback.gs; ожидается отказ с сообщением о неполном согласованном наборе. Тест входит в 72 passing deployment-manager tests run #69.
+
+Ограничение: это проверка source/manifest builder. Она не является runtime-проверкой старой/неполной ветки через Apps Script UI.
+
+## 7F. D-09-N09 — immutable commit pinning
+
+Статус: **UNIT/CI PASS; APPS SCRIPT RUNTIME NOT RUN**.
+
+Тест `a pinned branch snapshot never follows a later moving branch HEAD` задаёт сохранённый commit SHA и другой, более новый HEAD ветки. Manifest builder получает commit/tree по сохранённому SHA; тест проверяет, что результат содержит pinned SHA и что запрос `/branches/` не выполняется. Тест входит в 72 passing deployment-manager tests run #69.
+
+Ограничение: тест подтверждает использование сохранённого SHA при построении snapshot. Полный runtime-сценарий «выбрать ветку → продвинуть HEAD → повторный preview без повторного выбора → повторно выбрать ветку → получить новый SHA → сбросить выбор» на disposable Apps Script project ещё не выполнен.
+
+## 7G. D-09-N10 — отмена установки
+
+Статус: **UNIT/CI PASS; APPS SCRIPT RUNTIME PASS for the previously recorded D-09 probe cancellation; full installer cancellation runtime NOT RUN**.
+
+Тест `installer NO cancellation preserves verified backup and never calls updateContent` использует installer harness: при ответе NO результат имеет статус CANCELLED и `write_performed: false`, возвращается verified backup, вызов `updateContent` равен нулю, а проект читается только один раз. Тест входит в 72 passing deployment-manager tests run #69.
+
+Отдельно ранее проведённый D-09 lifecycle probe в disposable Apps Script project подтвердил отмену обновления V2: после NO probe оставался на V1 и не менял исходный файл. Это runtime-доказательство именно probe-сценария; оно не подменяет полную runtime-проверку installer NO с проверкой project fingerprint.
+
+## 7H. Сводка N04–N10
+
+| Сценарий | Unit/CI | Apps Script runtime |
+|---|---|---|
+| N04 Git tree preflight | PASS | Не выполнялся как отдельный N04 runtime test |
+| N05 source size / blob SHA-1 / SHA-256 manifest | PASS | Не выполнялся |
+| N06 canonical schema/timezone declarations | PASS | Не выполнялся |
+| N07 schema/timezone compatibility gate | PASS | Фактические значения в runtime не сверялись для N07 |
+| N08 incomplete updater module set | PASS | Не выполнялся |
+| N09 immutable commit pinning | PASS | Полный branch-movement workflow не выполнялся |
+| N10 installer NO cancellation | PASS | Probe cancellation подтверждён; полный installer NO fingerprint test не выполнялся |
+
+Все перечисленные CI-тесты подтверждены run #69: https://github.com/brusvv/dots_inventory-/actions/runs/46178046087. Общий D-09 runtime acceptance остаётся незавершённым до выполнения оставшихся сценариев в disposable Apps Script project.
