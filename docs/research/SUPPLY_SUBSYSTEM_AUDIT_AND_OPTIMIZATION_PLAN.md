@@ -231,8 +231,34 @@ The spec was tightened before implementation to resolve three edge cases:
   reordering same-effective-time receipts and sales merely because a correction
   was recorded later.
 
-These are specification clarifications only. No Apps Script module, schema,
-workbook, stock projection or runtime state was changed.
+These are specification clarifications only; the subsequent SC-01 source-audit
+module does not change schema, workbook, stock projections or runtime state.
+
+#### SC-01 read-only source audit implemented
+
+`47_DI3_SupplyCorrection.gs` now provides a read-only source audit for a
+received supply. It verifies the committed receipt operation and payload hash,
+the current supply number/received timestamp, the current supply-item rows, and
+the exact one-to-one mapping from each original receipt line to StockLedger,
+StockMovementDetails and StockLots. It rejects missing, duplicate, extra or
+mismatched records without attempting repair.
+
+Nine regression tests were added in `48_DI3_SupplyCorrectionTests.gs` and
+wired into the consolidated supply test runner. Quality gates passed at
+`319c842d0d91d7e11f341dcba32da5a20c871b90`:
+- Supply domain/lifecycle: **98/98**.
+- FIFO replay: **46/46**.
+- Order domain: **22/22**.
+- Catalog/order UX: **14/14**.
+- System safety: **39/39**.
+- Warehouse dashboard: **11/11**.
+- Finance schema: **4/4**.
+- Snapshot auditor: **8/8**.
+- Apps Script syntax: passed.
+
+SC-01 is limited to source audit. It does not register a correction operation,
+create the SupplyCorrectionEvents schema, write replacement movements, rebuild
+FIFO or change the existing fail-closed guard. SC-02–SC-04 remain pending.
 
 ### Deferred pending measurements or design
 
