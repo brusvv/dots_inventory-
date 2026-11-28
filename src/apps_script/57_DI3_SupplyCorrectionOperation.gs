@@ -714,6 +714,7 @@ function di3ApplySupplyCorrectionOperation_(operationRecord, payload) {
  */
 function di3PreviewSupplyCorrection(supplyId, correctionSpec) {
   return di3WithLock_(function () {
+    di3EnsureStockCoreSchemas_();
     var id = String(supplyId || "").trim();
     var spec = correctionSpec || {};
     var correctionId = String(spec.correction_id || "").trim();
@@ -788,6 +789,7 @@ function di3PreviewSupplyCorrection(supplyId, correctionSpec) {
  */
 function di3CorrectReceivedSupply(supplyId, correctionSpec) {
   return di3WithLock_(function () {
+    di3EnsureStockCoreSchemas_();
     var id = String(supplyId || "").trim();
     var spec = correctionSpec || {};
     var correctionId = String(spec.correction_id || "").trim();
