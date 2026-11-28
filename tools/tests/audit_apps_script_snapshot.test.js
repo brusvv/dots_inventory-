@@ -26,7 +26,10 @@ function validBackup() {
     payload_sha256_valid: true,
     file_hashes_valid: true,
     script_id_matches: true,
-    spreadsheet_id_matches: true
+    spreadsheet_id_matches: true,
+    description_marker_present: true,
+    metadata_valid: true,
+    backup_folder_membership_matches: true
   };
 }
 
@@ -177,4 +180,21 @@ test("runtime source audit probe collects read-only metadata and disables OAuth 
   assert.equal(report.deployments.items[0].version_number, 7);
   assert.equal(report.project_fingerprint_sha256.length, 64);
   assert.equal(JSON.stringify(report).includes("oauth-test"), false);
+});
+
+
+test("snapshot audit rejects a backup with invalid Drive metadata or folder membership", () => {
+  withSourceDir({ A: "alpha\\n" }, (sourceDir) => {
+    const backup = validBackup();
+    backup.backup_folder_membership_matches = false;
+    const report = auditSnapshot({
+      format: "dots-inventory-runtime-source-audit/v1",
+      files: [
+        { name: "A", type: "SERVER_JS", git_blob_sha1: gitBlobSha1("alpha\\n"), size_bytes: 6 }
+      ],
+      backups: [backup]
+    }, sourceDir);
+    assert.equal(report.status, "FAIL");
+    assert.deepEqual(report.invalid_backups, ["bootstrap.json"]);
+  });
 });
