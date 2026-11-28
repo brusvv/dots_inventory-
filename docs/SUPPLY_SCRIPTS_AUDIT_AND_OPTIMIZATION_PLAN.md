@@ -88,3 +88,15 @@ This document records the work plan and initial static observations. It is not a
 - S7 has begun: the first four low-risk optimizations are implemented with regression tests.
 - Source/regression, release-contract and package CI passed for the PR merge result containing the current optimization batch.
 - S8 runtime timing on a disposable workbook and S9 final report remain pending; static call-count observations are not runtime benchmarks.
+
+
+## Optimization batch 2 — selective PackVariants reconciliation
+
+Implemented on the audit branch:
+
+- Reconciliation now first reads only `V3_SupplyItems` rows matching affected `product_id` keys, then reads only parent `V3_Supplies` rows for the resulting `supply_id` set.
+- The shared multi-key repository reader transfers the lookup column and fetches full rows only for matches; the previous unconditional full-width reads of both tables are removed from the normal path.
+- If any affected item has a blank `supply_id`, the code deliberately falls back to a full parent-supply read. This preserves the existing fail-closed detection of a received parent with a missing identity.
+- The pure latest-received selection algorithm, schema-derived indexes, chronology tie rejection, duplicate line checks, and PackVariants ownership validation remain unchanged.
+
+Added regression coverage for selective item/parent reads, the blank-ID fallback, and the no-matching-items fast path. Exact-head CI is pending; do not treat this source change as validated until the workflows complete. Runtime comparison on a disposable workbook remains pending.
