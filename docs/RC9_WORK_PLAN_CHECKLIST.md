@@ -63,8 +63,13 @@ Branch HEAD at update: `2a33c5532e8bffcf7bef1a0458f8064f390111fd`
 - [ ] Preview tag/release explicitly approved and verified.
 - [ ] Stable/RC9 release explicitly approved only after all required gates pass.
 
-## 2. R0 — test environment inventory (read-only)
+## 2. R0 — test environment inventory (runtime inspection read-only; temporary probe insertion is a separately approved source write)
 
+- [x] Extend the runtime probe to report manifest timezone/OAuth scopes, project fingerprint, trigger metadata, deployment version metadata, Script Properties key names only, and backup payload/Drive metadata/folder membership.
+- [x] Harden OAuth-authenticated Apps Script API reads in the probe with `followRedirects: false`.
+- [x] Strengthen snapshot auditor backup acceptance to require valid Drive metadata and configured-folder membership.
+- [x] Add regression coverage for probe redirect behavior and invalid backup metadata/folder membership; final CI evidence pending.
+- [ ] Obtain explicit approval before adding/removing the temporary probe file in the exact disposable bound project.
 - [x] Identify Dots beta 4 as the test workbook.
 - [x] Confirm separate bound Apps Script Script ID is recorded by owner.
 - [x] Confirm initial Bootstrap reported 47/47 modules installed and verified.
