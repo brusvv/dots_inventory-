@@ -9,7 +9,7 @@
  * It is read-only: it does not write Script Properties, Drive, spreadsheet
  * data, triggers, deployments, or any other project files.
  */
-var DI3_GITHUB_INSTALL_LIFECYCLE_PROBE_REVISION = "D09-PROBE-V1";
+var DI3_GITHUB_INSTALL_LIFECYCLE_PROBE_REVISION = "D09-PROBE-V2";
 
 function di3RunGitHubInstallLifecycleProbe() {
   return {
