@@ -6,31 +6,52 @@
 function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedProductIds) {
   var affected = Object.create(null);
   (affectedProductIds || []).forEach(function (id) { affected[String(id)] = true; });
+  var supplyHeaders = DI3_TABLE_SCHEMAS.V3_Supplies;
+  var itemHeaders = DI3_TABLE_SCHEMAS.V3_SupplyItems;
+  var supplyIndex = {
+    supply_id: supplyHeaders.indexOf("supply_id"),
+    status: supplyHeaders.indexOf("status"),
+    created_at: supplyHeaders.indexOf("created_at"),
+    received_at: supplyHeaders.indexOf("received_at")
+  };
+  var itemIndex = {
+    supply_id: itemHeaders.indexOf("supply_id"),
+    line_no: itemHeaders.indexOf("line_no"),
+    product_id: itemHeaders.indexOf("product_id"),
+    pack_variant_id: itemHeaders.indexOf("pack_variant_id")
+  };
+  if (Object.keys(supplyIndex).some(function (key) { return supplyIndex[key] < 0; }) ||
+      Object.keys(itemIndex).some(function (key) { return itemIndex[key] < 0; })) {
+    throw new Error("PackVariants reconciliation: V3_Supplies/V3_SupplyItems schema is missing required columns.");
+  }
   var itemsBySupply = Object.create(null);
   (itemRows || []).forEach(function (row) {
-    var supplyId = String(row[1] || "");
+    var supplyId = String(row[itemIndex.supply_id] || "");
     if (!itemsBySupply[supplyId]) itemsBySupply[supplyId] = [];
     itemsBySupply[supplyId].push(row);
   });
 
   var receivedSupplies = [];
   (supplyRows || []).forEach(function (row) {
-    if (di3NormalizeSupplyStatus_(row[15]) !== DI3_SUPPLY_STATUS.RECEIVED) return;
-    var supplyId = String(row[0] || "");
+    if (di3NormalizeSupplyStatus_(row[supplyIndex.status]) !== DI3_SUPPLY_STATUS.RECEIVED) return;
+    var supplyId = String(row[supplyIndex.supply_id] || "");
     var rows = itemsBySupply[supplyId] || [];
     var relevantRows = rows.filter(function (itemRow) {
-      return !!affected[String(itemRow[3] || "")];
+      return !!affected[String(itemRow[itemIndex.product_id] || "")];
     });
     if (!relevantRows.length) return;
     if (!supplyId) throw new Error("Полученная поставка с затронутым товаром не имеет supply_id.");
-    if (row[18] === "" || row[18] == null || !Number.isFinite(new Date(row[18]).getTime())) {
+    var receivedValue = row[supplyIndex.received_at];
+    if (receivedValue === "" || receivedValue == null || !Number.isFinite(new Date(receivedValue).getTime())) {
       throw new Error("Полученная поставка " + supplyId + " имеет некорректный received_at; нельзя безопасно выбрать текущую фасовку.");
     }
-    var createdAt = row[16] === "" || row[16] == null ? new Date(row[18]) : new Date(row[16]);
-    if (!Number.isFinite(createdAt.getTime())) createdAt = new Date(row[18]);
+    var receivedAt = new Date(receivedValue);
+    var createdValue = row[supplyIndex.created_at];
+    var createdAt = createdValue === "" || createdValue == null ? new Date(receivedAt) : new Date(createdValue);
+    if (!Number.isFinite(createdAt.getTime())) createdAt = new Date(receivedAt);
     receivedSupplies.push({
       supply_id: supplyId,
-      received_at: new Date(row[18]),
+      received_at: receivedAt,
       created_at: createdAt,
       relevant_rows: relevantRows
     });
@@ -48,7 +69,7 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
   receivedSupplies.forEach(function (supply) {
     var productsInSupply = Object.create(null);
     supply.relevant_rows.forEach(function (row) {
-      var productId = String(row[3] || "");
+      var productId = String(row[itemIndex.product_id] || "");
       if (productId) productsInSupply[productId] = true;
     });
     Object.keys(productsInSupply).forEach(function (productId) {
@@ -71,7 +92,7 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
       return !latest[String(row[3] || "")];
     });
     rows.forEach(function (row) {
-      var lineNo = Number(row[2]);
+      var lineNo = Number(row[itemIndex.line_no]);
       if (!Number.isSafeInteger(lineNo) || lineNo <= 0) {
         throw new Error("Поставка " + supply.supply_id + " содержит некорректный line_no для затронутого товара.");
       }
@@ -79,15 +100,15 @@ function di3BuildLatestReceivedPackVariantMap_(supplyRows, itemRows, affectedPro
     rows.sort(function (a, b) { return Number(b[2]) - Number(a[2]); });
     var seenLineByProduct = Object.create(null);
     rows.forEach(function (row) {
-      var productId = String(row[3] || "");
-      var lineNo = Number(row[2]);
+      var productId = String(row[itemIndex.product_id] || "");
+      var lineNo = Number(row[itemIndex.line_no]);
       var duplicateKey = productId + "\\u001f" + lineNo;
       if (seenLineByProduct[duplicateKey]) {
         throw new Error("Поставка " + supply.supply_id + " содержит повторный line_no " + lineNo + " для товара " + productId + ".");
       }
       seenLineByProduct[duplicateKey] = true;
       if (latest[productId]) return;
-      var variantId = String(row[5] || "");
+      var variantId = String(row[itemIndex.pack_variant_id] || "");
       if (!variantId) throw new Error("Полученная поставка " + supply.supply_id + " содержит строку без pack_variant_id для товара " + productId + ".");
       latest[productId] = {
         pack_variant_id: variantId,
