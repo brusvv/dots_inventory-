@@ -353,6 +353,14 @@ function di3BuildGitHubBranchManifestFromSources_(branch, commit, treeEntries, s
   if (!Array.isArray(treeEntries) || !sourceTexts || typeof sourceTexts !== "object") throw new Error("Git tree или исходники ветки неполны.");
   var updaterSource = sourceTexts["src/apps_script/43_DI3_GitHubDeploymentManager.gs"];
   var branchSelectorCapable = typeof updaterSource === "string" && /function\s+di3SelectGitHubSourceBranch\s*\(/.test(updaterSource);
+  if (branchSelectorCapable) {
+    ["43_DI3_GitHubDeploymentManager.gs", "44_DI3_GitHubInstallPreview.gs",
+      "45_DI3_GitHubConfirmedInstaller.gs", "46_DI3_GitHubCodeRollback.gs"].forEach(function (name) {
+      if (!treeEntries.some(function (entry) { return entry && entry.type === "blob" && entry.path === "src/apps_script/" + name; })) {
+        throw new Error("Ветка содержит branch-selector updater, но не содержит полный согласованный набор updater-модулей: " + name + ". Обновление заблокировано.");
+      }
+    });
+  }
   var sourceFiles = treeEntries.filter(function (entry) {
     if (!entry || !/^src\/apps_script\/[^/]+\.gs$/.test(String(entry.path || ""))) return false;
     // Older feature branches may contain an older updater. Preserve the installed
