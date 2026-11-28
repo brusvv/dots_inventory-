@@ -34,6 +34,13 @@ function di3BuildSupplyCorrectionRelationPlan_(sourceLines, replacementLines, me
   }
   indexUnique(sourceLines, ["movement_id", "supply_item_id", "product_id", "pack_variant_id"], "Source line");
   indexUnique(replacementLines, ["movement_id", "supply_item_id", "product_id", "pack_variant_id"], "Replacement line");
+  var sourceMovementIds = Object.create(null);
+  sourceLines.forEach(function (line) { sourceMovementIds[String(line.movement_id)] = true; });
+  replacementLines.forEach(function (line) {
+    if (sourceMovementIds[String(line.movement_id)]) {
+      throw new Error("Source and replacement movement_id must be new and distinct: " + line.movement_id + ".");
+    }
+  });
 
   var sourceUsed = Object.create(null), replacementUsed = Object.create(null), pairs = [];
   function pairByKey(keyFn) {
