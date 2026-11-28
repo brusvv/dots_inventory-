@@ -239,9 +239,18 @@ function di3EndFullSupplyEditMode(reload) {
   if (reload !== false && supplyId) {
     var current = di3GetSupplyById_(supplyId);
     if (current) {
+      var previousNumber = String(sheet.getRange(DI3_SUPPLY_FORM.selector).getValue() || "").trim();
       sheet.getRange(DI3_SUPPLY_FORM.selector).setValue(current.supply_number);
       sheet.getRange(DI3_SUPPLY_FORM.number).setValue(current.supply_number);
-      return di3LoadSelectedSupplyDraft({ skipUnsavedConfirmation: true });
+      // A number change can happen after a successful full edit. Refresh only
+      // the selector rule in that case; all other form validations are intact.
+      if (previousNumber !== String(current.supply_number)) {
+        di3SetSupplySelectorValidation_(sheet, current.supply_number);
+      }
+      return di3LoadSelectedSupplyDraft({
+        skipUnsavedConfirmation: true,
+        skipValidationRefresh: true
+      });
     }
   }
   var supply = number ? di3FindSupplyByNumber_(number) : null;
