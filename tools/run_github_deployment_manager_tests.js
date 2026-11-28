@@ -790,7 +790,7 @@ test("branch manifest rejects symlink-mode Apps Script entries", () => {
     "di3BuildGitHubBranchManifestFromSources_(" + JSON.stringify(branch) + "," +
       JSON.stringify(commit) + "," + JSON.stringify(tree) + "," + JSON.stringify(sources) + ")",
     context
-  ), /допустимый набор Apps Script/);
+  ), /не является обычным файлом Apps Script/);
 });
 
 test("rejects branch source content that does not match its Git blob SHA", () => {
