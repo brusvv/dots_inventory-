@@ -423,6 +423,65 @@ function di3BuildSupplyFullEditPlan_(context, createVariants) {
   };
 }
 
+/**
+ * Detect edits that invalidate the financial preview in the full supply editor.
+ * Supports single-cell edits and pasted multi-cell ranges.
+ */
+function di3IsSupplyFullEditFinancialInputRange_(row, column, numRows, numColumns) {
+  row = Number(row); column = Number(column);
+  numRows = Math.max(1, Number(numRows) || 1);
+  numColumns = Math.max(1, Number(numColumns) || 1);
+  var lastRow = row + numRows - 1;
+  var lastColumn = column + numColumns - 1;
+  function intersects(r1, c1, r2, c2) {
+    return row <= r2 && lastRow >= r1 && column <= c2 && lastColumn >= c1;
+  }
+  // Product, units per pack, pack count and purchase price.
+  return intersects(DI3_SUPPLY_FORM.firstLine, 1,
+      DI3_SUPPLY_FORM.firstLine + DI3_SUPPLY_FORM.lineCount - 1, 4) ||
+    // Seller discount, partner discount and shipping.
+    intersects(5, 2, 7, 2);
+}
+
+/**
+ * Recalculate the full-edit form preview only. This function never creates
+ * pack variants, persists supply rows, posts stock movements or starts FIFO.
+ * Invalid intermediate input clears the previous preview so stale values are
+ * never mistaken for the current calculation.
+ */
+function di3RefreshSupplyFullEditFinancialPreview_(sheet) {
+  sheet = sheet || di3GetSheetOrThrow_(DI3_SUPPLY_FORM_SHEET);
+  try {
+    var lines = di3ResolveSupplyFormLines_(false);
+    var financialInputs = sheet.getRange("B5:B7").getValues().map(function (row) {
+      return row[0] === "" || row[0] == null ? 0 : row[0];
+    });
+    var plan = di3BuildSupplyFinancialPlan_({
+      lines: lines,
+      seller_discount_amount: financialInputs[0],
+      partner_discount_amount: financialInputs[1],
+      shipping_amount: financialInputs[2]
+    });
+    di3RenderSupplyFinancialPreview_(plan);
+    sheet.getRange("M2").setNote("Предварительный расчёт обновляется автоматически при изменении товара, фасовки, количества упаковок, закупочной цены, скидок или доставки. Это расчёт документа, не проведение складской корректировки.");
+    return {
+      status: "PREVIEW_UPDATED",
+      lines: plan.lines.length,
+      goods_amount: plan.goods_amount,
+      final_amount: plan.final_amount
+    };
+  } catch (error) {
+    sheet.getRange(DI3_SUPPLY_FORM.firstLine, 5, DI3_SUPPLY_FORM.lineCount, 6).clearContent();
+    sheet.getRange("L4:M8").clearContent();
+    sheet.getRange("M2").setNote("Предварительный расчёт не обновлён: " + (error && error.message ? error.message : String(error)) +
+      ". Исправь данные в строках поставки или финансовых полях. Сохранение с некорректными данными также будет заблокировано.");
+    return {
+      status: "PREVIEW_INVALID",
+      error: error && error.message ? error.message : String(error)
+    };
+  }
+}
+
 function di3PreviewFullSupplyEdit() {
   var context = di3GetSupplyFullEditContext_();
   var currentSnapshot = di3BuildSupplyFullEditSnapshot_(context.supply_id);
