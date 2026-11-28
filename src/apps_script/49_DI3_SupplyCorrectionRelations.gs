@@ -171,12 +171,13 @@ function di3BuildSupplyCorrectionEffectiveMovementMap_(relationRows, operationRo
         activeRelations.push(metadata);
         return;
       }
-      if (includeOperationId === metadata.operation_id &&
-          (operation.status === "PREPARED" || operation.status === "RETRYABLE")) {
-        // Recovery may have durably appended COMMITTED relation events before the
-        // enclosing operation status write. Only that operation may see them
-        // until Operations itself is COMMITTED.
-        activeRelations.push(metadata);
+      if (operation.status === "PREPARED" || operation.status === "RETRYABLE") {
+        if (includeOperationId === metadata.operation_id) {
+          // Recovery may have durably appended COMMITTED relation events before
+          // the enclosing operation status write. Only that operation may see
+          // them until Operations itself is COMMITTED.
+          activeRelations.push(metadata);
+        }
         return;
       }
       throw new Error("SupplyCorrectionEvents: relation_id " + relationId +
